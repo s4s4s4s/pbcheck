@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pbcheck"
+version = "0.0.1.dev0"
+description = "An auditor of pseudoreplication in single-cell RNA-seq differential expression analysis."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [{ name = "Alexander Poliakov", email = "s4s4spol@gmail.com" }]
+keywords = ["single-cell", "scRNA-seq", "differential-expression", "pseudoreplication", "pseudobulk", "statistics", "reproducibility"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "anndata",
+    "scanpy",
+    "statsmodels",
+    "pydeseq2",
+    "decoupler>=2.0",
+    "jinja2",
+    "matplotlib",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# Only needed to run the real-data audit against the CELLxGENE Census.
+census = ["cellxgene-census"]
+dev = ["pytest", "hypothesis", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/s4s4s4s/pbcheck"
+Repository = "https://github.com/s4s4s4s/pbcheck"
+Issues = "https://github.com/s4s4s4s/pbcheck/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pbcheck"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::FutureWarning", "ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

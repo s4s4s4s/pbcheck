@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+title: "pbcheck: an auditor of pseudoreplication in single-cell RNA-seq differential expression"
+message: "If you use this software or its Phase 0 protocol, please cite it."
+type: software
+authors:
+  - family-names: Poliakov
+    given-names: Alexander
+    email: s4s4spol@gmail.com
+repository-code: "https://github.com/s4s4s4s/pbcheck"
+license: BSD-3-Clause
+version: 0.0.1.dev0
+abstract: >-
+  pbcheck estimates how much an existing single-cell RNA-seq differential-expression
+  analysis is inflated by pseudoreplication — treating individual cells as independent
+  replicates when the true unit of replication is the donor. Phase 0 is a pre-registered
+  measurement study that decides whether the full tool is worth building; its frozen
+  protocol is in docs/PHASE0_SPEC.md and every deviation is recorded in docs/AMENDMENTS.md.
+keywords:
+  - single-cell
+  - scRNA-seq
+  - differential-expression
+  - pseudoreplication
+  - pseudobulk
+  - reproducibility

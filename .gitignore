@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# Data & caches (never commit downloaded datasets or the census cache)
+data/
+*.h5ad
+*.h5
+*.loom
+cellxgene_census_cache/
+*.zarr/
+*.tiledb/
+*.mtx
+*.tsv.gz
+
+# Run outputs: ignore everything, keep the directory.
+pilot/results/*
+!pilot/results/.gitkeep
+pilot/cache/
+
+# Coverage & logs
+.coverage
+htmlcov/
+*.log
+
+# Editors
+.vscode/
+.idea/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
