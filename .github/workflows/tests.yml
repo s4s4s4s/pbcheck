@@ -1,0 +1,50 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (py${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.12", "3.13"]
+        include:
+          # Developed on Windows; Linux is the untested platform, so it carries the matrix.
+          - os: windows-latest
+            python-version: "3.12"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # The [census] extra is deliberately NOT installed: Phase-0 engine validation runs
+      # entirely on synthetic oracles, so CI never reaches the network for data.
+      - name: Install package (src-layout, editable) + dev extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      # Not decoration: this turns the CI log into a live counterpart of docs/ENV_NOTES.md
+      # and shows immediately if an unpinned upper bound drifts.
+      - name: Report the resolved scientific stack
+        run: |
+          python -c "import numpy, scipy, pandas, anndata, scanpy, decoupler, pydeseq2, statsmodels; [print(f'{m.__name__}=={m.__version__}') for m in (numpy, scipy, pandas, anndata, scanpy, decoupler, pydeseq2, statsmodels)]"
+
+      - name: Run tests
+        run: python -m pytest -q
