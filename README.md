@@ -2,8 +2,39 @@
 
 **An auditor of pseudoreplication in single-cell RNA-seq differential expression.**
 
-> Status: **Phase 0 — pilot audit.** This repository is currently a reproducible measurement study, not yet a
-> released tool. The Phase 0 pilot decides whether the tool is worth building (see *The gate* below).
+> Status: **Phase 0 — a pre-registered measurement study, not a released tool.** The decision rule was frozen
+> in [`docs/PHASE0_SPEC.md`](docs/PHASE0_SPEC.md) *before* the data was seen; every departure from it is dated
+> and justified in [`docs/AMENDMENTS.md`](docs/AMENDMENTS.md).
+
+### Where this actually stands
+
+| | |
+|---|---|
+| Measurement engine | built; 21 tests pass |
+| Real CELLxGENE data | **not touched.** No dataset has been run, no stratum list pre-registered |
+| Every number below | from synthetic oracles with known ground truth — instrument calibration, **not a finding** |
+| Instrument validity | **not yet established.** The pseudobulk arm fails its own binding gate; see [Amendment 1](docs/AMENDMENTS.md) |
+| GO / NO-GO | not taken |
+
+Reproduce the calibration run yourself — CPU only, no downloads, deterministic, about five minutes:
+
+```bash
+python scripts/synthetic_gate.py
+```
+
+On a synthetic null with donor structure where the true number of DE genes is **exactly zero**:
+
+| quantity | value | reads as |
+|---|---|---|
+| naive per-cell λ | **54.8** | grossly inflated |
+| naive false-positive floor | **1166 / 1500 genes (77.8%)** | the error calls three quarters of the genome |
+| donor-pseudobulk floor | **0** (mean 0.60) | correct FDR control under the null |
+| pseudobulk λ | 1.25 | ⚠️ outside the pre-registered [0.9, 1.1] — the arm is not yet valid |
+
+The first two lines are why the tool is worth building. The last line is why it is not finished: the pseudobulk
+arm is the denominator of every inflation number, and until it is calibrated, none of them may be read as a
+result. That is the honest state, and the gate script reports it as `INSTRUMENT NEEDS ATTENTION` rather than
+quietly passing.
 
 ## The problem
 
@@ -19,14 +50,21 @@ This is well documented in the methods literature (Squair et al. 2021; Zimmerman
 not aware of one, in Python or R — is a tool that takes an *existing* analysis and estimates *how much* its DE
 results are inflated by this error. Pointers to prior art are welcome and will be credited here.
 
-## What pbcheck will do
+## What exists, and what does not
 
-- **Design auditor** (metadata only): inspect an `AnnData` `.obs` and flag the ingredients of pseudoreplication —
-  number of donors per condition, nesting of donor within condition, batch⟂condition confounding, group imbalance.
-- **Inflation estimate**: compare a naive per-cell DE against a correct pseudobulk DE and against a
-  **donor-level permutation null** (where the true number of DE genes is ≈ 0), and quantify the inflation.
-- **Report**: a per-dataset `risk_score ∈ [0, 1]` and an HTML report.
-- A mode that works **without raw counts**, auditing a published result table plus its cell metadata.
+Built and exercised by the test suite:
+
+- **Design auditor** (metadata only): reads an `AnnData` `.obs` and flags the ingredients of pseudoreplication —
+  donors per condition, nesting of donor within condition, batch⟂condition confounding measured **per donor**,
+  group imbalance. Needs no counts, which is what lets pbcheck audit a published study from its metadata alone.
+- **Both DE arms**: the naive per-cell test (the careless default, reproduced faithfully) and donor pseudobulk,
+  corrected over one shared gene universe at one alpha so the two differ only by the test.
+- **Donor-permutation null** and the inflation metrics (genomic-inflation λ, the false-positive floor).
+
+Specified but **not** built — the real-data harness (`census_select`, `io_counts`, `controls`, `decision`,
+`report`), the `risk_score`, the HTML report, and the no-raw-counts mode. See
+[`pilot/README.md`](pilot/README.md), which also lists the spec corrections that are named in module
+docstrings but not yet implemented, so that nothing here reads as done when it is not.
 
 ## The gate (Phase 0)
 

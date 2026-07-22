@@ -69,9 +69,9 @@ primary size-robust metric). `scripts/synthetic_gate.py` runs the whole instrume
 
 | quantity | value | reads as |
 |---|---|---|
-| λ_naive (perm-null p-values) | **50.9** | grossly inflated |
+| λ_naive (perm-null p-values) | **54.8** | grossly inflated (was 50.9 before `tie_correct=True` was passed, as spec §2 pins) |
 | λ_pseudobulk | 1.25 | ⚠️ STALE READING — **outside** the pre-registered band [0.9, 1.1]; arm is anti-conservative (perm-null FP 0.35–0.50), not "~calibrated" |
-| naive perm-floor (median #DEG) | **1138 / 1500 (75.9%)** | pseudoreplication floor is most of the genome |
+| naive perm-floor (median #DEG) | **1166 / 1500 (77.8%)** | pseudoreplication floor is most of the genome (1138 / 75.9% before tie correction) |
 | pseudobulk perm-floor (median #DEG) | **0** (mean 0.60) | correct FDR control under the null |
 | pseudobulk power (positive oracle, \|log2FC\|=1.5) | **0.83** | ⚠️ STALE — measured on an *easier* oracle than the spec pre-registers; at log2FC=1.0 / K=200 it is 0.47–0.57, **below** the binding 0.60 |
 
