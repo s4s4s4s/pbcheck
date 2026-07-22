@@ -30,17 +30,32 @@ class DesignReport:
     donor_nests_in_condition: bool  # each donor belongs to exactly one condition
     min_donors_per_group: int
     imbalance_ratio: float  # max/min group cell count
-    batch_confounded: dict[str, float] = field(default_factory=dict)  # batch col -> Cramer's V
+    batch_confounded: dict[str, float] = field(default_factory=dict)  # batch col -> donor-level Cramer's V
+    batch_separates_condition: dict[str, bool] = field(default_factory=dict)  # batch col -> perfect separation
     flags: list[str] = field(default_factory=list)
 
     @property
     def usable_for_pseudobulk(self) -> bool:
-        """Whether a donor-level pseudobulk DE is even meaningful for this design."""
-        return self.donor_nests_in_condition and self.min_donors_per_group >= 2
+        """Whether a donor-level pseudobulk DE is even meaningful for this design.
+
+        The threshold is 3 donors per group, matching the spec's inclusion gate (§1, item 1) — not 2.
+        A design perfectly separated by a batch/assay/pool covariate is excluded outright: its
+        inflation cannot be attributed to pseudoreplication rather than to the covariate.
+        """
+        return (
+            self.donor_nests_in_condition
+            and self.min_donors_per_group >= 3
+            and not any(self.batch_separates_condition.values())
+        )
 
 
 def _cramers_v(a: pd.Series, b: pd.Series) -> float:
-    """Association between two categoricals in [0, 1]; 1.0 == perfectly confounded."""
+    """Association between two categoricals in [0, 1]; 1.0 == perfectly confounded.
+
+    The caller is responsible for passing series at the correct unit of observation. For
+    condition-vs-batch confounding that unit is the DONOR, never the cell — see
+    :func:`_donor_level_table`.
+    """
     tab = pd.crosstab(a, b)
     if tab.shape[0] < 2 or tab.shape[1] < 2:
         return float("nan")
@@ -49,6 +64,31 @@ def _cramers_v(a: pd.Series, b: pd.Series) -> float:
     r, k = tab.shape
     denom = n * (min(r, k) - 1)
     return float(np.sqrt(chi2 / denom)) if denom > 0 else float("nan")
+
+
+def _donor_level_table(obs: pd.DataFrame, donor_col: str, cols: list[str]) -> pd.DataFrame:
+    """One row per (donor, *cols) combination — each donor counted once, not once per cell.
+
+    Condition, batch, assay, suspension and pool identity are donor-level attributes. Measuring
+    their association with condition over CELLS lets a donor with many cells dominate the estimate,
+    which is the very cells-as-replicates fallacy this package exists to detect: a batch that is
+    100% one condition can score near zero simply because the donors carrying it are small.
+    Deduplicating first makes every donor contribute equally.
+    """
+    return obs[[donor_col, *cols]].astype(str).drop_duplicates()
+
+
+def _perfectly_separates(a: pd.Series, b: pd.Series) -> bool:
+    """True if knowing ``a`` determines ``b`` — every level of a maps to exactly one level of b.
+
+    Checked explicitly rather than inferred from Cramer's V: V can sit below 1 on an unbalanced
+    table that is nonetheless perfectly separating, and a perfectly separated design makes the
+    inflation measurement uninterpretable rather than merely noisy.
+    """
+    tab = pd.crosstab(a, b)
+    if tab.shape[0] < 2 or tab.shape[1] < 2:
+        return False
+    return bool(((tab > 0).sum(axis=1) == 1).all())
 
 
 def _chi2(obs: np.ndarray) -> float:
@@ -94,10 +134,15 @@ def audit_design(
     min_dpg = min(donors_per_cond.values()) if donors_per_cond else 0
     imbalance = (max(groups.values()) / max(min(groups.values()), 1)) if groups else float("nan")
 
-    batch_conf = {}
+    # Confounding is assessed at the DONOR level (see _donor_level_table): batch, assay, suspension
+    # and pool are donor-constant attributes, and weighting them by cell count hides real confounds.
+    batch_conf: dict[str, float] = {}
+    batch_separates: dict[str, bool] = {}
     for bc in batch_cols or []:
         if bc in obs.columns:
-            batch_conf[bc] = round(_cramers_v(obs[bc].astype(str), obs[condition_col].astype(str)), 3)
+            dtab = _donor_level_table(obs, donor_col, [bc, condition_col])
+            batch_conf[bc] = round(_cramers_v(dtab[bc], dtab[condition_col]), 3)
+            batch_separates[bc] = _perfectly_separates(dtab[bc], dtab[condition_col])
 
     flags: list[str] = []
     if not donor_nests:
@@ -110,8 +155,13 @@ def audit_design(
     if len(groups) >= 2 and imbalance >= 5:
         flags.append(f"group cell-count imbalance {imbalance:.1f}x")
     for bc, v in batch_conf.items():
-        if not np.isnan(v) and v >= 0.8:
-            flags.append(f"batch '{bc}' is nearly confounded with condition (Cramer's V={v})")
+        if batch_separates.get(bc):
+            flags.append(
+                f"batch '{bc}' PERFECTLY separates condition at the donor level — the inflation "
+                "measurement is uninterpretable for this design, not merely confounded"
+            )
+        elif not np.isnan(v) and v >= 0.8:
+            flags.append(f"batch '{bc}' is nearly confounded with condition (donor-level Cramer's V={v})")
 
     return DesignReport(
         condition_col=condition_col,
@@ -124,5 +174,6 @@ def audit_design(
         min_donors_per_group=min_dpg,
         imbalance_ratio=float(imbalance),
         batch_confounded=batch_conf,
+        batch_separates_condition=batch_separates,
         flags=flags,
     )
