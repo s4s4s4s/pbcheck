@@ -41,20 +41,32 @@ def naive_de(
     a = a.copy()
     sc.pp.normalize_total(a, target_sum=target_sum)
     sc.pp.log1p(a)
+
+    # The spec (§2) pins this call verbatim, including two arguments scanpy defaults to False.
+    # tie_correct matters because scRNA-seq counts are heavily tied (mostly zeros), and without it
+    # the Wilcoxon normal approximation is distorted — which would land in lambda_naive as a tie
+    # artifact rather than as the clustering miscalibration we are trying to measure. It is only
+    # defined for the rank test, so it is not passed to the t-test robustness variant.
+    # pts adds the per-group expressed fractions, which the min-expression sensitivity check needs.
+    kw = {"pts": True}
+    if method == "wilcoxon":
+        kw["tie_correct"] = True
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         sc.tl.rank_genes_groups(
-            a, groupby=condition_col, groups=[test_level], reference=ref_level, method=method
+            a, groupby=condition_col, groups=[test_level], reference=ref_level, method=method, **kw
         )
     df = sc.get.rank_genes_groups_df(a, group=test_level)
-    table = pd.DataFrame(
-        {
-            "pval": df["pvals"].to_numpy(),  # raw; BH deferred to mtc so both arms match (spec §5)
-            "padj": np.nan,
-            "log2fc": df["logfoldchanges"].to_numpy(),
-        },
-        index=pd.Index(df["names"], name="gene"),
-    )
+    cols = {
+        "pval": df["pvals"].to_numpy(),  # raw; BH deferred to mtc so both arms match (spec §5)
+        "padj": np.nan,
+        "log2fc": df["logfoldchanges"].to_numpy(),
+    }
+    for src, dst in (("pct_nz_group", "pct_group"), ("pct_nz_reference", "pct_reference")):
+        if src in df.columns:
+            cols[dst] = df[src].to_numpy()
+    table = pd.DataFrame(cols, index=pd.Index(df["names"], name="gene"))
     return DEResult(
         method=f"naive[{method}]",
         table=table,
