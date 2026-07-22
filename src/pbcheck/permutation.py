@@ -123,8 +123,11 @@ def run_null(
     # ---- pseudobulk arm ----
     pb_pvals = np.full((len(perms_pb), G), np.nan)
     pb_ndeg = np.zeros(len(perms_pb), dtype=int)
+    pb_cell_totals = []
     donor_names = pd.Index(pdata.obs[donor_col].astype(str)) if donor_col in pdata.obs else pdata.obs_names
     for i, tset in enumerate(perms_pb):
+        n_test_cells = int(cells_per_donor[list(tset)].sum())
+        pb_cell_totals.append((n_test_cells, int(cells_per_donor.sum()) - n_test_cells))
         cond_vals = _labels_for(donor_names, tset, test_level, ref_level)
         res = deseq_from_pdata(pdata, condition_col=condition_col, test_level=test_level,
                                ref_level=ref_level, universe=universe,
@@ -133,12 +136,57 @@ def run_null(
         pb_pvals[i] = res.table["pval"].reindex(uni_index).to_numpy()
         pb_ndeg[i] = res.n_significant(fdr=fdr)
 
+    # ---- A2: is the real split comparable to the permutations it is judged against? ----
+    #
+    # Full cell-count stratification (restricting the permutation set to splits whose per-group
+    # cell totals match the real one) is not reachable at the donor counts real strata carry: at
+    # 3v3 there are only C(6,3) - 2 = 18 permutations to begin with, and filtering on cell count
+    # would leave single digits. So the spec's own alternative is used instead — log the per-group
+    # cell totals for BOTH arms and check explicitly that the real split sits inside the
+    # permutation distribution. If it does not, the floor is being compared against permutations
+    # of a systematically different size, and the comparison is size-confounded rather than a
+    # clean statement about the replication unit.
+    real_test_cells = int(cells_per_donor[list(true_test)].sum())
+    perm_test_cells = np.array([t for t, _ in cell_totals], dtype=float)
+    inside = bool(perm_test_cells.size and
+                  perm_test_cells.min() <= real_test_cells <= perm_test_cells.max())
+    pct = (float((perm_test_cells <= real_test_cells).mean()) if perm_test_cells.size
+           else float("nan"))
+
+    # ---- Monte-Carlo error (spec §4) ----
+    #
+    # The floor and the calibration claim are estimates over a finite permutation set. Reporting
+    # them without their sampling error invites reading a gap that the resolution cannot support:
+    # a false-positive rate from 20 permutations has SE ~0.11 and cannot separate 0.05 from 0.15.
+    n_n, n_p = len(perms_naive), len(perms_pb)
+    pb_fp_rate = float(np.mean(pb_ndeg >= 1)) if n_p else float("nan")
+    mc = {
+        "naive_floor_median": float(np.median(naive_ndeg)) if n_n else float("nan"),
+        "naive_floor_mc_se": float(np.std(naive_ndeg, ddof=1) / np.sqrt(n_n)) if n_n > 1 else float("nan"),
+        "pb_floor_median": float(np.median(pb_ndeg)) if n_p else float("nan"),
+        "pb_floor_mc_se": float(np.std(pb_ndeg, ddof=1) / np.sqrt(n_p)) if n_p > 1 else float("nan"),
+        "pb_fp_rate": pb_fp_rate,
+        "pb_fp_rate_mc_se": (float(np.sqrt(pb_fp_rate * (1 - pb_fp_rate) / n_p)) if n_p
+                             else float("nan")),
+    }
+    # The calibration claim is only as strong as the gap between the arms relative to this error.
+    gap = mc["naive_floor_median"] - mc["pb_floor_median"]
+    mc["floor_gap"] = float(gap)
+    mc["floor_gap_over_mc_se"] = (float(gap / mc["naive_floor_mc_se"])
+                                  if mc["naive_floor_mc_se"] and np.isfinite(mc["naive_floor_mc_se"])
+                                  and mc["naive_floor_mc_se"] > 0 else float("inf"))
+
     return {
         "naive_pvals": naive_pvals,
         "pb_pvals": pb_pvals,
         "naive_ndeg": naive_ndeg,
         "pb_ndeg": pb_ndeg,
         "cell_totals": cell_totals,
+        "pb_cell_totals": pb_cell_totals,
+        "real_test_cells": real_test_cells,
+        "real_split_inside_perm_range": inside,
+        "real_split_percentile_in_perms": pct,
+        "monte_carlo": mc,
         "n_perm_naive": len(perms_naive),
         "n_perm_pb": len(perms_pb),
         "n_donors": len(donors),

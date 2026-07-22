@@ -116,3 +116,40 @@ def test_bh_complete_null_reference_is_median_zero_not_alpha_times_G():
     assert np.median(counts) == ref["median_rejections"] == 0
     assert np.mean(counts) < 1.0, f"mean rejections {np.mean(counts)} should be of order alpha"
     assert np.mean(counts) < 0.05 * G / 100  # nowhere near alpha*G = 75
+
+
+def test_monte_carlo_error_and_split_check_are_reported():
+    """Spec §4 requires the MC error and that the real split be checked against the permutations.
+
+    Both were absent: the 'SE << floor gap' calibration check could only ever pass by assertion,
+    and the per-permutation cell totals were logged for one arm and never consumed by anything.
+    """
+    import sys, warnings
+    warnings.filterwarnings("ignore")
+    sys.path.insert(0, "synthetic")
+    from oracles import null_oracle
+    from pbcheck.permutation import run_null
+    from pbcheck.gene_universe import frozen_universe
+    from pbcheck.methods.pseudobulk import build_pseudobulk
+
+    o = null_oracle(n_donors_per_group=4, n_cells_per_donor=60, n_genes=200, seed=11)
+    uni = frozen_universe(build_pseudobulk(o.adata))
+    r = run_null(o.adata, uni, n_perm=10, n_perm_pb=6, fdr=0.05)
+
+    # Both arms log their per-group cell totals now, not just the naive one.
+    assert len(r["cell_totals"]) == r["n_perm_naive"]
+    assert len(r["pb_cell_totals"]) == r["n_perm_pb"]
+
+    # The real split is actually compared against the permutation distribution.
+    assert r["real_split_inside_perm_range"] is True
+    assert 0.0 <= r["real_split_percentile_in_perms"] <= 1.0
+
+    mc = r["monte_carlo"]
+    for k in ("naive_floor_mc_se", "pb_fp_rate", "pb_fp_rate_mc_se", "floor_gap"):
+        assert k in mc
+    # A binomial rate over n draws must carry sqrt(p(1-p)/n), so a handful of permutations
+    # cannot resolve alpha from a few times alpha -- the point of reporting it at all.
+    p, n = mc["pb_fp_rate"], r["n_perm_pb"]
+    assert np.isclose(mc["pb_fp_rate_mc_se"], np.sqrt(p * (1 - p) / n))
+    # And the headline gap must be large relative to its own sampling error.
+    assert mc["floor_gap_over_mc_se"] > 5
