@@ -44,6 +44,28 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 PROBE = REPO / "scripts" / "pb_calibration_probe.py"
 
+
+def git_publish(summary_dir: Path, note: str) -> str:
+    """Commit and push the summary so a partial run is never lost or invisible.
+
+    Best-effort: a transient network or git failure must not kill a multi-hour compute. The
+    per-cell JSONs live outside the repo and are the real record; this only publishes the small
+    summary so progress can be watched remotely (the whole reason this run moved to the PC).
+    """
+    try:
+        subprocess.run(["git", "add", str(summary_dir)], cwd=REPO, check=True,
+                       capture_output=True, text=True, timeout=60)
+        # Nothing staged -> nothing to do.
+        if subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO).returncode == 0:
+            return "no change"
+        subprocess.run(["git", "commit", "-m", f"grid summary: {note}"], cwd=REPO, check=True,
+                       capture_output=True, text=True, timeout=60)
+        subprocess.run(["git", "push", "origin", "HEAD"], cwd=REPO, check=True,
+                       capture_output=True, text=True, timeout=180)
+        return "pushed"
+    except Exception as e:  # noqa: BLE001 - deliberately swallow; compute must continue
+        return f"publish failed (non-fatal): {str(e)[:120]}"
+
 # The unshrunken baselines and the variance-borrowing candidates. wald is the known-failing
 # reference and is handled separately because it costs ~2.8 s per fit rather than ~5 ms.
 UNSHRUNKEN = ("ttest", "pooled_t", "wilcoxon")
@@ -189,6 +211,9 @@ def main() -> int:
     ap.add_argument("--max-hours", type=float, default=10.0)
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--n-cpus", type=int, default=4)
+    ap.add_argument("--commit-every", type=int, default=0,
+                    help="if > 0, commit+push the summary every N computed cells (visibility + "
+                         "crash-resilience); 0 disables")
     ap.add_argument("--list-only", action="store_true")
     a = ap.parse_args()
 
@@ -222,9 +247,15 @@ def main() -> int:
             failed += 1
             print(f"[{i}/{len(cells)}] FAILED {cell_key(c)}: {msg}", flush=True)
         if (done + failed) % 10 == 0:
-            summarise(a.out_dir, a.summary_dir)
+            n_so_far = summarise(a.out_dir, a.summary_dir)
+            if a.commit_every and done and done % a.commit_every == 0:
+                msg = git_publish(a.summary_dir, f"{n_so_far} cells so far")
+                print(f"[grid] publish: {msg}", flush=True)
 
     n = summarise(a.out_dir, a.summary_dir)
+    if a.commit_every:
+        print(f"[grid] publish (final): {git_publish(a.summary_dir, f'{n} cells, run complete')}",
+              flush=True)
     el = (time.time() - t0) / 3600
     print(f"[grid] done={done} cached={skipped} failed={failed} rows={n} elapsed={el:.2f}h", flush=True)
     print(f"[grid] summary -> {a.summary_dir/'summary.csv'}", flush=True)
