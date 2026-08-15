@@ -273,7 +273,38 @@ culminating in Amendment 2.
   loudly, and separately fails one in which every selected dataset failed, while a single flaky
   dataset out of sixty still exits 0 with its name in `notes.failed_datasets`: that run carries its
   result, and discarding five hours of work over one dropped connection would be its own bug.
-- Added: `tests/test_census_candidates.py` (34 tests) — no network, and no `cellxgene-census`,
+- Fixed (second live dry run, run 31909947593): pass 1 was SIGTERMed 22 seconds in — exit 143, the
+  hosted runner's memory-pressure kill rather than the kernel OOM killer's SIGKILL — before a
+  single progress line. Two causes, both memory, both now fixed and both now visible. **The read
+  buffers**: cellxgene-census's `DEFAULT_TILEDB_CONFIGURATION` sets `py.init_buffer_bytes` and
+  `soma.init_buffer_bytes` to **1 GiB each**, allocated per column before the first batch arrives,
+  and pass 1 asks for four string columns. The driver now opens the Census with a 128 MiB budget
+  (the value cellxgene-census's own documentation uses in its override example), exposed as
+  `--reader-buffer-mb` and as a workflow input so the next dispatch can go lower without a code
+  change. `open_census` grew a `tiledb_config` passthrough for it — an engineering knob, never a
+  data one: buffer sizes decide how many rows arrive per batch and nothing about which rows exist.
+  **The conversion**: every batch was going through `.to_pandas()`, which turns four Arrow string
+  columns into Python `object` arrays — one heap-allocated `str` per cell per column, the most
+  expensive representation available, for data about to be reduced to group counts. Pass 1 now
+  groups in Arrow (`Table.drop_null().group_by(keys).aggregate([(key, "count")])`) and materialises
+  only the grouped keys. Dictionary-encoded columns are decoded to their **values** first, because
+  Arrow assigns dictionary codes per batch — an accumulator keyed on codes would merge two
+  different donors and inflate their cell counts silently, in the direction that manufactures
+  candidates. A test pins the Arrow and pandas paths to identical output on data where a donor
+  demonstrably carries different codes in different batches.
+- Added (so the next failure explains itself): RSS is read from `/proc/self/status` and printed at
+  start, after the **first** batch (with its row count and Arrow bytes, either side of the fold),
+  every batch for the first five and every twentieth after that — calibrating cells/second should
+  not require surviving twenty batches, which the killed run did not. A SIGTERM/SIGINT handler
+  prints RSS and peak RSS before exiting, since a memory kill produces no traceback, and
+  `resource.getrusage` peak RSS is printed on every exit path and recorded in the manifest notes.
+- Fixed: the workflow's job summary never ran. GitHub executes `run:` as `bash -e -o pipefail`,
+  and `set -uo pipefail` does not clear `-e`, so the driver failing in the pipe aborted the step
+  before the `GITHUB_STEP_SUMMARY` block and the intended `exit "${status}"`. Reporting now lives
+  in its own `if: always()` step, which is the only arrangement that survives a step that dies; the
+  stack-provenance step tees into the same log, so the uploaded artifact carries the versions a run
+  died with even when the driver never started.
+- Added: `tests/test_census_candidates.py` (37 tests) — no network, and no `cellxgene-census`,
   including a test that the driver does not import it at module level, which is what keeps the
   suite runnable on the development machine. The Census access path is exercised against a SOMA
   stand-in that *applies* the equality clauses of the filter and can be told to fail a given

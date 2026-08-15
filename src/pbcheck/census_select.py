@@ -339,13 +339,20 @@ class ConfoundReport:
     pending: dict[str, str] = field(default_factory=dict)
 
 
-def open_census(*, census_version: str = CENSUS_VERSION):
+def open_census(*, census_version: str = CENSUS_VERSION, tiledb_config=None):
     """Open the Census at the pinned version (§1). Lazy-imports the ``[census]`` extra.
 
     The version parameter exists to be *checked*, not to be varied: anything other than
     :data:`CENSUS_VERSION` raises, and the two mutable aliases raise with their own message, because
     a run whose Census version is decided at call time cannot be reproduced. Pointing this package at
     a different Census release is a protocol change and goes through ``docs/AMENDMENTS.md`` first.
+
+    ``tiledb_config`` is forwarded to ``open_soma`` and is an **engineering** knob, never a data
+    one: the keys it carries are read-buffer sizes and transport settings, which decide how many
+    rows arrive per batch and nothing about which rows exist. cellxgene-census merges it over its
+    own defaults, so the S3 region and the anonymous credentials survive. It exists because those
+    defaults allocate 1 GiB of read buffer per column, which a 16 GB CI runner does not have four
+    of; see ``scripts/census_candidates.py``. ``None`` leaves the defaults alone.
     """
     if census_version in MUTABLE_CENSUS_ALIASES:
         raise ValueError(
@@ -365,6 +372,9 @@ def open_census(*, census_version: str = CENSUS_VERSION):
             "cellxgene-census is not installed. It is an optional extra on purpose — the whole "
             'synthetic engine validation runs without it. Install with: pip install -e ".[census]"'
         ) from exc
+    if tiledb_config:
+        return cellxgene_census.open_soma(census_version=census_version,
+                                          tiledb_config=dict(tiledb_config))
     return cellxgene_census.open_soma(census_version=census_version)
 
 

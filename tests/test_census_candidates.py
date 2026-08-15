@@ -32,6 +32,7 @@ from pathlib import Path
 warnings.filterwarnings("ignore")
 
 import pandas as pd  # noqa: E402
+import pyarrow as pa  # noqa: E402
 import pytest  # noqa: E402
 
 from pbcheck import census_select as cs  # noqa: E402
@@ -95,6 +96,22 @@ def batches(frame, size):
     return [frame.iloc[i:i + size].copy() for i in range(0, frame.shape[0], size)]
 
 
+def arrow_batch(frame, *, dictionary=True):
+    """One chunk as the Census delivers it: an Arrow table, string columns dictionary-encoded.
+
+    Dictionary codes are assigned per batch, so two batches that both contain donor ``p1`` may give
+    it different codes — which is precisely why the accumulator can only be keyed on the decoded
+    values, and why this helper is the honest input for the order-independence tests.
+    """
+    table = pa.Table.from_pandas(frame, preserve_index=False)
+    if not dictionary:
+        return table
+    for i, field in enumerate(table.schema):
+        if pa.types.is_string(field.type) or pa.types.is_large_string(field.type):
+            table = table.set_column(i, field.name, table.column(field.name).dictionary_encode())
+    return table
+
+
 def counts_of(frame, size=17):
     counts, _seen, _n = cc.aggregate_batches(batches(frame, size), progress_every=0)
     return counts
@@ -135,6 +152,48 @@ def test_aggregation_does_not_depend_on_batch_boundaries_or_batch_order():
     assert n_fine > n_coarse >= 1
     assert sum(fine.values()) == frame.shape[0]
     assert fine[("ds1", "T cell", "COVID-19", "A0")] == 23
+
+
+def test_the_arrow_and_pandas_paths_agree_including_on_dictionary_columns():
+    """Pass 1 groups in Arrow; the pandas path stays for tests and for any caller with a frame.
+
+    The two must agree exactly, and the Arrow one must agree *through* dictionary encoding: the
+    Census hands back ``dictionary<values=string, indices=int32>`` and the indices are assigned per
+    batch, so code 3 in one batch and code 3 in the next are unrelated. An accumulator keyed on the
+    codes would merge two different donors into one and inflate their cell counts — silently, and
+    in the direction that manufactures candidates.
+    """
+    frame = pd.concat([
+        obs_frame(healthy_donors(n_per_group=4, n_cells=23), dataset_id="ds1"),
+        obs_frame(healthy_donors(n_per_group=3, n_cells=11), dataset_id="ds2", cell_type="B cell"),
+    ], ignore_index=True)
+
+    from_frames = cc.aggregate_batches(batches(frame, 9), progress_every=0)
+    from_arrow = cc.aggregate_batches(
+        [arrow_batch(chunk) for chunk in batches(frame, 9)], progress_every=0)
+    # Re-cut as well as re-typed: agreement must not depend on the two paths seeing equal chunks.
+    from_plain_arrow = cc.aggregate_batches(
+        [arrow_batch(chunk, dictionary=False) for chunk in batches(frame, 13)], progress_every=0)
+
+    assert from_frames == from_arrow, "same chunking, same counts, same batch count"
+    assert from_arrow[0] == from_plain_arrow[0]
+    assert from_arrow[1] == from_plain_arrow[1] == frame.shape[0]
+    assert sum(from_arrow[0].values()) == frame.shape[0]
+
+    # ...and the agreement above is not a coincidence of every batch encoding the values in the
+    # same order: at least one donor really does carry different codes in different batches, which
+    # is the trap an accumulator keyed on codes would fall into.
+    first_code, clashing = {}, set()
+    for chunk in (arrow_batch(c) for c in batches(frame, 9)):
+        for code, donor in enumerate(chunk.column("donor_id").chunk(0).dictionary.to_pylist()):
+            if first_code.setdefault(donor, code) != code:
+                clashing.add(donor)
+    assert clashing, "no donor got two different codes — the test data is not exercising the trap"
+
+
+def test_an_unexpected_batch_type_is_refused_rather_than_silently_skipped():
+    with pytest.raises(TypeError, match="pyarrow.Table"):
+        cc.aggregate_batches([[("ds1", "T cell", "covid", "p1")]], progress_every=0)
 
 
 def test_cells_without_a_donor_or_a_stratum_are_dropped_before_grouping():
@@ -241,7 +300,7 @@ def test_no_command_line_option_can_move_a_pre_registered_number():
     options = {opt for action in cc.build_arg_parser()._actions for opt in action.option_strings}
     assert options == {
         "-h", "--help", "--dry-run", "--max-datasets",
-        "--max-cells-per-dataset-query", "--output-dir",
+        "--max-cells-per-dataset-query", "--output-dir", "--reader-buffer-mb",
     }
     # ...and no call in the driver passes a census_version at all: open_census() defaults to the
     # §1 pin, and a driver that named the version could point the run at a different Census.
@@ -377,23 +436,21 @@ def _equality_clauses(expression: str):
     return clauses
 
 
-class _FakeBatch:
-    def __init__(self, frame):
-        self._frame = frame
-
-    def to_pandas(self):
-        return self._frame
-
-
 class _FakeRead:
-    """A SOMA reader: iterable in chunks (pass 1) *and* concat-able (pass 2, via query_obs)."""
+    """A SOMA reader: iterable in chunks (pass 1) *and* concat-able (pass 2, via query_obs).
+
+    The chunks are real ``pyarrow.Table`` objects with **dictionary-encoded** string columns, which
+    is what the Census hands back and what the driver has to group without ever decoding a column
+    into Python strings. A stand-in that yielded DataFrames would have let the driver keep calling
+    ``.to_pandas()`` per batch — the second thing that made pass 1 unaffordable.
+    """
 
     def __init__(self, frame, *, batch_size=16):
         self._frame = frame
         self._batch_size = batch_size
 
     def __iter__(self):
-        return iter(_FakeBatch(chunk) for chunk in batches(self._frame, self._batch_size))
+        return iter(arrow_batch(chunk) for chunk in batches(self._frame, self._batch_size))
 
     def concat(self):
         return self
@@ -542,9 +599,41 @@ def test_splitting_a_dataset_by_cell_type_does_not_change_a_single_manifest_row(
 
 def _run_args(tmp_path, **overrides):
     args = dict(output_dir=tmp_path, dry_run=False, max_datasets=0,
-                max_cells_per_dataset_query=2_000_000)
+                max_cells_per_dataset_query=2_000_000,
+                reader_buffer_mb=cc.READER_BUFFER_BYTES // 1024**2)
     args.update(overrides)
     return types.SimpleNamespace(**args)
+
+
+def test_the_run_opens_the_census_with_a_bounded_read_buffer(tmp_path, monkeypatch):
+    """The second live dry run was SIGTERMed at 22 s with no output: cellxgene-census defaults to
+    1 GiB of read buffer **per column** and pass 1 asks for four. The budget is what the driver
+    hands to `open_census`, and it must survive a reopen — a retry that dropped back to the
+    default would kill the run on its second attempt instead of its first.
+    """
+    opened = []
+
+    def fake_open_census(**kwargs):
+        opened.append(kwargs)
+        return _FakeCensus(_FakeSomaObs(_two_dataset_frame()))
+
+    monkeypatch.setattr(cs, "open_census", fake_open_census)
+    cc.run(_run_args(tmp_path, reader_buffer_mb=64))
+
+    assert opened and all(
+        call["tiledb_config"] == {"py.init_buffer_bytes": 64 * 1024**2,
+                                  "soma.init_buffer_bytes": 64 * 1024**2}
+        for call in opened
+    )
+    # Both keys, always: py.* is the TileDB-Py path and soma.* the SOMA one, and cellxgene-census's
+    # own default sets both. Setting one would leave the other at 1 GiB.
+    assert set(cc.reader_tiledb_config(1)) == {"py.init_buffer_bytes", "soma.init_buffer_bytes"}
+    assert cc.READER_BUFFER_BYTES == 128 * 1024**2
+
+    handle = cc._CensusHandle(tiledb_config=cc.reader_tiledb_config())
+    handle.reopen()
+    assert opened[-1]["tiledb_config"] == cc.reader_tiledb_config()
+    handle.close()
 
 
 def test_both_passes_end_to_end_produce_the_manifest_and_its_provenance(tmp_path, monkeypatch):

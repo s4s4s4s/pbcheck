@@ -23,6 +23,10 @@ on:
         description: "How long to keep the manifest + log artifact."
         type: number
         default: 30
+      reader_buffer_mb:
+        description: "Per-column Census read buffer, MiB (py./soma.init_buffer_bytes). The census default is 1024, which four string columns do not fit into a 16 GB runner. Lower this if the run is killed at exit 143."
+        type: number
+        default: 128
 
 # Deliberately NOT cancel-in-progress (the `tests` workflow is): a five-hour run that is killed
 # by a second dispatch produces nothing at all, and the Census is pinned, so two concurrent runs
@@ -63,42 +67,57 @@ jobs:
 
       # The counterpart of the `tests` workflow's stack report, for the half of the stack that
       # workflow never installs. The Census version and the value_filter are printed from the
-      # package so the log states the protocol the run was made under, not a copy of it.
+      # package so the log states the protocol the run was made under, not a copy of it. It is
+      # tee'd into the same log the artifact carries, so a run that dies in the driver still ships
+      # the stack it died with — the log is the post-mortem, and it starts here.
       - name: Report the resolved Census stack and the pinned protocol
+        shell: bash
         run: |
-          python -c "import cellxgene_census, tiledbsoma, pyarrow, pandas, numpy; [print(f'{m.__name__}=={m.__version__}') for m in (cellxgene_census, tiledbsoma, pyarrow, pandas, numpy)]"
-          python -c "from pbcheck import census_select as cs; print('census_version:', cs.CENSUS_VERSION); print('value_filter (applied):', cs.VALUE_FILTER); print('value_filter (spec text):', cs.SPEC_VALUE_FILTER); print('organism:', cs.CENSUS_ORGANISM)"
+          {
+            python -c "import cellxgene_census, tiledbsoma, pyarrow, pandas, numpy; [print(f'{m.__name__}=={m.__version__}') for m in (cellxgene_census, tiledbsoma, pyarrow, pandas, numpy)]"
+            python -c "from pbcheck import census_select as cs; print('census_version:', cs.CENSUS_VERSION); print('value_filter (applied):', cs.VALUE_FILTER); print('value_filter (spec text):', cs.SPEC_VALUE_FILTER); print('organism:', cs.CENSUS_ORGANISM)"
+            free -m || true
+            nproc || true
+          } 2>&1 | tee census-candidates.log
 
-      # `set -e` is deliberately off: the driver's exit status must survive the pipe into tee so
-      # the step still fails, while the tail below still reaches the job summary either way. A
-      # failed run's last 60 lines are the whole point of dispatching a dry run.
+      # GitHub runs `run:` as `bash -e -o pipefail`, so the driver failing anywhere in the pipe
+      # fails this step — which is what we want, and is why the job summary is NOT written here.
+      # The previous version put the summary after the pipeline in this same step: `-e` (which
+      # `set -uo pipefail` does not clear) aborted the step at the pipe, and neither the summary
+      # nor the intended exit code ever ran. Reporting belongs in a step that cannot be skipped.
       - name: Build the candidate manifest
         shell: bash
         env:
           DRY_RUN: ${{ inputs.dry_run }}
           MAX_DATASETS: ${{ inputs.max_datasets }}
+          READER_BUFFER_MB: ${{ inputs.reader_buffer_mb }}
           # Cell-type labels are ontology free text and carry non-ASCII ("Muller cell" is spelled
           # with an umlaut in CL), and the driver prints them in its top-candidates summary. If the
           # runner's stdout ever resolved to ASCII, that print would die AFTER the manifest was
           # written — a red run, and a lost log, for a formatting reason.
           PYTHONIOENCODING: utf-8
         run: |
-          set -uo pipefail
-          args=(--max-datasets "${MAX_DATASETS:-0}")
+          args=(--max-datasets "${MAX_DATASETS:-0}" --reader-buffer-mb "${READER_BUFFER_MB:-128}")
           if [ "${DRY_RUN}" = "true" ]; then
             args+=(--dry-run)
           fi
-          echo "python scripts/census_candidates.py ${args[*]}"
-          python scripts/census_candidates.py "${args[@]}" 2>&1 | tee census-candidates.log
-          status=${PIPESTATUS[0]}
+          echo "python scripts/census_candidates.py ${args[*]}" | tee -a census-candidates.log
+          python -u scripts/census_candidates.py "${args[@]}" 2>&1 | tee -a census-candidates.log
+
+      # if: always() — this is the step that reports, so it must run when the driver dies, when it
+      # times out, and when it succeeds. A memory kill (SIGTERM, exit 143) produces no traceback:
+      # the tail of this log is the entire post-mortem.
+      - name: Summarise the run log
+        if: always()
+        shell: bash
+        run: |
           {
-            echo "### Census candidate manifest (dry_run=${DRY_RUN}, exit ${status})"
+            echo "### Census candidate manifest (dry_run=${{ inputs.dry_run }}, buffers ${{ inputs.reader_buffer_mb }} MiB)"
             echo
             echo '```'
-            tail -n 60 census-candidates.log
+            tail -n 80 census-candidates.log 2>/dev/null || echo "(no log — the run died before writing one)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          exit "${status}"
 
       # if: always() — a partial log from a run that timed out or died mid-pass is the timing
       # calibration for the next dispatch, and losing it costs another five hours to recover.

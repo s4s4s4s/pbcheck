@@ -64,6 +64,7 @@ quietly missing from it.
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 import time
 from pathlib import Path
@@ -112,11 +113,103 @@ FATAL_EXCEPTIONS = (
 
 TOP_N_SUMMARY = 15
 
+#: Read-buffer budget per column, in bytes, handed to the Census as ``py.init_buffer_bytes`` /
+#: ``soma.init_buffer_bytes``.
+#:
+#: cellxgene-census's own ``DEFAULT_TILEDB_CONFIGURATION`` sets **1 GiB each**, which is a fine
+#: default for a workstation and fatal here: the reader allocates that per column before the first
+#: batch arrives, and pass 1 asks for four string columns (each of which needs data, offset and
+#: validity buffers). The second live dry run died 22 seconds in with SIGTERM (exit 143 — the
+#: hosted runner's memory-pressure kill, not the kernel OOM killer's SIGKILL) before a single
+#: progress line, which is the shape of an allocation that never got to read anything.
+#:
+#: 128 MiB is the value cellxgene-census's own documentation uses in its example of overriding
+#: these keys, and it is a budget, not a correctness knob: buffer size cannot change which cells
+#: come back, only how many arrive per batch. Exposed as ``--reader-buffer-mb`` so the next
+#: dispatch can go lower without a code change.
+READER_BUFFER_BYTES = 128 * 1024**2
+
+#: Progress lines for the first few batches, then every ``--progress-every``. Calibrating
+#: cells/second should not require surviving twenty batches — the first one is the interesting one.
+PROGRESS_FIRST_N = 5
+PROGRESS_EVERY = 20
+
 
 # ---------------------------------------------------------------------------
 # Pass 1 — streaming aggregation. Pure functions below iter_obs_batches, so the arithmetic is
 # testable on a machine that has no cellxgene-census (which is the development machine).
 # ---------------------------------------------------------------------------
+
+def reader_tiledb_config(buffer_bytes: int = READER_BUFFER_BYTES) -> dict:
+    """The TileDB overrides pass 1 opens the Census with — a memory budget and nothing else.
+
+    Both keys are set because both exist and cellxgene-census's own default sets both: ``py.*`` is
+    the TileDB-Py path and ``soma.*`` the SOMA one. ``open_soma(tiledb_config=...)`` merges these
+    over :data:`cellxgene_census.DEFAULT_TILEDB_CONFIGURATION` rather than replacing it, so the S3
+    region, the anonymous credentials and the user-agent all survive untouched.
+
+    Nothing here can change *which* cells are read: a buffer size decides how many rows arrive per
+    batch, and pass 1's arithmetic is batch-boundary independent by construction.
+    """
+    buffer_bytes = int(buffer_bytes)
+    return {"py.init_buffer_bytes": buffer_bytes, "soma.init_buffer_bytes": buffer_bytes}
+
+
+def _rss_bytes():
+    """Resident set size, from ``/proc`` on Linux. ``None`` anywhere else — no new dependency.
+
+    The runner kills on RSS, so RSS is the number worth printing. It is read rather than estimated
+    because the interesting allocations here (TileDB read buffers, Arrow buffers) live outside
+    Python's own allocator and are invisible to anything that counts Python objects.
+    """
+    try:
+        with open("/proc/self/status", encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _peak_rss_bytes():
+    """High-water RSS for this process, or ``None`` on a platform without ``resource``."""
+    try:
+        import resource
+    except ImportError:  # Windows, where this driver is developed but never run for real
+        return None
+    # Linux reports ru_maxrss in kibibytes (macOS in bytes); CI is Linux and that is the number
+    # this line exists to report.
+    return int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss) * 1024
+
+
+def _fmt_bytes(n) -> str:
+    if n is None:
+        return "n/a"
+    return f"{n / 1024**2:,.1f} MiB"
+
+
+def _install_fatal_signal_logging() -> None:
+    """Print RSS when the runner kills us, so the next post-mortem starts from a number.
+
+    A hosted runner under memory pressure sends **SIGTERM** (exit 143), which is catchable — that
+    is how the second dry run died, silently, 22 seconds in. (The kernel OOM killer's SIGKILL is
+    not catchable and shows up as 137; if that is what happens next, the distinction is itself
+    diagnostic.) The handler raises rather than exiting quietly, so the ``finally`` blocks close
+    the Census handle and the exit status still says "killed by signal".
+    """
+    def handler(signum, _frame):
+        print(f"[census-candidates] FATAL: killed by signal {signum} "
+              f"({signal.Signals(signum).name}) — rss={_fmt_bytes(_rss_bytes())} "
+              f"peak_rss={_fmt_bytes(_peak_rss_bytes())}", file=sys.stderr, flush=True)
+        raise SystemExit(128 + signum)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, handler)
+        except (ValueError, OSError, AttributeError):  # not the main thread, or no such signal
+            pass
+
 
 def iter_obs_batches(
     census,
@@ -125,11 +218,17 @@ def iter_obs_batches(
     value_filter: str = cs.VALUE_FILTER,
     columns=KEY_COLUMNS,
 ):
-    """Yield the §1 obs slice one Arrow batch at a time, as DataFrames. **No** ``.concat()``.
+    """Yield the §1 obs slice one **Arrow** batch at a time. **No** ``.concat()``, no pandas.
 
     ``soma_obs.read(...)`` returns a reader that is already an iterator of ``pyarrow.Table``
     chunks; ``query_obs`` calls ``.concat()`` on it, which is the full materialisation this pass
     exists to avoid. Iterating it directly costs nothing extra and never holds more than one chunk.
+
+    The tables are handed on **as Arrow**. Calling ``.to_pandas()`` here was the driver's second
+    memory bug: four string columns become Python ``object`` arrays, i.e. one heap-allocated
+    ``str`` per cell per column — the most expensive representation available, for data that is
+    about to be reduced to a few thousand group counts. :func:`aggregate_batches` groups in Arrow
+    instead and only ever materialises the grouped keys.
 
     Only :data:`KEY_COLUMNS` are requested. The optional columns (``raw_sum`` and friends) are not
     needed to decide *which datasets to read* and would multiply the bytes crossing the network by
@@ -137,16 +236,87 @@ def iter_obs_batches(
     """
     soma_obs = census["census_data"][organism].obs
     reader = soma_obs.read(column_names=list(columns), value_filter=value_filter)
-    for batch in reader:
-        yield batch.to_pandas()
+    yield from reader
 
 
-def aggregate_batches(batches, *, key_columns=KEY_COLUMNS, progress_every: int = 20, label="pass1"):
+#: One message for both places that meet a batch they cannot read, so an unexpected reader type
+#: says the same thing whichever of them notices it first.
+_BATCH_TYPE_MESSAGE = (
+    "cannot aggregate a batch of type {kind}: expected a pyarrow.Table (what the SOMA reader "
+    "yields) or a pandas DataFrame"
+)
+
+
+def _batch_rows(batch) -> int:
+    rows = getattr(batch, "num_rows", None)  # pyarrow.Table
+    if rows is None:
+        rows = getattr(batch, "shape", (None,))[0]  # pandas.DataFrame
+    if rows is None:
+        raise TypeError(_BATCH_TYPE_MESSAGE.format(kind=type(batch).__name__))
+    return int(rows)
+
+
+def _arrow_key_counts(table, key_columns):
+    """``((key tuple), cells)`` for one Arrow batch, grouped in Arrow.
+
+    Three things happen here and each of them is load-bearing:
+
+    * **dictionary columns are decoded to their values.** The Census may hand back
+      ``dictionary<values=string, indices=int32>``, and the indices are assigned *per batch* — code
+      7 in one batch and code 7 in the next are unrelated. An accumulator keyed on codes would
+      silently merge distinct donors, so the keys can only be the values. The decode goes through
+      ``column.type.value_type`` rather than a hard-coded string type, so a ``large_string``
+      dictionary stays a ``large_string``.
+    * **nulls go before the grouping**, not after: ``Table.drop_null()`` drops a row with a null in
+      *any* of the four columns, which is exactly what the gate does (a cell with no donor has no
+      replication unit; a cell with no stratum key forms no stratum).
+    * **only the grouped result becomes Python.** A batch of half a million cells collapses to at
+      most a few thousand ``(dataset, cell type, disease, donor)`` keys before anything is turned
+      into a ``str``.
+    """
+    keyed = table.select(list(key_columns))
+    for i, name in enumerate(key_columns):
+        column = keyed.column(name)
+        value_type = getattr(column.type, "value_type", None)
+        if value_type is not None:
+            keyed = keyed.set_column(i, name, column.cast(value_type))
+
+    keyed = keyed.drop_null()
+    if not keyed.num_rows:
+        return []
+
+    grouped = keyed.group_by(list(key_columns)).aggregate([(key_columns[0], "count")])
+    count_name = f"{key_columns[0]}_count"
+    counts = (grouped.column(count_name) if count_name in grouped.schema.names
+              else grouped.column(grouped.num_columns - 1)).to_pylist()
+    keys = [grouped.column(name).to_pylist() for name in key_columns]
+    return zip(zip(*keys), counts)
+
+
+def _frame_key_counts(frame, key_columns):
+    """The same, for a pandas frame — kept so the accumulator stays testable without pyarrow."""
+    keyed = frame.loc[:, list(key_columns)].dropna()
+    if not keyed.shape[0]:
+        return []
+    sizes = keyed.astype(str).groupby(list(key_columns), observed=True, sort=False).size()
+    return sizes.items()
+
+
+def _key_counts(batch, key_columns):
+    if hasattr(batch, "group_by"):  # pyarrow.Table — the streaming path
+        return _arrow_key_counts(batch, key_columns)
+    if isinstance(batch, pd.DataFrame):
+        return _frame_key_counts(batch, key_columns)
+    raise TypeError(_BATCH_TYPE_MESSAGE.format(kind=type(batch).__name__))
+
+
+def aggregate_batches(batches, *, key_columns=KEY_COLUMNS, progress_every: int = PROGRESS_EVERY,
+                      label="pass1"):
     """Fold an iterable of obs batches into ``{(dataset, cell_type, disease, donor): cells}``.
 
     Returns ``(counts, n_cells_seen, n_batches)``. Pure apart from the progress print: it takes an
-    iterable of frames, so the whole of pass 1's arithmetic can be exercised with hand-built
-    frames and no network.
+    iterable of batches — Arrow tables from the reader, or pandas frames from a test — so the whole
+    of pass 1's arithmetic can be exercised with hand-built data and no network.
 
     Two properties this function must have, both tested:
 
@@ -168,19 +338,31 @@ def aggregate_batches(batches, *, key_columns=KEY_COLUMNS, progress_every: int =
     n_batches = 0
     t0 = time.time()
 
-    for frame in batches:
+    for batch in batches:
         n_batches += 1
-        n_cells_seen += int(frame.shape[0])
-        keyed = frame.loc[:, key_columns].dropna()
-        if keyed.shape[0]:
-            sizes = keyed.astype(str).groupby(key_columns, observed=True, sort=False).size()
-            for key, n in sizes.items():
-                counts[key] = counts.get(key, 0) + int(n)
-        if progress_every and n_batches % progress_every == 0:
+        rows = _batch_rows(batch)
+        n_cells_seen += rows
+
+        # The first batch is the one the last run never lived to report. Its rows, its bytes and
+        # the RSS on either side of folding it are what turn "died at 22 s" into a cause.
+        rss_before = _rss_bytes() if n_batches == 1 else None
+
+        for key, n in _key_counts(batch, key_columns):
+            counts[key] = counts.get(key, 0) + int(n)
+
+        if not progress_every:  # 0 = quiet, for the tests that only want the arithmetic
+            continue
+        if n_batches == 1:
+            print(f"[{label}] first batch: {rows:,} rows | "
+                  f"{_fmt_bytes(getattr(batch, 'nbytes', None))} arrow | "
+                  f"{len(counts):,} keys | rss {_fmt_bytes(rss_before)} -> "
+                  f"{_fmt_bytes(_rss_bytes())} | {time.time() - t0:.1f}s", flush=True)
+        elif n_batches <= PROGRESS_FIRST_N or n_batches % progress_every == 0:
             elapsed = max(time.time() - t0, 1e-9)
             print(
                 f"[{label}] {n_batches} batches | {n_cells_seen:,} cells | {len(counts):,} keys | "
-                f"{elapsed / 60:.1f} min | {n_cells_seen / elapsed:,.0f} cells/s",
+                f"{elapsed / 60:.1f} min | {n_cells_seen / elapsed:,.0f} cells/s | "
+                f"rss {_fmt_bytes(_rss_bytes())}",
                 flush=True,
             )
     return counts, n_cells_seen, n_batches
@@ -379,12 +561,13 @@ class _CensusHandle:
     error is unknown.
     """
 
-    def __init__(self):
-        self.handle = cs.open_census()
+    def __init__(self, *, tiledb_config=None):
+        self.tiledb_config = tiledb_config
+        self.handle = cs.open_census(tiledb_config=tiledb_config)
 
     def reopen(self) -> None:
         self.close()
-        self.handle = cs.open_census()
+        self.handle = cs.open_census(tiledb_config=self.tiledb_config)
 
     def close(self) -> None:
         closer = getattr(self.handle, "close", None)
@@ -470,8 +653,14 @@ def run(args) -> dict:
           f"max_datasets={args.max_datasets} "
           f"max_cells_per_dataset_query={args.max_cells_per_dataset_query:,}", flush=True)
 
+    tiledb_config = reader_tiledb_config(int(args.reader_buffer_mb) * 1024**2)
+    print(f"[census-candidates] reader buffers: {args.reader_buffer_mb} MiB per column "
+          f"({sorted(tiledb_config)}) — cellxgene-census defaults to 1 GiB each, which four "
+          "string columns do not fit into a 16 GB runner", flush=True)
+    print(f"[census-candidates] rss at start: {_fmt_bytes(_rss_bytes())}", flush=True)
+
     t_start = time.time()
-    handle = _CensusHandle()
+    handle = _CensusHandle(tiledb_config=tiledb_config)
     try:
         counts, n_cells_seen, n_batches, pass1_seconds = _run_pass1(handle)
         if not n_cells_seen:
@@ -583,6 +772,13 @@ def run(args) -> dict:
                 "n_datasets_surviving": len(survivors),
                 "seconds": round(pass1_seconds, 1),
                 "cells_per_second": round(n_cells_seen / max(pass1_seconds, 1e-9), 1),
+                "reader_tiledb_config": dict(tiledb_config),
+                "aggregation":
+                    "Arrow-native: each batch is grouped with pyarrow (dictionary columns decoded "
+                    "to their values first, since the codes are per-batch) and only the grouped "
+                    "keys are ever turned into Python strings. Nothing calls .to_pandas() on a "
+                    "batch and nothing calls .concat() on the reader.",
+                "peak_rss_bytes": _peak_rss_bytes(),
                 "coarse_filter":
                     f"a dataset survives when some (dataset_id, cell_type) has a disease term with "
                     f">= {cs.MIN_DONORS_PER_GROUP} donors of >= {gc.MIN_CELLS} cells and as many "
@@ -698,6 +894,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--output-dir", type=Path, default=DEFAULT_OUT_DIR,
         help="where census_candidates.json/.csv are written (gitignored; the CI artifact)",
     )
+    parser.add_argument(
+        "--reader-buffer-mb", type=int, default=READER_BUFFER_BYTES // 1024**2,
+        help="per-column read buffer handed to the Census as py./soma.init_buffer_bytes. A memory "
+             "budget, not a data knob: it decides how many rows arrive per batch and nothing "
+             "about which rows exist. cellxgene-census's own default is 1024 (1 GiB per column), "
+             "which is what killed the second dry run on a 16 GB runner.",
+    )
     return parser
 
 
@@ -745,9 +948,16 @@ def exit_code(manifest) -> int:
 
 def main(argv=None) -> int:
     args = build_arg_parser().parse_args(argv)
-    manifest = run(args)
-    print_summary(manifest)
-    return exit_code(manifest)
+    _install_fatal_signal_logging()
+    try:
+        manifest = run(args)
+        print_summary(manifest)
+        return exit_code(manifest)
+    finally:
+        # Always, on every path including the fatal ones: the high-water mark is the number that
+        # says whether the next run can afford a bigger buffer or needs a smaller one.
+        print(f"[census-candidates] peak rss: {_fmt_bytes(_peak_rss_bytes())}",
+              file=sys.stderr, flush=True)
 
 
 if __name__ == "__main__":
