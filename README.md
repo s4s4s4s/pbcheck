@@ -10,31 +10,40 @@
 
 | | |
 |---|---|
-| Measurement engine | built; 21 tests pass |
+| Measurement engine | built; tested in CI |
 | Real CELLxGENE data | **not touched.** No dataset has been run, no stratum list pre-registered |
 | Every number below | from synthetic oracles with known ground truth — instrument calibration, **not a finding** |
-| Instrument validity | **not yet established.** The pseudobulk arm fails its own binding gate; see [Amendment 1](docs/AMENDMENTS.md) |
+| Pseudobulk arm's test | **moderated eBayes** (Amendment 2), replacing the DESeq2-Wald arm Amendment 1 found miscalibrated |
+| Calibration (λ, FP rate) | **criteria met** — see the table below, including the FP-rate caveat |
+| Power at the pre-registered operating point | **not met** — 0.35 vs the required ≥ 0.60. Not a bug: the grid predicts no test clears 0.60 at this σ_donor; the fix is a pending §8(c) decision, not more engineering |
+| Instrument validity | **still not established**, for the power reason above — see [Amendment 2](docs/AMENDMENTS.md) |
 | GO / NO-GO | not taken |
 
-Reproduce the calibration run yourself — CPU only, no downloads, deterministic, about five minutes:
+Reproduce the calibration run yourself — CPU only, no downloads, deterministic, about two minutes:
 
 ```bash
 python scripts/synthetic_gate.py
 ```
 
-On a synthetic null with donor structure where the true number of DE genes is **exactly zero**:
+On a synthetic null with donor structure where the true number of DE genes is **exactly zero**, and a synthetic
+positive at the pre-registered effect size (log2FC = 1.0, K = 200), default parameters, most recent run 117.9s:
 
 | quantity | value | reads as |
 |---|---|---|
-| naive per-cell λ | **54.8** | grossly inflated |
-| naive false-positive floor | **1166 / 1500 genes (77.8%)** | the error calls three quarters of the genome |
-| donor-pseudobulk floor | **0** (mean 0.60) | correct FDR control under the null |
-| pseudobulk λ | 1.25 | ⚠️ outside the pre-registered [0.9, 1.1] — the arm is not yet valid |
+| naive per-cell λ | **54.77** | grossly inflated |
+| naive false-positive floor | **1164 / 1500 genes (77.6%)** | the error calls three quarters of the genome |
+| donor-pseudobulk floor | **0** | correct FDR control under the null |
+| pseudobulk λ | **1.02** | ✅ inside the pre-registered [0.9, 1.1] — was 1.25 under the retired DESeq2-Wald test |
+| pseudobulk perm-null FP rate | **0.05** at target ≤ 0.05 | marginal: 2/40 permutations, Monte-Carlo SE 0.034 — this run cannot distinguish 0.05 from ~0.12; needs more permutations to call it cleanly |
+| pseudobulk power (log2FC = 1.0, K = 200) | **0.35** | ❌ below the required ≥ 0.60 |
 
-The first two lines are why the tool is worth building. The last line is why it is not finished: the pseudobulk
-arm is the denominator of every inflation number, and until it is calibrated, none of them may be read as a
-result. That is the honest state, and the gate script reports it as `INSTRUMENT NEEDS ATTENTION` rather than
-quietly passing.
+The first two lines are why the tool is worth building. The calibration lines are why the test was replaced
+(Amendment 2) and why replacing it worked: λ and the FP rate are now where the pre-registration asks them to
+be, modulo the Monte-Carlo caveat above. The power line is why the instrument is still not valid: at this
+σ_donor no test in the committed selection grid reaches 0.60, moderated tests included, so this is not an
+engineering gap to close but an open question — whether §8(c)'s pre-registered effect size is realistic for
+real strata — that has not yet been decided. The gate script reports this honestly as
+`INSTRUMENT NEEDS ATTENTION` rather than quietly passing.
 
 ## The problem
 
@@ -84,10 +93,11 @@ on real data. Statistics are verified by hand against these oracles, not assumed
 
 ```
 src/pbcheck/          # the auditor engine (methods/)
-pilot/                # Phase 0 harness: dataset selection, sweep, results
+pilot/                # Phase 0 artifacts: committed test-selection grid + results, no code
+scripts/              # the harness: synthetic gate, calibration probe, selection analyzer
 synthetic/            # synthetic-oracle generators with known ground truth
-tests/                # unit + property tests (oracles are the correctness spec)
-docs/                 # PHASE0_SPEC.md (methodology), ENV_NOTES.md
+tests/                # unit + regression tests (oracles are the correctness spec)
+docs/                 # PHASE0_SPEC.md (methodology), AMENDMENTS.md, ENV_NOTES.md
 ```
 
 ## Install (development)
