@@ -16,27 +16,51 @@ where the confounds are messy. Methodology: [`../docs/PHASE0_SPEC.md`](../docs/P
 
 ## What is done (this repo, runs offline)
 
-- `pbcheck.gene_universe` — label-agnostic frozen universe (spec §3, A3)
-- `pbcheck.methods.naive` / `pbcheck.methods.pseudobulk` — the two DE arms (poscounts, cooks_filter=False)
-- `pbcheck.mtc` — identical BH over the frozen universe for both arms (§5)
+- `pbcheck.gene_universe` — label-agnostic frozen universe (spec §3, A3), minimum size enforced (C5)
+- `pbcheck.methods.naive` — the naive per-cell arm, with the settings §2 pins verbatim
+- `pbcheck.methods.moderated` / `pbcheck.methods.pseudobulk` — the pseudobulk arm: **moderated eBayes**
+  (Amendment 2 Change 1) with the pre-registered thin-donor filter (Change 7); `deseq_from_pdata` retained,
+  superseded, to reproduce Amendment-1-era numbers
+- `pbcheck.mtc` — one **paired** BH over one common tested set for both arms (§5, Amendment 2 Change 2)
 - `pbcheck.permutation` — donor-permutation null, both arms (§4)
 - `pbcheck.metrics` — genomic-inflation λ, permutation floor, signal-above-floor (§6)
+- `pbcheck.gate_config` — the pre-registered thresholds, in one place, tagged by provenance
 - `pbcheck.design` — obs-only design auditor (§7)
 - `synthetic/oracles.py` + `scripts/synthetic_gate.py` — validation on known truth (§8 b/c)
 
 ### Known gaps in what is listed above
 
-Several spec corrections are named in module docstrings but are **not** implemented; they are listed here so
-that nothing reads as done when it is not:
+Listed so that nothing reads as done when it is not. Statuses below are as of **Amendment 2 (2026-08-15)**;
+each item names the amendment entry that settles it.
 
-- **A2** — permutations are not cell-count stratified; per-permutation cell totals are logged but never consumed.
-- **B5** — λ is computed from analytic Wilcoxon / DESeq2 p-values, not from empirical permutation-null p-values.
-- **C3** — the native independent-filtered `padj` cross-check is never computed.
-- **C5** — the minimum-frozen-universe SKIP gate is never called (`min_size` is accepted and ignored).
-- Thin-donor filtering (`min_cells` / `min_counts`) does not run: decoupler 2.x has no such parameters.
-- `naive.py` does not pass `tie_correct=True` / `pts=True`, which spec §2 pins verbatim.
+- **A2 — partially addressed, full stratification deferred to Phase 1** (Amendment 2 Change 6). Permutations
+  are *not* cell-count stratified. What runs is a range check: per-permutation per-group cell totals are
+  logged for both arms and the real split is verified to sit inside the permutation distribution. Rationale
+  for the deferral, including why it does not gate the pseudobulk validity claim, is in the amendment.
+- **B5 — implemented, and its literal construction measured and rejected** (Amendment 2 Change 3). The
+  binding λ is computed from each arm's own p-values under the permutation null. B5's "rank of the observed
+  statistic within the donor-permutation null" is implemented as `metrics.empirical_perm_pvalues` and
+  reported as a **machinery check only**: under the sharp null it is uniform by construction (measured:
+  λ = 0.93 where the binding λ was 26.08, and identical on a held-out permuted labeling), so it carries no
+  calibration information.
+- **C3 — superseded / retired** (Amendment 2 Change 5). The native independent-filtered `padj` cross-check
+  is DESeq2-specific and dies with DESeq2. Replaced by prior-strength disclosure (`d0`, shrinkage factor) and
+  a null p-value uniformity check.
+- **C5 — implemented** (Amendment 2 Change 4). The minimum-frozen-universe gate is enforced and the gate
+  script passes `min_size`; the realised prior (`d0`, shrinkage, trend flag, residual df) is persisted as the
+  moderated analog of DESeq2's `fitType`.
+- **Thin-donor filtering (`min_cells` / `min_counts`) — implemented** (Amendment 2 Change 7). decoupler 2.x
+  has no such parameters, so it is applied manually after aggregation on decoupler's own `psbulk_cells` /
+  `psbulk_counts`, with the spec's semantics: dropped, not merged.
+- `naive.py` **does** pass `tie_correct=True` / `pts=True` as of R0 (`c13a21e`), asserted by capturing the
+  actual call in `tests/test_methods.py`. Remaining gap: on scanpy 1.12.2 only `pct_nz_group` is returned
+  when an explicit `reference` is given, so the min-expression sensitivity check (§6/B5) has one side of the
+  expressed fractions available, not both.
 - `design.py` computes the confounding Cramér's V per cell rather than per donor, which can miss a genuine
-  donor-level confound.
+  donor-level confound. **Still open.**
+- **The `sigma_donor` of the synthetic oracle is a free knob, unanchored to any real
+  mean-dispersion / donor-variance trend (§8(b)).** Both amendments close on this as the outstanding
+  threat to every power number computed here. **Still open, and it is the important one.**
 
 ## What remains (needs `pip install -e ".[census]"`)
 

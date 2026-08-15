@@ -36,6 +36,10 @@ def frozen_universe(
         It defaults to off rather than to 200 so that the gate is never applied silently — but a
         caller that passes a number gets a real check, not a decorative argument.
 
+        Amendment 2 Change 4 closed the gap this wording was written against: until then **no**
+        caller passed it, so C5 was accepted-and-ignored in practice however real the check was
+        here. ``scripts/synthetic_gate.py`` now passes ``gate_config.MIN_UNIVERSE_SIZE``.
+
     Returns
     -------
     Sorted list of gene names forming the frozen universe.

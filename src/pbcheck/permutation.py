@@ -197,16 +197,27 @@ def run_null(
             # cross-arm comparable.
             naive_ndeg[i] = naive_ndeg_solo[i]
 
-    # ---- A2: is the real split comparable to the permutations it is judged against? ----
+    # ---- A2 PARTIALLY ADDRESSED (range check only); full stratification deferred ----
     #
-    # Full cell-count stratification (restricting the permutation set to splits whose per-group
-    # cell totals match the real one) is not reachable at the donor counts real strata carry: at
-    # 3v3 there are only C(6,3) - 2 = 18 permutations to begin with, and filtering on cell count
-    # would leave single digits. So the spec's own alternative is used instead — log the per-group
-    # cell totals for BOTH arms and check explicitly that the real split sits inside the
-    # permutation distribution. If it does not, the floor is being compared against permutations
-    # of a systematically different size, and the comparison is size-confounded rather than a
-    # clean statement about the replication unit.
+    # See docs/AMENDMENTS.md, Amendment 2 Change 6. Correction A2 requires the permutation set to
+    # be cell-count STRATIFIED — restricted to, or reweighted toward, assignments whose per-group
+    # cell totals are close to the real split. What follows is NOT that. It is a range check: log
+    # the per-group cell totals for both arms and verify the real split sits inside the permutation
+    # distribution. Where it does not, the floor is being compared against permutations of a
+    # systematically different size and the comparison is size-confounded rather than a clean
+    # statement about the replication unit — which the caller must then read as such.
+    #
+    # Deferred to Phase 1, with the reasons recorded so the deferral can be argued with:
+    #   * Restricting or reweighting a permutation set on a covariate changes the null being
+    #     sampled and needs decisions (matching tolerance, empty-restricted-set behaviour, whether
+    #     the null stays exact) that are statistical work, not wiring.
+    #   * It is infeasible at the donor counts the spec's own inclusion gate admits: at 3v3 there
+    #     are C(6,3) - 2 = 18 permutations in total, and cell-count filtering leaves single digits.
+    #   * The confound is asymmetric between the arms. Donor pseudobulk profiles are aggregated
+    #     once and are label-invariant, so per-group cell-count imbalance cannot move the
+    #     pseudobulk arm's inputs at all; only the naive per-cell arm's statistic scales with cell
+    #     count. A2 therefore does not gate the pseudobulk validity claim, which is what Amendment
+    #     2 exists to repair. It does bear on the naive arm's floor, a Phase 1 headline quantity.
     real_test_cells = int(cells_per_donor[list(true_test)].sum())
     perm_test_cells = np.array([t for t, _ in cell_totals], dtype=float)
     inside = bool(perm_test_cells.size and

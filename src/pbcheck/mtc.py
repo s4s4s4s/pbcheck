@@ -2,9 +2,18 @@
 
 Spec §5: the naive and pseudobulk arms must be Benjamini-Hochberg corrected over an **identical,
 label-agnostic** gene universe at the same alpha, so any difference in the significant-gene count is
-due to the test / replication unit and nothing else. We deliberately do NOT consume scanpy's or
-DESeq2's own adjusted p-values (DESeq2's independent filtering would NA genes asymmetrically vs the
-naive arm — spec C2/C3); both arms feed raw p-values into the same ``fdr_bh`` over the same G genes.
+due to the test / replication unit and nothing else. We deliberately do NOT consume any arm's own
+adjusted p-values; both arms feed raw p-values into the same ``fdr_bh`` over the same G genes.
+
+The requirement C2 was written for — no gene NA'd asymmetrically between the arms — is now carried
+by :func:`bh_both_arms` for **any** source of NA rather than by a DESeq2 flag, which is strictly
+stronger and survives the arm change. C3's independent-filtering cross-check was DESeq2-specific and
+is retired with it (Amendment 2 Change 5).
+
+**Amendment 2 Change 2 (erratum).** ``bh_both_arms`` was specified by §5, implemented here, tested,
+and used by no production caller: ``permutation.run_null`` and ``scripts/synthetic_gate.py`` both
+called the per-arm :func:`bh_over_universe`, so every published number had each arm corrected over
+its own non-NaN subset. Both now use the paired path.
 """
 
 from __future__ import annotations
@@ -72,7 +81,10 @@ def bh_over_universe(result: DEResult, universe: list[str], alpha: float = 0.05)
     # NOTE: a length check here would be a tautology — reindex returns len(universe) rows by
     # construction and cannot fail. The property that actually needs guarding is that the TWO arms
     # are corrected over the same tested set, which one arm alone cannot establish. Use
-    # bh_both_arms for anything whose output is compared across arms.
+    # bh_both_arms for anything whose output is compared across arms — as run_null and the gate now
+    # do (Amendment 2 Change 2). This single-arm path remains correct for genuinely within-arm
+    # quantities (e.g. the naive arm's own floor over permutations with no pseudobulk counterpart)
+    # and for tests; it is not a shortcut for a cross-arm comparison.
     return DEResult(method=result.method, table=tab, contrast=result.contrast)
 
 
