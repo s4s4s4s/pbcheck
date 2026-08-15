@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pbcheck"
-version = "0.0.1.dev0"
+dynamic = ["version"]
 description = "An auditor of pseudoreplication in single-cell RNA-seq differential expression analysis."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -42,6 +42,9 @@ dev = ["pytest", "hypothesis", "ruff"]
 Homepage = "https://github.com/s4s4s4s/pbcheck"
 Repository = "https://github.com/s4s4s4s/pbcheck"
 Issues = "https://github.com/s4s4s4s/pbcheck/issues"
+
+[tool.hatch.version]
+path = "src/pbcheck/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pbcheck"]

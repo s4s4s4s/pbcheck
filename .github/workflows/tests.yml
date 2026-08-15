@@ -38,6 +38,12 @@ jobs:
       - name: ruff check
         run: python -m ruff check .
 
+      # pyproject.toml's version is dynamic, read from src/pbcheck/__init__.py by hatchling
+      # (R3); CITATION.cff keeps an independent copy for tools that read it standalone (GitHub's
+      # "Cite this repository", Zenodo), which is exactly the copy that can drift unnoticed.
+      - name: Check CITATION.cff version matches the package
+        run: python scripts/check_version_consistency.py
+
   test:
     name: pytest (py${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
