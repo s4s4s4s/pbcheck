@@ -86,7 +86,14 @@ Built and exercised by the test suite:
   corrected over one shared gene universe at one alpha so the two differ only by the test.
 - **Donor-permutation null** and the inflation metrics (genomic-inflation λ, the false-positive floor).
 
-Specified but **not** built — the real-data harness (`census_select`, `io_counts`, `controls`, `decision`,
+- **Census stratum selection** (`census_select`, obs only, no network in the tests): opens the Census at the
+  pinned version `2025-01-30` (never a mutable alias), forms `(dataset_id × cell_type)` strata with one
+  `disease vs normal` contrast per disease term, applies the inclusion-gate items metadata can decide,
+  pre-screens confounding per donor and emits a **candidate** manifest. It admits nothing: integer counts and
+  universe size are pending on `io_counts`, and `sigma_donor` / envelope membership are pending on the anchor
+  Amendment 3 leaves open.
+
+Specified but **not** built — the rest of the real-data harness (`io_counts`, `controls`, `decision`,
 `report`), the `risk_score`, the HTML report, and the no-raw-counts mode. See
 [`pilot/README.md`](pilot/README.md), which also lists the spec corrections that are named in module
 docstrings but not yet implemented, so that nothing here reads as done when it is not.

@@ -126,3 +126,37 @@ culminating in Amendment 2.
   so this is an implementation fix, not a protocol change. `tests/test_methods.py` now asserts both
   columns and checks them against per-condition nonzero rates computed from the matrix (which is
   what guards the reindex), replacing the test that recorded the gap.
+
+### Real-data harness, module 1 — Census stratum selection (2026-08-15)
+
+- Added: `pbcheck.census_select` (spec §9 item 1), the obs-only front of the real-data harness.
+  `open_census()` refuses anything but the pinned `2025-01-30` and refuses the mutable aliases by
+  name; `query_obs()` materialises the §1 columns, records the ones the Census schema does not
+  expose instead of faking them, and picks up any library/pool identifier it does (D3); strata are
+  `(dataset_id × cell_type)` with **one binary `disease vs normal` contrast per disease term**, never
+  a pooled "any disease" arm; `apply_inclusion_gate()` drops thin donors (< 10 cells in that cell
+  type — dropped, not merged) before applying the ≥ 3 donors/group rule, and rejects a donor that
+  spans both conditions or a group carrying one donor; `confound_prescreen()` measures Cramér's V and
+  perfect separation **per donor** — reusing `pbcheck.design`'s helpers rather than copying them —
+  over assay, suspension type, tissue, a sequencing-depth bin and any pool id, **restricted to the
+  levels that group two or more donors** (a level held by a single donor is a relabeling of
+  `donor_id`, which is nested within condition by design, so scoring it would have excluded a
+  40-donor stratum over a two-donor library coincidence), excluding on the three §1 names and
+  tagging the rest; `emit_manifest()` writes the §1 manifest as JSON + CSV with the
+  census version, package versions, the pre-registered config block and D4's excluded fraction in
+  the header.
+- Added: `tests/test_census_select.py` (48 tests, no network, synthetic obs frames) — including the
+  pin test that no mutable census alias appears as an argument anywhere in the module, that every
+  column the module cannot compute is written as `pending`, and two regression tests from the
+  adversarial review: a singleton pool coincidence among 40 donors must tag and not exclude while a
+  structural pool confound still excludes, and cells with a null `donor_id` must be dropped and
+  counted — under pandas 3.0's `future.infer_string` a null survives `.astype(str)`, so such cells
+  were passing the gate unseen although §1 item 3 requires `donor_id` present.
+- Note: this module **admits nothing**. Inclusion-gate items 4 and 5 (integer counts, frozen-universe
+  size) need `X` and are emitted as `pending` for `io_counts` / `gene_universe`; `sigma_donor` and
+  envelope membership are `pending` on the anchor Amendment 3 explicitly leaves OPEN; every row
+  carries `admitted_to_sweep = False`. It also publishes **no** covariate-affordability column:
+  §1's C4 df rule lapsed with DESeq2 (Amendment 2 Change 1), the shipped moderated arm fits
+  `~ 1 + x`, and a partial confound is tagged and neutralised by the permutation null, not
+  modelled. Committing this manifest is not the §1 pre-registration of the
+  stratum list.

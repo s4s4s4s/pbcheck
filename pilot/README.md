@@ -42,6 +42,11 @@ where the confounds are messy. Methodology: [`../docs/PHASE0_SPEC.md`](../docs/P
 - `pbcheck.metrics` — genomic-inflation λ, permutation floor, signal-above-floor (§6)
 - `pbcheck.gate_config` — the pre-registered thresholds, in one place, tagged by provenance
 - `pbcheck.design` — obs-only design auditor (§7)
+- `pbcheck.census_select` — obs-only stratum selection (§1): pinned census version, `(dataset_id × cell_type)`
+  strata with one `disease vs normal` contrast per term, the inclusion-gate items obs can decide (thin donors
+  dropped not merged, ≥ 3 donors/group, donor nested in condition), the donor-level confound pre-screen with
+  the pooling flag, and the candidate manifest (JSON + CSV). **Candidates, not a pre-registration** — see the
+  gap note below
 - `synthetic/oracles.py` + `scripts/synthetic_gate.py` — validation on known truth (§8 b/c)
 
 ### Known gaps in what is listed above
@@ -89,16 +94,23 @@ each item names the amendment entry that settles it.
 
 Per spec §9, in order:
 
-1. **`census_select.py`** — open a *pinned* Census version, query obs, apply the inclusion gate
-   (≥3 donors/group, ≥10 cells/donor, integer counts), confound pre-screen (Cramér's V + perfect
-   separation + pooling flag), and **pre-register** the stratum list before any metric is computed.
-2. **`io_counts.py`** — load a `(dataset_id × cell_type)` stratum, assert integer raw counts.
-3. **`controls.py`** — cells-per-donor sweep (the primary conditioning axis, D1), donors-per-group
-   sweep, depth-match downsampling.
-4. **`decision.py`** — the pre-registered GO/NO-GO rule, clustered by dataset (D2), pseudobulk
+1. **`io_counts.py`** — load a `(dataset_id × cell_type)` stratum, assert integer raw counts. It also
+   owes `census_select`'s manifest two columns it cannot fill from obs: `integer_check` (gate item 4)
+   and, with `gene_universe`, `frozen_universe_size` (item 5 / C5). Both are written as `pending`
+   today, never as a value.
+2. **`controls.py`** — cells-per-donor sweep (the primary conditioning axis, D1), donors-per-group
+   sweep, depth-match downsampling, cell-type annotation ontology depth (D5 — also a `pending`
+   column of the selection manifest).
+3. **`decision.py`** — the pre-registered GO/NO-GO rule, clustered by dataset (D2), pseudobulk
    validity gate first.
-5. **`report.py`** — jinja2 HTML: per-stratum/per-dataset tables, null-distribution plots,
+4. **`report.py`** — jinja2 HTML: per-stratum/per-dataset tables, null-distribution plots,
    floor-vs-cells-per-donor curves, λ, oracle pass/fail, provenance manifest.
+
+Not a module, and not automatable: **the §1 pre-registration of the stratum list itself** — choosing
+8–12 datasets that *span* the outcome space and freezing that list by commit before any metric is
+computed. `census_select` proposes candidates and stamps every row `admitted_to_sweep = False`;
+selecting from them is a judgement, and admission additionally needs the per-stratum `sigma_donor`
+estimate and envelope membership Amendment 3 leaves open.
 
 ## First pass (spec §1)
 
