@@ -1,16 +1,24 @@
 """The correct pseudobulk DE test — the reference pbcheck compares the naive test against.
 
 Counts are aggregated to one profile per donor (per cell type) with decoupler, then tested across
-donors with PyDESeq2. The unit of replication is the donor, which is what removes the
-pseudoreplication inflation.
+donors. The unit of replication is the donor, which is what removes the pseudoreplication inflation.
 
-Two spec corrections are baked in:
-  * **poscounts size factors** (C1): median-of-ratios silently drops any gene with a zero in any
-    sample and degenerates on sparse per-cell-type pseudobulk, so we use ``poscounts``.
-  * **cooks_filter=False** (C2): DESeq2's Cook's-distance / independent filtering would set some genes'
-    p-values to NA asymmetrically, while the naive Wilcoxon arm filters nothing — that would make the
-    two arms' gene sets differ. We pull raw p-values with no such filter, then BH-correct both arms
-    identically over the frozen universe in :mod:`pbcheck.mtc`.
+**The arm's test is moderated eBayes** (:mod:`pbcheck.methods.moderated`) as of Amendment 2
+(2026-08-15) Change 1, which closes the replacement-test question Amendment 1 left open.
+DESeq2-Wald — which Amendment 1 showed fails the binding validity gate of decision rule item 1 /
+§8(a) — is retired from the arm; :func:`deseq_from_pdata` is retained, superseded, so that every
+Amendment-1-era number stays reproducible from this repository.
+
+Spec corrections still live here:
+  * **thin-donor filtering** (§1 inclusion-gate item 2, §3): donor profiles below ``min_cells``
+    cells or ``min_counts`` summed counts are **dropped, not merged**. Implemented manually per
+    Amendment 2 Change 7 — decoupler 2.x removed the parameters the spec pins, so this filter had
+    silently never run.
+  * **cooks_filter=False** (C2) on the retained DESeq2 path. C2's underlying requirement — no
+    asymmetric NA between the arms — now binds for *any* source of NA and is carried by
+    :func:`pbcheck.mtc.bh_both_arms` (Amendment 2 Change 2), which is strictly stronger.
+  * **poscounts size factors** (C1) on the retained DESeq2 path. C1 is DESeq2-specific and lapses
+    with it; the moderated arm normalises by library size directly through log2(CPM + 1).
 """
 
 from __future__ import annotations
@@ -24,6 +32,12 @@ from pydeseq2.dds import DeseqDataSet
 from pydeseq2.ds import DeseqStats
 
 from pbcheck.methods.de import DEResult
+from pbcheck.methods.moderated import ebayes_from_pdata
+
+#: Pre-registered thin-donor thresholds (spec §1 inclusion-gate item 2 and the §3 aggregation call).
+#: Changing them is a protocol change and requires an AMENDMENTS.md entry.
+MIN_CELLS = 10
+MIN_COUNTS = 1000
 
 
 def build_pseudobulk(
@@ -33,21 +47,31 @@ def build_pseudobulk(
     celltype_col: str | None = "cell_type",
     condition_col: str = "condition",
     mode: str = "sum",
-    min_cells: int = 10,
-    min_counts: int = 1000,
+    min_cells: int = MIN_CELLS,
+    min_counts: int = MIN_COUNTS,
 ):
-    """Aggregate raw counts to one pseudobulk profile per donor (per cell type).
+    """Aggregate raw counts to one pseudobulk profile per donor (per cell type), then thin-filter.
 
-    ``mode='sum'`` (not mean) because DESeq2 models library size and expects summed integer counts.
+    ``mode='sum'`` (not mean) because the downstream models library size and expect summed integer
+    counts.
 
-    ``min_cells`` / ``min_counts`` are accepted but inert: the spec's inclusion gate (§1 item 2)
-    and the §3 aggregation call both pre-register per-donor thin-sample filtering
-    (``dc.pp.pseudobulk(..., min_cells=10, min_counts=1000)``), but decoupler 2.x's
-    ``dc.pp.pseudobulk`` has no such parameters to forward them to (see pilot/README.md's
-    documented-deviations list). Implementing an equivalent filter ourselves would be a protocol
-    change requiring an AMENDMENTS.md entry first (this is R0, engineering-only). Left as accepted
-    parameters rather than removed so the signature keeps documenting the pre-registered intent;
-    implementation deferred to Amendment 2 (R1).
+    **Thin-donor filter (Amendment 2 Change 7).** Spec §1 inclusion-gate item 2 pins "≥ 10 cells per
+    donor in that cell_type (donors below threshold are **dropped, not merged**)" and §3 pins
+    ``dc.pp.pseudobulk(..., min_cells=10, min_counts=1000)``. decoupler 2.x removed both parameters,
+    so from the port onwards the pre-registered filter silently never ran; R0 documented that hole
+    and deferred the fix to an amendment, which is Change 7. The filter is applied here on
+    decoupler's own bookkeeping columns (``psbulk_cells`` / ``psbulk_counts``) after aggregation and
+    before the universe is frozen, exactly where the spec places it. A profile below either
+    threshold is **removed**; nothing is merged into another donor and nothing is back-filled.
+
+    The surviving profiles carry ``pdata.uns['thin_donor_filter']`` recording the thresholds, the
+    counts dropped for each reason and the dropped profile names, so a stratum that loses donors is
+    visible in the artifact rather than silently smaller. The spec's separate "≥ 3 pseudosamples per
+    group post-aggregation, else SKIP" rule (§3) applies to what survives and is enforced by the
+    caller.
+
+    Passing ``min_cells=0, min_counts=0`` disables the filter; it is not a way to soften the
+    protocol, only to inspect what the filter removed.
     """
     pdata = dc.pp.pseudobulk(
         adata, sample_col=donor_col, groups_col=celltype_col, mode=mode, raw=False
@@ -56,7 +80,47 @@ def build_pseudobulk(
         raise ValueError(
             f"'{condition_col}' not carried into pseudobulk .obs; it must be constant within donor."
         )
-    return pdata
+    return _drop_thin_donors(pdata, min_cells=min_cells, min_counts=min_counts)
+
+
+def _drop_thin_donors(pdata, *, min_cells: int, min_counts: int):
+    """Drop (never merge) donor profiles below the pre-registered thin-sample thresholds.
+
+    ``psbulk_cells`` / ``psbulk_counts`` are decoupler's own per-profile bookkeeping. Where they are
+    absent (a hand-built ``pdata`` in a test, say) the corresponding threshold cannot be applied and
+    is recorded as not applied, rather than being silently treated as satisfied — the failure mode
+    this whole change exists to remove.
+    """
+    n_before = pdata.n_obs
+    keep = np.ones(n_before, dtype=bool)
+    applied = {}
+
+    for col, thresh, label in (("psbulk_cells", min_cells, "min_cells"),
+                               ("psbulk_counts", min_counts, "min_counts")):
+        if thresh <= 0:
+            applied[label] = "disabled"
+            continue
+        if col not in pdata.obs.columns:
+            applied[label] = "unavailable: decoupler did not emit " + col
+            continue
+        vals = pd.to_numeric(pdata.obs[col], errors="coerce").to_numpy(dtype=float)
+        fails = ~(vals >= thresh)  # NaN fails: an unmeasurable profile is not a passing one
+        applied[label] = int(fails.sum())
+        keep &= ~fails
+
+    dropped = [str(n) for n, k in zip(pdata.obs_names, keep) if not k]
+    out = pdata[keep].copy() if not keep.all() else pdata
+    out.uns["thin_donor_filter"] = {
+        "min_cells": int(min_cells),
+        "min_counts": int(min_counts),
+        "n_profiles_before": int(n_before),
+        "n_profiles_after": int(out.n_obs),
+        "n_dropped": int(n_before - out.n_obs),
+        "dropped_profiles": dropped,
+        "per_threshold": applied,
+        "semantics": "dropped, not merged (spec section 1 item 2; Amendment 2 Change 7)",
+    }
+    return out
 
 
 def deseq_from_pdata(
@@ -71,6 +135,17 @@ def deseq_from_pdata(
     n_cpus: int = 4,
 ) -> DEResult:
     """Run PyDESeq2 on already-aggregated donor pseudobulk profiles.
+
+    **SUPERSEDED by Amendment 2 (2026-08-15) Change 1 — kept for reproducibility of
+    Amendment-1-era results.** This is no longer the pseudobulk arm's test: Amendment 1 showed
+    DESeq2-Wald fails the binding validity gate (λ = 1.21–1.25 outside [0.9, 1.1]; permutation-null
+    FP 0.35–0.50 against α = 0.05; power 0.47–0.57 against ≥ 0.60), and the 146-cell selection grid
+    reproduced the failure independently (FP = 0.26 and 0.56 at 8v8, binomial P = 1.1e-17 and
+    5.8e-68). The arm's test is now :func:`pbcheck.methods.moderated.ebayes_from_pdata`.
+
+    It is retained, not deleted, because every number in Amendment 1 and ``PILOT_FINDINGS.md`` was
+    produced by this function: retiring a method by removing the code that produced the retired
+    results would make the record unfalsifiable. New callers must use the moderated arm.
 
     Split out from :func:`pseudobulk_de` so a permutation harness can aggregate donors **once** and
     only relabel donor->condition per permutation (donor profiles are invariant under relabeling).
@@ -144,23 +219,30 @@ def pseudobulk_de(
     universe: list[str] | None = None,
     min_count: int = 10,
     min_total_count: int = 15,
-    fdr: float = 0.05,
-    n_cpus: int = 4,
+    min_cells: int = MIN_CELLS,
+    min_counts: int = MIN_COUNTS,
+    trend: bool = False,
 ) -> DEResult:
-    """Correct DE: pseudobulk per donor -> PyDESeq2 ``~condition`` across donors.
+    """Correct DE: pseudobulk per donor -> **moderated eBayes** ``~condition`` across donors.
 
-    If ``universe`` is given, the test is restricted to exactly those genes (the frozen label-agnostic
-    universe, spec §3); otherwise a self-contained expression filter is applied for standalone use.
-    Returns raw p-values + log2FC; call :func:`pbcheck.mtc.bh_over_universe` to get significance.
+    The arm's test as of Amendment 2 Change 1 (Smyth 2004 moderated t on log2(CPM + 1) donor
+    profiles; see :mod:`pbcheck.methods.moderated` for the estimator and the selection evidence).
+    Thin donor profiles are dropped before the test per Amendment 2 Change 7.
+
+    If ``universe`` is given, the test is restricted to exactly those genes (the frozen
+    label-agnostic universe, spec §3); otherwise a self-contained expression filter is applied for
+    standalone use. Returns raw p-values + log2FC with the realised prior on ``.moderation``; call
+    :func:`pbcheck.mtc.bh_both_arms` (not the per-arm path) for anything compared across arms.
     """
     pdata = build_pseudobulk(
-        adata, donor_col=donor_col, celltype_col=celltype_col, condition_col=condition_col
+        adata, donor_col=donor_col, celltype_col=celltype_col, condition_col=condition_col,
+        min_cells=min_cells, min_counts=min_counts,
     )
     if universe is None:
         dc.pp.filter_by_expr(
             pdata, group=condition_col, min_count=min_count, min_total_count=min_total_count
         )
-    return deseq_from_pdata(
+    return ebayes_from_pdata(
         pdata, condition_col=condition_col, test_level=test_level, ref_level=ref_level,
-        universe=universe, fdr=fdr, n_cpus=n_cpus,
+        universe=universe, trend=trend,
     )
