@@ -36,7 +36,7 @@ dependencies = [
 census = ["cellxgene-census"]
 # Only needed for the (not-yet-built) HTML report; nothing in src/ imports these (grepped, R3).
 report = ["jinja2", "matplotlib", "tqdm"]
-dev = ["pytest", "hypothesis", "ruff"]
+dev = ["pytest", "pytest-cov", "hypothesis", "ruff"]
 
 [project.urls]
 Homepage = "https://github.com/s4s4s4s/pbcheck"

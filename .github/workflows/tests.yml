@@ -56,6 +56,10 @@ jobs:
           # Developed on Windows; Linux is the untested platform, so it carries the matrix.
           - os: windows-latest
             python-version: "3.12"
+          # One macOS combination, on the newer interpreter, for a third-platform smoke check
+          # without tripling the whole matrix.
+          - os: macos-latest
+            python-version: "3.13"
 
     steps:
       - uses: actions/checkout@v4
@@ -79,5 +83,54 @@ jobs:
         run: |
           python -c "import numpy, scipy, pandas, anndata, scanpy, decoupler, pydeseq2, statsmodels; [print(f'{m.__name__}=={m.__version__}') for m in (numpy, scipy, pandas, anndata, scanpy, decoupler, pydeseq2, statsmodels)]"
 
-      - name: Run tests
-        run: python -m pytest -q
+      # Report-only: no --cov-fail-under gate. This is a bleeding-edge, pre-registered research
+      # repo mid-Phase-0 — a coverage floor would either block legitimate work or get raised by
+      # weakening it, neither of which is worth it yet. The number is surfaced so it is visible
+      # without being enforced.
+      - name: Run tests (with coverage)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pytest -q --cov=pbcheck --cov-report=term | tee pytest-coverage.txt
+          {
+            echo "### Coverage (pbcheck) — report-only, no threshold gate"
+            echo
+            echo '```'
+            cat pytest-coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: build sdist/wheel + twine check + install smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # build/twine are packaging tooling, not part of the [dev] test/lint extra, so they are
+      # installed directly here rather than pulled in by every contributor's dev install.
+      - name: Install packaging tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: twine check
+        run: python -m twine check dist/*
+
+      # The real smoke test: install the built wheel (not the editable checkout) into a clean
+      # venv and confirm the package actually imports — catches missing package-data / MANIFEST
+      # issues that `pip install -e .` can silently paper over.
+      - name: Install the built wheel into a fresh venv and import it
+        run: |
+          python -m venv wheel-venv
+          wheel-venv/bin/pip install --upgrade pip
+          wheel-venv/bin/pip install dist/*.whl
+          wheel-venv/bin/python -c "import pbcheck; print(pbcheck.__version__)"
