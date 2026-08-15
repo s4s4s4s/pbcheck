@@ -39,6 +39,15 @@ def build_pseudobulk(
     """Aggregate raw counts to one pseudobulk profile per donor (per cell type).
 
     ``mode='sum'`` (not mean) because DESeq2 models library size and expects summed integer counts.
+
+    ``min_cells`` / ``min_counts`` are accepted but inert: the spec's inclusion gate (§1 item 2)
+    and the §3 aggregation call both pre-register per-donor thin-sample filtering
+    (``dc.pp.pseudobulk(..., min_cells=10, min_counts=1000)``), but decoupler 2.x's
+    ``dc.pp.pseudobulk`` has no such parameters to forward them to (see pilot/README.md's
+    documented-deviations list). Implementing an equivalent filter ourselves would be a protocol
+    change requiring an AMENDMENTS.md entry first (this is R0, engineering-only). Left as accepted
+    parameters rather than removed so the signature keeps documenting the pre-registered intent;
+    implementation deferred to Amendment 2 (R1).
     """
     pdata = dc.pp.pseudobulk(
         adata, sample_col=donor_col, groups_col=celltype_col, mode=mode, raw=False
