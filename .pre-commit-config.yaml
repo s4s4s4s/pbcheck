@@ -1,0 +1,33 @@
+# Mirrors CI (.github/workflows/tests.yml) on purpose: `ruff check` only, no `--fix` and no
+# format hooks. This is a pre-registered scientific repo and a lot of existing code predates a
+# formatting policy — see the comment on the lint job in tests.yml for why `ruff format --check`
+# is deliberately absent there too. A pre-commit hook that reformatted on commit would diverge
+# from what CI enforces and would pollute `git blame` on files the analysis depends on.
+#
+# docs/PHASE0_SPEC.md and docs/AMENDMENTS.md are the frozen protocol documents (see CLAUDE.md /
+# the R3 task brief) and are excluded from the fixing hooks below so their bytes are never
+# touched by a mechanical pass — end-of-file-fixer would otherwise add PHASE0_SPEC.md's missing
+# trailing newline.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check .
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+        exclude: ^docs/(PHASE0_SPEC|AMENDMENTS)\.md$
+      - id: trailing-whitespace
+        exclude: ^docs/(PHASE0_SPEC|AMENDMENTS)\.md$
+      - id: check-yaml
+      - id: check-added-large-files
+        # pilot/testsel/summary.{csv,json} are committed run artifacts (~64KB / ~22KB); the
+        # largest tracked file in the repo is ~71KB (scripts/pb_calibration_probe.py). 500KB
+        # gives headroom without letting an actual accidental large-file commit through.
+        args: [--maxkb=500]
