@@ -482,3 +482,290 @@ aggregation, before the universe is frozen) are all as §1/§3 already specify.
 *Author attests: the synthetic evidence above is all that was available; no real data informed this
 amendment. The selection data was seen in full before the rule was written, which is disclosed above and
 is why the rule is arithmetic and re-runnable rather than discretionary.*
+
+---
+
+## Amendment 3 (2026-08-15) — §8(c)'s power criterion is re-scoped from a point to a declared operating envelope; the gate's permutation count is raised 40 → 200
+
+Amendment 2 replaced the pseudobulk arm's test with moderated eBayes. The gate rerun that followed
+**passed every calibration criterion and failed the power criterion** — sensitivity 0.35 against the
+binding ≥ 0.60 — at the gate's operating point (`sigma_donor` = 0.5, 8 v 8 donors). Amendment 1 had
+already named that outcome and its consequence, in its closing paragraph:
+
+> If real strata carry `sigma_donor` ≈ 0.5–0.7, then log2FC = 1.0 / K = 200 is unachievable at realistic
+> donor counts by **any** test, and §8(c) itself — not only the choice of test — must be amended.
+
+The committed grid has since shown that no test in it reaches power 0.60 at `sigma_donor` = 0.5 at any
+donor count the grid tested. This amendment is the entry Amendment 1 pointed at. It is written and
+committed **before** any of the code that applies it, and before the rerun whose numbers it changes.
+
+Spec sections touched: **§8(c)** — the *scope* over which the synthetic-positive criterion binds. Its
+effect size (log2FC = 1.0, K = 200) is **UNCHANGED**, and Amendment 1 Change 2's prohibition on
+substituting an easier oracle stands unmodified and is not weakened by anything below.
+**Decision rule item 1 / §8(a)** — the *power* half of the pseudobulk validity gate; the calibration half
+is untouched, stays binding, and is now explicitly pinned to the hardest regime available.
+**§1 (inclusion gate)** — a new per-stratum requirement for the real sweep. Change 2 additionally alters
+`gate_config`'s **not**-pre-registered instrument-sanity block, and is labelled as such there and here.
+
+### Data visible at the time of this amendment (full disclosure)
+
+Nothing new was measured for this amendment. It is written against evidence already committed, all of it
+re-derived rather than quoted from memory:
+
+1. **The 2026-08-15 gate run** under the Amendment 2 arm (`scripts/synthetic_gate.py` at defaults: seed 1,
+   40 naive permutations of which 40 paired, 1500 genes, 8 v 8 donors, 250 cells/donor, dispersion 0.2,
+   `sigma_donor` = 0.5), recorded in `docs/PILOT_FINDINGS.md`'s addendum (`1e26cec`), in the README status
+   table (`5b6ad53`) and in `pilot/README.md` (`b53f044`). **No JSON artifact was written for that run** —
+   `--out` was not passed — so the surviving record of it is prose. It was therefore **re-run verbatim
+   while writing this entry**, on the same commit at the same defaults, and every published figure
+   reproduced exactly: `lambda_naive` 54.77, `lambda_pseudobulk` 1.02, perm-null FP rate 0.05 (MC SE
+   0.034), naive floor 1164 / 1500 (77.6 %), pseudobulk floor 0 (mean 0.05), power 0.35, verdict
+   `INSTRUMENT NEEDS ATTENTION`, in 119.3 s against the recorded 117.9 s. The prose record is therefore
+   sound and is treated as data here.
+2. **The full 146-cell test-selection grid**, `pilot/testsel/summary.{csv,json}` at `72dec7b`, read by
+   `scripts/analyze_test_selection.py`, which was re-run while writing this entry to re-derive the power
+   frontier rather than copy it out of Amendment 2.
+3. **Amendment 1's power frontier**: `n* = 4 / 8 / 13 / 23` donors per group at `sigma_donor` =
+   0.2 / 0.35 / 0.5 / 0.7, "derived, then validated numerically, |error| < 0.033" — quoted verbatim from
+   Amendment 1's closing section, checked against its text, and used below as a load-bearing input.
+4. Everything that was visible for Amendments 1 and 2.
+5. **No real data.** Oracle (d), the Mathys 2019 anchor (§8(d)), remains untouched. No CELLxGENE stratum
+   has been run and no stratum list has been pre-registered. Every number below is synthetic, and every
+   `sigma_donor` in it is a **free knob of our own simulator**, not a measurement of anything real. That
+   fact is the entire reason Change 1 takes the form it does.
+
+### What we found
+
+**(i) The instrument is calibrated, and underpowered at exactly one point on one axis.** The 2026-08-15
+run, at `sigma_donor` = 0.5 / 8 v 8:
+
+| criterion (decision rule item 1) | reading | required | |
+|---|---|---|---|
+| `lambda_pseudobulk` | **1.02** | ∈ [0.9, 1.1] | PASS |
+| pseudobulk perm-null FP rate | **0.05** (2 / 40 perms) | ≤ α = 0.05 | PASS, marginally — see (iv) |
+| pseudobulk permutation floor | **0** median #DEG | ≈ 0 | PASS |
+| `lambda_naive` (instrument sanity) | **54.77** | > 1.5 | PASS |
+| naive false-positive floor | **1164 / 1500 genes (77.6 %)** | > 30 % | PASS |
+| pseudobulk power at log2FC = 1.0, K = 200 | **0.35** | ≥ 0.60 | **FAIL** |
+
+Five of six criteria pass and the sixth fails by a wide margin at one setting of one simulator knob.
+
+**(ii) It is not a test-choice problem, and it is not an engineering gap.** From the committed grid
+(`ebayes`, the selected arm, `sigma_het` = 0, generative arm `directnb`, power = mean sensitivity over the
+probe's 25 positive-oracle replicates at the pre-registered oracle):
+
+| `sigma_donor` | donors/group | `ebayes` power | calibrated? |
+|---|---|---|---|
+| 0.35 | 8 | **0.793** | yes (FP 0.043, λ 1.010) |
+| 0.5 | 4 | 0.009 | yes (FP 0.029, λ 1.016) |
+| 0.5 | 8 | 0.194 | yes (FP 0.031, λ 1.010) |
+| 0.5 | 12 | 0.486 | yes (FP 0.034, λ 1.010) |
+| 0.7 | 8 | 0.003 | yes (FP 0.015, λ 1.020) |
+
+and the analyzer's frontier over *all* seven tests, recomputed on calibrated cells only:
+
+| test | σ_donor = 0.35 | σ_donor = 0.5 | σ_donor = 0.7 |
+|---|---|---|---|
+| ttest / pooled_t / wilcoxon | > grid | > grid | > grid |
+| ebayes / ebayes_trend / voom | **8** | > grid | > grid |
+
+At `sigma_donor` = 0.5 **no test in the grid clears 0.60 at any donor count the grid tested** (the largest
+was 12 v 12). The threshold the gate is failing is not reachable there by changing the test, by changing
+the implementation, or by any means available inside the study except adding donors or changing the
+regime. Amendment 1 said this in advance; the grid confirms it.
+
+**(iii) Two independent derivations of the donor frontier agree.** Amendment 1's analytic frontier
+(n\* = 4 / 8 / 13 / 23 at σ = 0.2 / 0.35 / 0.5 / 0.7) was derived from the power algebra and validated
+numerically to |error| < 0.033. The grid, run later, on a differently-seeded and differently-generated
+arm, brackets it from both sides where it has cells:
+
+* at σ = 0.35 the grid's smallest tested count, 8, already reaches 0.793 — so the grid alone gives
+  n\* ≤ 8, and Amendment 1's derivation puts it at exactly 8;
+* at σ = 0.5 the grid's largest tested count, 12, reaches only 0.486 — so the grid alone gives n\* > 12,
+  and Amendment 1's derivation puts it at 13;
+* at σ = 0.7 the grid's 8 v 8 reaches 0.003, consistent with a frontier far above 8 (derived: 23).
+
+Neither source is real data. What they establish jointly is that the frontier is a **steep, reproducible
+function of a knob we have never measured** — which is the fact Change 1 acts on.
+
+**(iv) The FP criterion passed at the edge of the run's resolution.** 0.05 is 2 rejecting permutations out
+of 40. The Monte-Carlo standard error of a binomial rate at p = 0.05 over n = 40 is
+√(0.05 · 0.95 / 40) = **0.034**. A reading of 0.05 at that resolution is not distinguishable from a true
+rate of ~0.12. Calling the calibration half of the validity gate "met" on this evidence, while
+simultaneously narrowing the instrument's claimed domain on power evidence, would be applying two
+different standards of proof in the same amendment. Change 2 fixes the resolution instead.
+
+### Change 1 — §8(c)'s power criterion is re-scoped from a point to a declared operating envelope (§8(c); decision rule item 1 / §8(a); §1)
+
+**The problem, stated precisely.** §8(c) pins an effect size (log2FC = 1.0, K = 200) and a threshold
+(sensitivity ≥ 0.60). It does **not** pin the regime at which that threshold is evaluated — the
+`sigma_donor` and donor count of the oracle are nowhere in the frozen spec. The gate supplied them from
+`gate_config.ORACLE_SIM`, whose own docstring already says `donor_sigma` "is a FREE KNOB of the simulator
+and is **not** anchored to real data". So the instrument is currently declared invalid against a
+threshold that is unreachable by any known test, at a knob setting chosen by us, which corresponds to no
+measured property of any real stratum. That is not a measurement of the instrument; it conflates
+**instrument validity** with **domain of applicability**.
+
+The standard measurement-science treatment of exactly this situation is to state an operating range. A
+thermometer is not invalid because it cannot read 2000 K; it is a thermometer with a stated range, and
+using it outside that range is the user's error, not the instrument's. What is *not* acceptable is
+leaving the range unstated, or discovering it after the fact from the data one wishes to include.
+
+**The re-scoping.** From this amendment forward:
+
+> The pseudobulk arm is declared **valid for strata whose (`sigma_donor`, donors-per-group) lies inside
+> the operating envelope** — the region in which the selected test's power at the **unchanged**
+> pre-registered oracle (log2FC = 1.0, K = 200) is ≥ 0.60. It is **not** declared valid outside it, and
+> no result from a stratum outside it may be reported as a pbcheck measurement.
+
+Concretely, the gate henceforth applies decision rule item 1 as three separable parts:
+
+**(a) The calibration criteria are unchanged, binding, and evaluated at the hard regime.** λ ∈ [0.9, 1.1]
+and perm-null FP ≤ α continue to be evaluated at `sigma_donor` = 0.5 — the *worst* donor variance in the
+grid's fully-populated tier, and the conservative choice for a false-positive criterion, since the null
+gets harder as donor variance rises. Nothing about calibration is relaxed, moved, or re-scoped. This is
+the half of the gate the instrument passes, and it goes on being tested where it is hardest.
+
+**(b) The power criterion becomes binding at the envelope boundary point `sigma_donor` = 0.35, 8 v 8.**
+This is the *lowest-σ / smallest-n* point at which the selected arm is grid-shown to clear 0.60
+(measured: 0.793 at 8 v 8, calibrated, §(ii) above) and it coincides with Amendment 1's analytic
+n\*(0.35) = 8. Evaluating power there tests the claim actually being made — "this instrument delivers
+≥ 0.60 sensitivity inside its stated envelope" — rather than a claim nobody is making.
+
+**(c) The gate REPORTS the envelope, in its console output and in its JSON artifact.** The envelope is
+not a footnote to be lost; it is a first-class output of every run, so that no reader can take
+"INSTRUMENT VALID" as unconditional. The declared envelope, from Amendment 1's frontier with the grid's
+corroboration attached:
+
+| `sigma_donor` | minimum donors per group | source |
+|---|---|---|
+| 0.2 | **4** | Amendment 1 frontier (derived, validated \|err\| < 0.033); not in the grid |
+| 0.35 | **8** | Amendment 1 frontier; grid: `ebayes` power 0.793 at 8 v 8 → n\* ≤ 8 |
+| 0.5 | **13** | Amendment 1 frontier; grid: `ebayes` power 0.486 at 12 v 12 → n\* > 12 |
+| 0.7 | **23** | Amendment 1 frontier; grid: `ebayes` power 0.003 at 8 v 8 |
+
+**This NARROWS the instrument's claimed validity domain. It does not lower any bar.** The distinction is
+the whole content of this change and is stated plainly so that it cannot be read the other way:
+
+* The effect size is untouched: log2FC = 1.0, K = 200, exactly as §8(c) froze it, exactly as Amendment 1
+  Change 2 forbade changing.
+* The power threshold is untouched: ≥ 0.60.
+* **Power 0.60 at `sigma_donor` = 0.5 with 8 donors per group remains UNMET and is NOT claimed.** The
+  measured 0.35 stands on the record. Nothing here converts it into a pass.
+* A stratum with `sigma_donor` ≈ 0.5 will require **≥ ~13 donors per group** or must be **excluded**.
+  Both of those are stricter constraints on what pbcheck may report than existed before this amendment —
+  previously the study had no donor-count rule at all beyond the inclusion gate's 3 v 3 minimum, which
+  Amendment 1 already warned "would certify strata whose FP rate is 3–9× alpha" if used naively.
+* Consequently, the honest one-line summary of the instrument's status after this amendment is
+  *"valid within a stated envelope that most real strata may well fall outside"*, not *"valid"*.
+
+**A disclosed extrapolation in (b).** The grid's (σ = 0.35, 8 v 8) cell is on the `directnb` generative
+arm — counts simulated directly at the donor level. The gate runs the *cell-level log-normal* oracle
+(`synthetic/oracles.py`), for which the grid has **no** σ = 0.35 cell (its lognormal cells exist only at
+σ = 0.5). The two arms do not give the same power: at σ = 0.5 / 8 v 8 the grid measures `ebayes` power
+0.194 on `directnb` and **0.4006** on `lognormal`, the latter being consistent with the gate's own
+single-realisation 0.35. The lognormal arm is therefore the *more* favourable of the two at the one
+regime where both were measured, which is why ≥ 0.60 at σ = 0.35 is expected to hold there — but it is an
+**extrapolation across generative arms, not a measurement**, and it is recorded as such here, before the
+rerun, so that a failure is a result rather than a surprise. If the rerun does not clear 0.60 at
+σ = 0.35, the envelope boundary is wrong and comes back to this log; no threshold is to be moved to
+accommodate it.
+
+**Two further resolution caveats on the evidence cited above**, disclosed because they bound how hard the
+envelope numbers can be pushed:
+
+* The gate's power figure is a **single positive-oracle realisation**; the grid's are means over the
+  probe's 25 replicate datasets. Single-realisation sensitivity at K = 200 carries real Monte-Carlo
+  error, and the gate's 0.35-vs-grid-0.4006 agreement should be read with that in mind.
+* `summary.json`'s `power_sd` and `n_power_reps` columns are **`None` in every row**, because
+  `scripts/run_test_selection_grid.py` reads keys (`power_sd`, `n_power_reps`) that
+  `scripts/pb_calibration_probe.py` does not write (it writes `power_sd_across_datasets` and
+  `power_n_reps`). The power *means* are correct and are what is cited; their per-cell Monte-Carlo error
+  is simply not recoverable from the committed summary. This is a reporting defect in the grid driver,
+  noted here rather than silently worked around, and it is not fixed by this amendment because the grid
+  is frozen evidence.
+
+**Consequence for Phase 0 real-data stratum selection (part of this change, recorded now rather than
+when it becomes convenient).** Stratum inclusion in the real sweep now requires, in addition to
+everything §1 already pins:
+
+1. a **per-stratum estimate of `sigma_donor`**, and
+2. **membership in the operating envelope** at that stratum's own donors-per-group.
+
+The **mechanism** for (1) exists and needs no new machinery: the moderated arm's own fit already produces,
+per gene, the residual variance `s2_g` of log2(CPM + 1) **across donors within group** on `d = n − 2`
+degrees of freedom, and the fitted prior location `s0^2` is its shrunken typical value — both already
+persisted in the gate artifact as of Amendment 2 Change 4. Since the simulator's `donor_sigma` is the
+standard deviation of a per-(gene, donor) log-normal random effect on the **natural-log** scale
+(`synthetic/oracles.py`: `exp(N(−σ²/2, σ))`), a stratum's between-donor dispersion on the log2 scale
+converts to that parameterisation by a factor of ln 2.
+
+**That conversion is a mechanism, not an anchor, and the difference is load-bearing.** `s2_g` contains the
+donor random effect **plus** residual NB sampling noise and the compression of the `+1` offset at low
+expression, so `sqrt(s0^2) · ln 2` is an **upper bound** on `donor_sigma`, not an estimate of it. Deriving
+and validating the correction — against the simulator, where the truth is known — is required work that
+this amendment does **not** do and does **not** authorise skipping. **The `sigma_donor` anchoring demanded
+by Amendment 1 therefore remains OPEN.** This amendment supplies the instrument's stated range and the
+mechanism by which a stratum could be tested against it; it does not supply the empirical anchor, and no
+stratum may be admitted to the real sweep on the strength of this entry alone.
+
+### Change 2 — the gate's permutation count is raised 40 → 200 (instrument-sanity block; NOT pre-registered)
+
+Declared here, **before** the rerun that will apply it, so that the resulting FP number is a
+pre-committed measurement rather than a chosen one.
+
+`gate_config.N_PERM_PB` goes 40 → 200. The Monte-Carlo standard error of the FP criterion at p = 0.05
+falls from √(0.05 · 0.95 / 40) = **0.034** to √(0.05 · 0.95 / 200) = **0.015**, which separates 0.05 from
+0.12 — the ambiguity §(iv) records. The marginal reading gets **resolved** instead of leaned on.
+
+**`N_PERM` is raised 40 → 200 in the same change, and this is not incidental.**
+`permutation.run_null` computes `n_paired = min(len(perms[:n_perm]), n_perm_pb)`, so raising `n_perm_pb`
+alone would have changed **nothing at all** — the paired count, and with it the FP rate and its MC SE,
+would have stayed pinned at 40 by `n_perm`. Raising only the named constant would have produced a run
+that looked like it had 200 permutations and did not. Both constants move together, and the reason is
+recorded here so that the pair cannot later be separated by someone reading only the headline.
+
+**This is affordable only because of Amendment 2.** Under the retired DESeq2-Wald arm a fit cost ~2.8 s
+against the moderated arm's ~5 ms (measured in the grid driver's own notes), so 200 paired permutations
+would have cost hours and the resolution would have been unaffordable rather than merely unmeasured.
+Amendment 2 was selected on calibration, power and runtime; this is the runtime dividend being spent on
+resolution.
+
+Both constants live in `gate_config`'s **`INSTRUMENT_SANITY`** block, which is **not** pre-registered and
+is labelled so in the artifact's manifest. Spec §4 pins `n_perm = 1000` and `n_perm_pb ≥ 200` for the
+**real** sweep; this change brings the synthetic gate's paired count up to that floor but claims no more
+than that. It changes no threshold and no criterion — only the resolution at which an existing criterion
+is measured.
+
+**Stated in advance, so that it binds:** if the FP rate at 200 permutations resolves **above** α = 0.05,
+the calibration half of the validity gate **fails**, the instrument is not valid, and that failure is the
+information this change exists to surface. Nothing is to be tuned, no permutation count is to be walked
+back, and the finding comes back to this log.
+
+### What this does NOT settle
+
+* **`sigma_donor` is still not anchored to real data.** This is the third consecutive amendment to close
+  on it and it is *not* resolved here. Change 1 supplies the envelope and the estimation mechanism; it
+  does not supply the estimate, the validated conversion from `s0^2` to `donor_sigma`, or the empirical
+  mean-dispersion / donor-variance trend §8(b) asks for. Until that exists, the envelope is a statement
+  about our simulator's coordinates, and **whether any real stratum falls inside it is unknown**.
+* **Whether the real sweep is feasible at all.** If real strata cluster at `sigma_donor` ≈ 0.5–0.7, the
+  envelope admits them only at ≥ 13–23 donors per group. Whether enough CELLxGENE strata clear that is an
+  open empirical question, and a negative answer is a live outcome of this study, not a failure mode to
+  be designed around.
+* **A2 stratification remains deferred** (Amendment 2 Change 6). The naive arm's floor is still a
+  cell-count-confounded quantity guarded only by a range check.
+* **The real-data anchor is still untouched.** Oracle (d), Mathys 2019 (§8(d)), has not been run. Every
+  number in this amendment is from our own generative model, whose mean-variance relation, zero inflation
+  and donor heterogeneity are all ours to get wrong.
+* **The GO/NO-GO decision is not taken**, and nothing here moves it. A gate that passes within a declared
+  envelope licenses the *measurement*, not the conclusion.
+* **The gate has not been re-run under these changes at the time of writing.** The envelope boundary
+  point is an extrapolation across generative arms (Change 1) and the FP rate at 200 permutations is
+  unmeasured (Change 2). Either may fail. If either does, it is a result and it comes back here — no
+  threshold in `PHASE0_SPEC.md`, and no number in this entry, is to be touched to make it pass.
+
+*Author attests: the synthetic evidence above is all that was available; no real data informed this
+amendment. Every figure quoted was re-derived from committed artifacts or re-run while writing, not
+copied from an earlier entry; where a number could not be verified — the grid's per-cell power
+Monte-Carlo error — that is said rather than glossed.*
