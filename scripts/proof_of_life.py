@@ -5,6 +5,23 @@ engine is formalized. This validates three things at once: (1) the phenomenon pb
 audits is real and large, (2) the synthetic oracle generator behaves, (3) the decoupler
 2.x / PyDESeq2 0.5.4 API path works end-to-end.
 
+HISTORICAL -- predates the engine and the frozen protocol; not comparable to it.
+This script predates ``pbcheck.mtc``, ``pbcheck.methods`` and ``docs/PHASE0_SPEC.md``,
+and uses statistics the current protocol forbids:
+
+  * it reads scanpy's own ``pvals_adj`` for the naive arm directly. ``pbcheck.mtc``
+    requires one paired BH over a gene universe shared with the pseudobulk arm (spec
+    §5); the two arms here are NOT corrected over the same tested set.
+  * the pseudobulk arm here has no ``poscounts`` size factors and no Cook's-outlier
+    handling (spec C1/C2), unlike ``pbcheck.methods.pseudobulk``.
+  * it applies a strict ``|log2FC| > 1`` filter on top of FDR, which
+    ``docs/PILOT_FINDINGS.md`` (2026-07-19) found MASKS the pseudoreplication
+    phenomenon (drops the naive false-positive count from ~1500 to 0-34).
+
+Its numbers are historical evidence of *why* the engine was built the way it was, not
+numbers comparable to ``scripts/synthetic_gate.py`` or anything else in ``pbcheck``.
+Importing this module emits a warning for exactly that reason.
+
 Expected:
   NULL + donor effect     -> naive calls many false DE; pseudobulk ~0. Large inflation.
   NULL + NO donor effect  -> naive and pseudobulk agree (~0). Inflation collapses.  [control]
@@ -16,6 +33,17 @@ from __future__ import annotations
 import sys
 import warnings
 from pathlib import Path
+
+warnings.warn(
+    "scripts/proof_of_life.py predates pbcheck's engine and protocol: it consumes "
+    "scanpy's own pvals_adj instead of the paired BH pbcheck.mtc requires, has no "
+    "poscounts/Cook's-outlier handling, and applies the |log2FC| > 1 filter that "
+    "docs/PILOT_FINDINGS.md found masks the phenomenon. Its numbers are historical, "
+    "not comparable to scripts/synthetic_gate.py or the engine. See the module "
+    "docstring.",
+    FutureWarning,
+    stacklevel=2,
+)
 
 warnings.filterwarnings("ignore")
 
