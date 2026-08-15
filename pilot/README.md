@@ -6,13 +6,19 @@ run the **same code** over real public datasets and see whether the naive-vs-pse
 where the confounds are messy. Methodology: [`../docs/PHASE0_SPEC.md`](../docs/PHASE0_SPEC.md).
 
 > [!important]
-> **The instrument is not yet validated.** At the parameters the spec pre-registers, the pseudobulk arm does
-> not currently meet its own binding validity gate (spec §8(a)/§8(c)): `lambda_pseudobulk` sits outside the
-> pre-registered [0.9, 1.1] band, the permutation-null false-positive rate exceeds alpha, and sensitivity at
-> the pre-registered effect size (log2FC = 1.0, K = 200) falls short of the required 0.60. Because the
-> pseudobulk arm is the denominator of every inflation number, no result here may be read as a finding until
-> that is resolved. Diagnosis is in progress; any change to the frozen protocol will be recorded, dated, in
-> `../docs/AMENDMENTS.md` before it is applied.
+> **The instrument is still not validated, but the reason changed.** Amendment 1's finding — that the
+> pseudobulk arm (then DESeq2-Wald) fails calibration — is **superseded** by
+> [Amendment 2](../docs/AMENDMENTS.md): the arm's test was replaced with moderated eBayes, and under it
+> `lambda_pseudobulk` sits inside the pre-registered [0.9, 1.1] band and the permutation-null false-positive
+> rate meets its target (0.05 against alpha = 0.05, though only 2/40 permutations — Monte-Carlo SE 0.034
+> means this run cannot yet distinguish 0.05 from ~0.12). Both calibration criteria of the binding validity
+> gate (spec §8(a)) are therefore met, for the first time. **Power is not**: sensitivity at the
+> pre-registered effect size (log2FC = 1.0, K = 200; §8(c)) is 0.35 against the required 0.60, and the
+> committed test-selection grid shows no test — moderated or not — clears 0.60 at this `sigma_donor`. That
+> points to a pending decision about §8(c) itself, not an implementation gap. Because the pseudobulk arm is
+> the denominator of every inflation number, no result here may be read as a finding until the gate passes
+> in full. Any further change to the frozen protocol will be recorded, dated, in `../docs/AMENDMENTS.md`
+> before it is applied.
 
 ## What is done (this repo, runs offline)
 
@@ -56,8 +62,10 @@ each item names the amendment entry that settles it.
   actual call in `tests/test_methods.py`. Remaining gap: on scanpy 1.12.2 only `pct_nz_group` is returned
   when an explicit `reference` is given, so the min-expression sensitivity check (§6/B5) has one side of the
   expressed fractions available, not both.
-- `design.py` computes the confounding Cramér's V per cell rather than per donor, which can miss a genuine
-  donor-level confound. **Still open.**
+- **`design.py`'s Cramér's V — resolved** (`aecf8c5`, *"Measure design confounding per donor, not per cell"*).
+  Batch/assay/suspension/pool confounding is now measured on the deduplicated donor-level table, not
+  weighted by cell count; a design where one batch is entirely one condition now scores V = 0.577
+  (was 0.128, cell-weighted, which raised no flag).
 - **The `sigma_donor` of the synthetic oracle is a free knob, unanchored to any real
   mean-dispersion / donor-variance trend (§8(b)).** Both amendments close on this as the outstanding
   threat to every power number computed here. **Still open, and it is the important one.**
