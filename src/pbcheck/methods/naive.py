@@ -58,15 +58,27 @@ def naive_de(
             a, groupby=condition_col, groups=[test_level], reference=ref_level, method=method, **kw
         )
     df = sc.get.rank_genes_groups_df(a, group=test_level)
+    genes = pd.Index(df["names"], name="gene")
     cols = {
         "pval": df["pvals"].to_numpy(),  # raw; BH deferred to mtc so both arms match (spec §5)
         "padj": np.nan,
         "log2fc": df["logfoldchanges"].to_numpy(),
     }
+    # Both expressed fractions come from ``uns``, not from the dataframe helper. On scanpy 1.12.2
+    # ``rank_genes_groups_df`` emits only ``pct_nz_group`` when an explicit ``reference`` is given
+    # (``pct_nz_reference`` appears only for reference='rest', via ``pts_rest``), but ``uns['pts']``
+    # is a genes x groups frame that always carries the reference column too. The min-expression
+    # floor sensitivity check (§6/B5) needs both sides, so read the frame directly and reindex it
+    # from var order onto the ranked gene order of ``df``.
+    pts = a.uns["rank_genes_groups"].get("pts")
+    if pts is not None:
+        for level, dst in ((test_level, "pct_group"), (ref_level, "pct_reference")):
+            if level in pts.columns:
+                cols[dst] = pts[level].reindex(genes).to_numpy()
     for src, dst in (("pct_nz_group", "pct_group"), ("pct_nz_reference", "pct_reference")):
-        if src in df.columns:
+        if dst not in cols and src in df.columns:  # fallback if a scanpy version drops uns['pts']
             cols[dst] = df[src].to_numpy()
-    table = pd.DataFrame(cols, index=pd.Index(df["names"], name="gene"))
+    table = pd.DataFrame(cols, index=genes)
     return DEResult(
         method=f"naive[{method}]",
         table=table,

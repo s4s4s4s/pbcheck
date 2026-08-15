@@ -16,6 +16,7 @@ tests rather than comments:
 import warnings
 
 import numpy as np
+import pandas as pd
 import pytest
 import scanpy as sc
 
@@ -62,17 +63,36 @@ def test_naive_arm_omits_tie_correct_for_the_t_test_variant(monkeypatch, small_n
     assert seen.get("pts") is True     # the robustness variant still carries pts
 
 
-def test_naive_arm_returns_the_pts_column_it_actually_gets(small_null_adata):
-    """``pts=True`` must reach the result table, not just the call.
+def test_naive_arm_returns_both_expressed_fractions(small_null_adata):
+    """``pts=True`` must reach the result table on BOTH sides, not just the call.
 
-    Recorded honestly: on scanpy 1.12.2, ``rank_genes_groups_df`` returns ``pct_nz_group`` but NOT
-    ``pct_nz_reference`` when an explicit ``reference`` is given, so only the group fraction
-    survives. ``naive_de`` maps whichever of the two scanpy emits. The min-expression-floor
-    sensitivity check (spec §6/B5) wants both fractions, so on this scanpy version it has only one
-    side available — a real gap, asserted here as it is rather than as it should be.
+    On scanpy 1.12.2 ``rank_genes_groups_df`` returns ``pct_nz_group`` but NOT ``pct_nz_reference``
+    when an explicit ``reference`` is given, so the dataframe helper alone yields one side. The
+    min-expression-floor sensitivity check (spec §6/B5) needs both, and both are recoverable from
+    ``uns['rank_genes_groups']['pts']``, which ``naive_de`` reads directly.
     """
     res = naive_de(small_null_adata)
-    assert "pct_group" in res.table.columns
+    assert {"pct_group", "pct_reference"} <= set(res.table.columns)
+    for col in ("pct_group", "pct_reference"):
+        frac = res.table[col]
+        assert frac.notna().all(), f"{col} has holes after reindexing onto the ranked gene order"
+        assert ((frac >= 0) & (frac <= 1)).all(), f"{col} is not a fraction"
+
+
+def test_naive_arm_expressed_fractions_match_the_matrix(small_null_adata):
+    """The two fractions must be the per-condition nonzero rates, not the same column twice.
+
+    Guards the reindex: ``uns['pts']`` is in ``var_names`` order while the table is in ranked order,
+    so a missing reindex would silently mis-assign fractions to genes.
+    """
+    res = naive_de(small_null_adata)
+    a = small_null_adata
+    cond = a.obs["condition"].to_numpy()
+    X = a.X.toarray() if hasattr(a.X, "toarray") else np.asarray(a.X)
+    for level, col in (("disease", "pct_group"), ("ctrl", "pct_reference")):
+        expected = pd.Series((X[cond == level] > 0).mean(axis=0), index=list(a.var_names))
+        got = res.table[col]
+        np.testing.assert_allclose(got.to_numpy(), expected.reindex(got.index).to_numpy(), atol=1e-12)
 
 
 # ---------------------------------------------------------------------------

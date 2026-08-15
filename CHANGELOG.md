@@ -116,3 +116,13 @@ culminating in Amendment 2.
 - Changed: docs truth sync — README and `pilot/README.md` updated to the Amendment 3 gate numbers and
   to the envelope caveat, with the verdict stated as *valid within the stated operating envelope* and
   never as an unqualified "valid".
+- Fixed: `naive.py` now recovers **both** expressed fractions the min-expression floor sensitivity
+  check needs (§6/B5). scanpy 1.12.2's `rank_genes_groups_df` drops `pct_nz_reference` when an
+  explicit `reference` is passed, so the reference fraction never reached the result table; but
+  `uns['rank_genes_groups']['pts']` is a genes x groups frame that carries every level of the
+  groupby. The arm reads that frame directly and reindexes it from `var_names` order onto the ranked
+  gene order, emitting `pct_group` and `pct_reference` for both the Wilcoxon and t-test variants;
+  the dataframe columns stay as a fallback. No amendment: the spec already required both fractions,
+  so this is an implementation fix, not a protocol change. `tests/test_methods.py` now asserts both
+  columns and checks them against per-condition nonzero rates computed from the matrix (which is
+  what guards the reindex), replacing the test that recorded the gap.

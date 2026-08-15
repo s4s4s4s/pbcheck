@@ -69,9 +69,14 @@ each item names the amendment entry that settles it.
   has no such parameters, so it is applied manually after aggregation on decoupler's own `psbulk_cells` /
   `psbulk_counts`, with the spec's semantics: dropped, not merged.
 - `naive.py` **does** pass `tie_correct=True` / `pts=True` as of R0 (`c13a21e`), asserted by capturing the
-  actual call in `tests/test_methods.py`. Remaining gap: on scanpy 1.12.2 only `pct_nz_group` is returned
-  when an explicit `reference` is given, so the min-expression sensitivity check (§6/B5) has one side of the
-  expressed fractions available, not both.
+  actual call in `tests/test_methods.py`. The follow-on gap — on scanpy 1.12.2 `rank_genes_groups_df`
+  returns only `pct_nz_group` when an explicit `reference` is given — **is now closed**: the reference
+  fraction was never lost, only dropped by the dataframe helper. `uns['rank_genes_groups']['pts']` is a
+  genes x groups frame carrying every level of the groupby, so `naive.py` reads it directly and reindexes
+  from `var_names` order onto the ranked gene order, emitting both `pct_group` and `pct_reference`. The
+  min-expression sensitivity check (§6/B5) now has both sides. This is an implementation fix, not a
+  protocol change — the spec already required both fractions — so it carries no amendment. The dataframe
+  columns remain as a fallback for a scanpy version that stops populating `uns['pts']`.
 - **`design.py`'s Cramér's V — resolved** (`aecf8c5`, *"Measure design confounding per donor, not per cell"*).
   Batch/assay/suspension/pool confounding is now measured on the deduplicated donor-level table, not
   weighted by cell count; a design where one batch is entirely one condition now scores V = 0.577
