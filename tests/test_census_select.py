@@ -72,7 +72,35 @@ def healthy_donors(n_per_group=3, n_cells=20, **extra):
 def test_census_version_is_the_spec_pin():
     assert cs.CENSUS_VERSION == "2025-01-30"
     assert 'open_soma(census_version="2025-01-30")' in SPEC
-    assert cs.VALUE_FILTER in SPEC
+    assert cs.SPEC_VALUE_FILTER in SPEC
+
+
+def test_the_executable_filter_is_the_spec_filter_minus_the_unfilterable_organism_clause():
+    """Regression from the first live run, which died on the reader constructor with
+    ``SOMAError: 'Column organism does not exist in schema'`` before reading a cell.
+
+    §1's filter text names three conditions; only two of them are obs columns. In the pinned
+    Census's schema the organism is the **experiment** — ``census["census_data"]["homo_sapiens"]``,
+    which ``query_obs`` has always opened — so the third clause is not a filter that is merely
+    redundant, it is unparseable against that schema. The pre-registered text is kept verbatim for
+    the manifest; what executes is the text minus that one conjunct, and the population selected is
+    the same one either way.
+    """
+    assert "organism" not in cs.VALUE_FILTER, "the clause the live parser rejects"
+    assert "Homo sapiens" not in cs.VALUE_FILTER
+    assert cs.VALUE_FILTER == "is_primary_data == True and disease != 'na'"
+
+    # The executable filter is the spec text with exactly one conjunct removed — nothing else was
+    # relaxed, tightened or reworded while the file was open.
+    dropped = "organism == 'Homo sapiens'"
+    assert dropped in cs.SPEC_VALUE_FILTER
+    assert " and ".join(
+        part for part in cs.SPEC_VALUE_FILTER.split(" and ") if part != dropped
+    ) == cs.VALUE_FILTER
+
+    # ...and the dropped clause is realised, not abandoned.
+    assert cs.CENSUS_ORGANISM == "homo_sapiens"
+    assert "census['census_data']['homo_sapiens']" in cs.ORGANISM_REALIZED_BY
 
 
 def test_the_mutable_aliases_are_rejected_not_used():
@@ -129,14 +157,43 @@ class _FakeRead:
         return self._frame
 
 
+#: Columns the real Census obs schema carries that these synthetic frames do not materialise.
+#: ``is_primary_data`` is one — the §1 filter tests it, and no test here needs its values.
+#: ``organism`` is deliberately **not** one: in the pinned schema the organism is the experiment
+#: (``census["census_data"]["homo_sapiens"]``), not a column, and a stand-in that tolerated an
+#: ``organism`` clause is exactly what let a filter the live parser rejects reach production.
+CENSUS_ONLY_FILTER_COLUMNS = ("is_primary_data",)
+
+
+class _FakeSomaError(RuntimeError):
+    """Stands in for ``tiledbsoma.SOMAError``, which is what the live reader raises."""
+
+
+def _check_filter_against_schema(value_filter, schema_names) -> None:
+    """Resolve every name in a value filter against the schema, as the live parser does.
+
+    TileDB-SOMA parses the filter with ``ast`` and then resolves each name against the array's
+    schema, raising ``'Column X does not exist in schema'`` when one is not there — at reader
+    construction, before a single cell is read. A stand-in that skipped this step accepted filters
+    the Census refuses, which is not a stand-in but a rubber stamp.
+    """
+    known = set(schema_names)
+    for node in ast.walk(ast.parse(value_filter or "True", mode="eval")):
+        if isinstance(node, ast.Name) and node.id not in known:
+            raise _FakeSomaError(f"Column {node.id} does not exist in schema")
+
+
 class _FakeSomaObs:
     def __init__(self, frame, *, schema_names=None):
         self._frame = frame
-        self.schema = types.SimpleNamespace(names=list(schema_names or frame.columns))
+        self.schema = types.SimpleNamespace(
+            names=list(schema_names or [*frame.columns, *CENSUS_ONLY_FILTER_COLUMNS])
+        )
         self.calls = []
 
     def read(self, column_names=None, value_filter=None):
         self.calls.append({"column_names": list(column_names), "value_filter": value_filter})
+        _check_filter_against_schema(value_filter, self.schema.names)
         return _FakeRead(self._frame[[c for c in column_names if c in self._frame.columns]].copy())
 
 
@@ -171,6 +228,24 @@ def test_query_obs_refuses_a_schema_without_the_stratum_columns():
     frame = obs_frame(healthy_donors()).drop(columns=["donor_id"])
     with pytest.raises(ValueError, match="donor_id"):
         cs.query_obs(_FakeCensus(_FakeSomaObs(frame)))
+
+
+def test_the_stand_in_rejects_a_filter_naming_a_column_the_schema_does_not_have():
+    """The stand-in must fail where the Census fails, or it certifies filters that cannot run.
+
+    This is the test that would have caught the first live dry run's death on the ground: the §1
+    filter text was being sent to ``obs`` verbatim, and the old stand-in — which never resolved
+    filter names against its schema — accepted it happily while tiledbsoma raised
+    ``'Column organism does not exist in schema'`` at reader construction.
+    """
+    soma = _FakeSomaObs(obs_frame(healthy_donors()))
+    with pytest.raises(_FakeSomaError, match="Column organism does not exist"):
+        cs.query_obs(_FakeCensus(soma), value_filter=cs.SPEC_VALUE_FILTER)
+
+    # The executable filter passes the same check, and `is_primary_data` resolves because the real
+    # Census obs schema has it even though these synthetic frames carry no such column.
+    cs.query_obs(_FakeCensus(soma), value_filter=cs.VALUE_FILTER)
+    assert soma.calls[-1]["value_filter"] == cs.VALUE_FILTER
 
 
 # ---------------------------------------------------------------------------
@@ -657,7 +732,13 @@ def test_the_header_pins_the_census_version_and_the_package_versions():
     obs, rows = _rows()
     header = cs.emit_manifest(rows, obs=obs)["header"]
     assert header["census_version"] == "2025-01-30"
+    # Both the filter that ran and the filter §1 pre-registers, since they are not the same string
+    # and a header carrying only one of them would either misquote the protocol or misreport the
+    # query. The organism clause is accounted for rather than silently missing.
     assert header["value_filter"] == cs.VALUE_FILTER
+    assert header["value_filter_spec"] == cs.SPEC_VALUE_FILTER
+    assert header["organism"] == cs.CENSUS_ORGANISM
+    assert "not an obs filter clause" in header["organism_realized_by"]
     for package in ("cellxgene-census", "anndata", "scanpy", "numpy", "scipy", "pandas",
                     "statsmodels", "pydeseq2", "decoupler"):
         assert package in header["package_versions"]

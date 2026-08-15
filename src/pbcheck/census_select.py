@@ -90,10 +90,40 @@ CENSUS_VERSION = "2025-01-30"
 #: which is the only place either string may legitimately appear in this package.
 MUTABLE_CENSUS_ALIASES = ("latest", "stable")
 
-#: obs ``value_filter`` verbatim from §1.
-VALUE_FILTER = "is_primary_data == True and organism == 'Homo sapiens' and disease != 'na'"
+#: §1's obs ``value_filter``, **verbatim**: the pre-registered text. Kept because it is what the
+#: protocol says and what the manifest must be auditable against — not because it is executable.
+#: The string actually sent to the Census is :data:`VALUE_FILTER`.
+SPEC_VALUE_FILTER = "is_primary_data == True and organism == 'Homo sapiens' and disease != 'na'"
+
+#: The **executable** form of :data:`SPEC_VALUE_FILTER` — the filter applied to ``obs``.
+#:
+#: §1's text names three conditions. Two of them are obs columns and are applied exactly as
+#: written. The third, ``organism == 'Homo sapiens'``, is not a column at all in the pinned
+#: Census's schema: the organism is the **experiment**,
+#: ``census["census_data"]["homo_sapiens"]``, which :data:`CENSUS_ORGANISM` selects and which
+#: :func:`query_obs` has always opened. Sending that clause to ``obs`` is not a stricter or a
+#: looser filter — it is a ``SOMAError: 'Column organism does not exist in schema'``, which is
+#: how the first live run of ``scripts/census_candidates.py`` died on the reader constructor
+#: before reading a single cell.
+#:
+#: The queried population is **identical** to the one §1 pre-registers: every cell reachable
+#: through the human experiment is *Homo sapiens*, so the clause was never selecting anything the
+#: experiment key does not already select. No threshold and no scope moved. This is a translation
+#: of pre-registered text into the API that has to execute it, not a protocol change, which is why
+#: it carries no amendment — and why both strings, plus the mechanism, go into the manifest header
+#: rather than one silently replacing the other.
+VALUE_FILTER = "is_primary_data == True and disease != 'na'"
 
 CENSUS_ORGANISM = "homo_sapiens"
+
+#: Where §1's organism clause actually happens. Recorded in the manifest header so that a reader
+#: comparing the applied filter against the spec text finds the missing conjunct accounted for
+#: rather than absent.
+ORGANISM_REALIZED_BY = (
+    "the experiment key census['census_data']['homo_sapiens'] (CENSUS_ORGANISM), not an obs "
+    "filter clause: in the pinned Census's schema 'organism' is a measurement of the experiment "
+    "and not a column of obs, so the §1 clause is unfilterable there and redundant here"
+)
 
 #: Group B of every contrast (§1: "Group A = one disease term; Group B = ``normal``").
 REFERENCE_LEVEL = "normal"
@@ -984,8 +1014,13 @@ def emit_manifest(
         "census_version_source":
             "spec §1 pins open_soma(census_version='2025-01-30'); the mutable aliases "
             f"{list(MUTABLE_CENSUS_ALIASES)} are rejected by open_census()",
+        # Both, always: what was applied to obs, and what §1 pre-registers. They differ by one
+        # conjunct, and a header carrying only one of them would either misquote the protocol or
+        # misreport the query. The third key says where the missing conjunct went.
         "value_filter": attrs.get("value_filter", VALUE_FILTER),
+        "value_filter_spec": SPEC_VALUE_FILTER,
         "organism": attrs.get("organism", CENSUS_ORGANISM),
+        "organism_realized_by": ORGANISM_REALIZED_BY,
         "obs_columns_spec": list(OBS_COLUMNS),
         "obs_columns_requested": attrs.get("requested_columns"),
         "obs_columns_missing": attrs.get("missing_columns"),

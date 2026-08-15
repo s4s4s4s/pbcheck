@@ -67,7 +67,7 @@ jobs:
       - name: Report the resolved Census stack and the pinned protocol
         run: |
           python -c "import cellxgene_census, tiledbsoma, pyarrow, pandas, numpy; [print(f'{m.__name__}=={m.__version__}') for m in (cellxgene_census, tiledbsoma, pyarrow, pandas, numpy)]"
-          python -c "from pbcheck import census_select as cs; print('census_version:', cs.CENSUS_VERSION); print('value_filter:', cs.VALUE_FILTER)"
+          python -c "from pbcheck import census_select as cs; print('census_version:', cs.CENSUS_VERSION); print('value_filter (applied):', cs.VALUE_FILTER); print('value_filter (spec text):', cs.SPEC_VALUE_FILTER); print('organism:', cs.CENSUS_ORGANISM)"
 
       # `set -e` is deliberately off: the driver's exit status must survive the pipe into tee so
       # the step still fails, while the tail below still reaches the job summary either way. A

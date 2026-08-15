@@ -1350,7 +1350,9 @@ def stratum_value_filter(
     """§1's obs ``value_filter``, narrowed to one ``(dataset_id × cell_type)`` stratum.
 
     The §1 filter is kept verbatim as the first conjunct — it is what defines the queried population
-    (primary data, Homo sapiens, disease known) — and the stratum keys are appended. The disease
+    (primary data, disease known; *Homo sapiens* is realised by the ``organism`` argument of
+    ``get_anndata``, which selects the experiment, and is not an obs column — see
+    :data:`pbcheck.census_select.VALUE_FILTER`) — and the stratum keys are appended. The disease
     terms, when given, restrict the load to the two levels of one binary contrast (§1: one
     ``disease-vs-normal`` contrast per term, never a pooled "any disease" arm).
     """

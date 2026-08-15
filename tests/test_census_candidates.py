@@ -290,6 +290,27 @@ def test_a_scoped_filter_only_narrows_what_is_read():
     assert cc.scope_filter("dataset-uuid") == f"{cs.VALUE_FILTER} and dataset_id == 'dataset-uuid'"
 
 
+def test_no_filter_the_driver_builds_names_a_column_outside_the_obs_schema():
+    """Where the first live dry run died: a SOMAError on the reader constructor, before a cell.
+
+    Both filters this driver sends are built from `census_select.VALUE_FILTER` — pass 1's, and
+    pass 2's with the stratum keys appended — and every name in them has to be an actual obs
+    column. `organism` is not one: in the pinned Census it is the experiment key, which
+    `iter_obs_batches` and `query_obs` select by opening `census["census_data"][organism]`.
+    """
+    soma = _FakeSomaObs(_two_dataset_frame())
+    schema = set(soma.schema.names)
+
+    for value_filter in (cs.VALUE_FILTER, cc.scope_filter("ds1"), cc.scope_filter("ds1", "T cell")):
+        assert "organism" not in value_filter
+        assert _filter_names(value_filter) <= schema, f"unfilterable name in {value_filter!r}"
+
+    # ...and the stand-in is what makes that assertion worth anything: it fails where the Census
+    # does. The old §1 text, sent to obs verbatim, is what CI actually tried and could not run.
+    with pytest.raises(_FakeSomaError, match="Column organism does not exist"):
+        soma.read(column_names=list(cc.KEY_COLUMNS), value_filter=cs.SPEC_VALUE_FILTER)
+
+
 def test_a_scoped_filter_survives_an_apostrophe_in_a_free_text_cell_type():
     """Cell-type labels are ontology free text. A label with an apostrophe must round-trip."""
     cell_type = "cell of Bowman's capsule"
@@ -316,6 +337,32 @@ def test_the_sql_style_escape_would_have_been_silently_wrong():
 # ---------------------------------------------------------------------------
 # Pass 2 against a SOMA stand-in that actually applies the filter (no network).
 # ---------------------------------------------------------------------------
+
+#: Columns the real Census obs schema carries that these synthetic frames do not materialise —
+#: kept in step with ``tests/test_census_select.py``'s stand-in. ``organism`` is deliberately not
+#: among them: in the pinned schema the organism is the experiment, not a column, and a stand-in
+#: that tolerated an ``organism`` clause is what let a filter the live parser rejects reach CI.
+CENSUS_ONLY_FILTER_COLUMNS = ("is_primary_data",)
+
+
+class _FakeSomaError(RuntimeError):
+    """Stands in for ``tiledbsoma.SOMAError`` — a RuntimeError, so the driver retries it once and
+    then dies, which is exactly what the first live run did."""
+
+
+def _filter_names(expression: str) -> set:
+    """Every bare name a value filter references — what the live reader resolves against schema."""
+    tree = ast.parse(expression or "True", mode="eval")
+    return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+
+
+def _check_filter_against_schema(value_filter, schema_names) -> None:
+    """Fail where the Census fails: a filter naming a column outside the schema is rejected at
+    reader construction, before a single cell is read."""
+    unknown = sorted(_filter_names(value_filter) - set(schema_names))
+    if unknown:
+        raise _FakeSomaError(f"Column {unknown[0]} does not exist in schema")
+
 
 def _equality_clauses(expression: str):
     """The ``name == literal`` clauses of a value filter, via ``ast`` — as SOMA would read it."""
@@ -363,12 +410,15 @@ class _FakeSomaObs:
         self._frame = frame
         self.honour_filter = honour_filter
         self.fail_on = fail_on  # substring of the value_filter whose read should blow up
-        self.schema = types.SimpleNamespace(names=list(frame.columns))
+        self.schema = types.SimpleNamespace(
+            names=list([*frame.columns, *CENSUS_ONLY_FILTER_COLUMNS])
+        )
         self.calls = []
         self.failures = 0
 
     def read(self, column_names=None, value_filter=None):
         self.calls.append({"column_names": list(column_names), "value_filter": value_filter})
+        _check_filter_against_schema(value_filter, self.schema.names)
         if self.fail_on and self.fail_on in (value_filter or ""):
             self.failures += 1
             raise RuntimeError(f"simulated transport failure for {self.fail_on!r}")

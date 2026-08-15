@@ -460,7 +460,9 @@ def run(args) -> dict:
 
     print(f"[census-candidates] census_version={cs.CENSUS_VERSION} "
           f"organism={cs.CENSUS_ORGANISM}", flush=True)
-    print(f"[census-candidates] value_filter: {cs.VALUE_FILTER}", flush=True)
+    print(f"[census-candidates] value_filter (applied to obs): {cs.VALUE_FILTER}", flush=True)
+    print(f"[census-candidates] value_filter (§1 as written): {cs.SPEC_VALUE_FILTER}", flush=True)
+    print(f"[census-candidates] organism clause realised by: {cs.ORGANISM_REALIZED_BY}", flush=True)
     print(f"[census-candidates] thresholds: min_cells_per_donor={gc.MIN_CELLS} "
           f"min_donors_per_group={cs.MIN_DONORS_PER_GROUP} (frozen; no CLI option moves them)",
           flush=True)
@@ -598,7 +600,10 @@ def run(args) -> dict:
                 "max_cells_per_dataset_query": int(args.max_cells_per_dataset_query),
                 "datasets_split_per_cell_type": split_datasets,
                 "value_filter_scoping":
-                    "the header's value_filter is §1's, verbatim. Each pass-2 read appended "
+                    "the header's value_filter is the executable §1 filter, verbatim (the "
+                    "pre-registered text is beside it as value_filter_spec; §1's organism clause "
+                    "is realised by the experiment key, see organism_realized_by). Each pass-2 "
+                    "read appended "
                     "\"and dataset_id == '<id>'\" (and, for a split dataset, "
                     "\"and cell_type == '<label>'\") to narrow WHAT IS READ; nothing about what "
                     "qualifies was changed.",

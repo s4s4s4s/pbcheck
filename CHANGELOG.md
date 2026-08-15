@@ -145,7 +145,7 @@ culminating in Amendment 2.
   tagging the rest; `emit_manifest()` writes the §1 manifest as JSON + CSV with the
   census version, package versions, the pre-registered config block and D4's excluded fraction in
   the header.
-- Added: `tests/test_census_select.py` (48 tests, no network, synthetic obs frames) — including the
+- Added: `tests/test_census_select.py` (50 tests, no network, synthetic obs frames) — including the
   pin test that no mutable census alias appears as an argument anywhere in the module, that every
   column the module cannot compute is written as `pending`, and two regression tests from the
   adversarial review: a singleton pool coincidence among 40 donors must tag and not exclude while a
@@ -273,12 +273,38 @@ culminating in Amendment 2.
   loudly, and separately fails one in which every selected dataset failed, while a single flaky
   dataset out of sixty still exits 0 with its name in `notes.failed_datasets`: that run carries its
   result, and discarding five hours of work over one dropped connection would be its own bug.
-- Added: `tests/test_census_candidates.py` (33 tests) — no network, and no `cellxgene-census`,
+- Added: `tests/test_census_candidates.py` (34 tests) — no network, and no `cellxgene-census`,
   including a test that the driver does not import it at module level, which is what keeps the
   suite runnable on the development machine. The Census access path is exercised against a SOMA
   stand-in that *applies* the equality clauses of the filter and can be told to fail a given
   dataset, so a mis-escaped literal comes back empty there exactly as it would on S3 and all three
   exit paths (partial failure, total failure, nothing survived) run end to end through `main()`.
+- Fixed (first live dry run, run 31909378806): the §1 `value_filter` was being sent to `obs`
+  verbatim, and the pinned Census refuses it — `SOMAError: 'Column organism does not exist in
+  schema'`, raised on the reader constructor before a single cell was read. In schema 2.1.0 the
+  organism is not an obs column but the **experiment**, `census["census_data"]["homo_sapiens"]`,
+  which `query_obs` had always been opening correctly; the clause was therefore both unfilterable
+  and redundant. `census_select` now separates the two things that were one string:
+  `SPEC_VALUE_FILTER` is §1's text, kept verbatim for the manifest and asserted against the spec
+  document, and `VALUE_FILTER` is what executes — the same text minus that one conjunct, pinned by
+  a test that reconstructs it from the spec string rather than restating it. The manifest header
+  carries **both**, plus `organism_realized_by`, so a reader comparing the applied filter against
+  the protocol finds the missing conjunct accounted for instead of absent. The queried population
+  is unchanged (every cell in the human experiment is *Homo sapiens*), no threshold or scope moved,
+  and this is an executable translation of pre-registered text rather than a protocol change, so it
+  carries no amendment. `io_counts.stratum_value_filter` inherits the fix through the same constant
+  — its `get_anndata` wrapper was already passing `organism` as the API's own argument, which is
+  the correct half of this and the reason nothing else had to move.
+- Fixed (same root cause, the reason CI was green over it): the SOMA stand-ins in
+  `tests/test_census_select.py` and `tests/test_census_candidates.py` never resolved a filter's
+  names against their schema, so they accepted a filter the live parser rejects — a rubber stamp,
+  not a stand-in. Both now parse the filter with `ast` and raise `Column X does not exist in
+  schema` for any name outside the schema, exactly where tiledbsoma raises it, and their schema is
+  the synthetic frame's columns **plus** the real Census columns those frames do not materialise
+  (`is_primary_data`, and deliberately not `organism`). Three regression tests: the executable
+  filter names no `organism` and is the spec text minus exactly one conjunct; the old text sent to
+  a stand-in without that column fails as it failed in production; and every filter the driver
+  builds — pass 1's and pass 2's scoped one — resolves entirely against an obs schema.
 - Note: the run is manual (`workflow_dispatch`, `dry_run` defaulting to true), not cancellable by
   a second dispatch, capped at 330 minutes against the runner's hard 6-hour kill, and its output is
   an **artifact, never a commit** — `pilot/results/` is gitignored, and a candidate list that
