@@ -24,19 +24,18 @@ dependencies = [
     "numpy",
     "scipy",
     "pandas",
-    "anndata",
-    "scanpy",
+    "anndata>=0.13",
+    "scanpy>=1.12",
     "statsmodels",
-    "pydeseq2",
+    "pydeseq2>=0.5.4",
     "decoupler>=2.0",
-    "jinja2",
-    "matplotlib",
-    "tqdm",
 ]
 
 [project.optional-dependencies]
 # Only needed to run the real-data audit against the CELLxGENE Census.
 census = ["cellxgene-census"]
+# Only needed for the (not-yet-built) HTML report; nothing in src/ imports these (grepped, R3).
+report = ["jinja2", "matplotlib", "tqdm"]
 dev = ["pytest", "hypothesis", "ruff"]
 
 [project.urls]
