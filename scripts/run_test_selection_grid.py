@@ -48,9 +48,16 @@ PROBE = REPO / "scripts" / "pb_calibration_probe.py"
 def git_publish(summary_dir: Path, note: str) -> str:
     """Commit and push the summary so a partial run is never lost or invisible.
 
-    Best-effort: a transient network or git failure must not kill a multi-hour compute. The
-    per-cell JSONs live outside the repo and are the real record; this only publishes the small
-    summary so progress can be watched remotely (the whole reason this run moved to the PC).
+    OPT-IN ONLY (``--git-publish``, off by default): a compute driver must not mutate git state
+    unless explicitly asked to. This exists for the unattended multi-hour PC runs, whose only
+    transport for remote visibility is git — see commit 40c034c, "Publish the grid summary
+    incrementally, not only at the end". The per-cell JSONs live outside the repo and are the
+    real record; this only publishes the small summary so progress can be watched remotely.
+
+    Best-effort once opted in: a transient network or git failure must not kill a multi-hour
+    compute, so failures are caught here rather than raised — but they are printed in full to
+    stderr, not swallowed into a truncated status string that could go unnoticed in the sweep's
+    stdout log. The caller always continues the sweep regardless of the return value.
     """
     try:
         subprocess.run(["git", "add", str(summary_dir)], cwd=REPO, check=True,
@@ -63,8 +70,11 @@ def git_publish(summary_dir: Path, note: str) -> str:
         subprocess.run(["git", "push", "origin", "HEAD"], cwd=REPO, check=True,
                        capture_output=True, text=True, timeout=180)
         return "pushed"
-    except Exception as e:  # noqa: BLE001 - deliberately swallow; compute must continue
-        return f"publish failed (non-fatal): {str(e)[:120]}"
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+        detail = e.stderr if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)
+        print(f"[grid] GIT PUBLISH FAILED (non-fatal, sweep continues): {detail}",
+              file=sys.stderr, flush=True)
+        return "publish failed (see stderr)"
 
 # The unshrunken baselines and the variance-borrowing candidates. wald is the known-failing
 # reference and is handled separately because it costs ~2.8 s per fit rather than ~5 ms.
@@ -211,9 +221,14 @@ def main() -> int:
     ap.add_argument("--max-hours", type=float, default=10.0)
     ap.add_argument("--python", default=sys.executable)
     ap.add_argument("--n-cpus", type=int, default=4)
-    ap.add_argument("--commit-every", type=int, default=0,
-                    help="if > 0, commit+push the summary every N computed cells (visibility + "
-                         "crash-resilience); 0 disables")
+    ap.add_argument("--git-publish", action="store_true",
+                    help="opt-in: commit+push the summary periodically (see --commit-every) and "
+                         "once more at the end. OFF by default -- a compute driver must not "
+                         "mutate git state unless asked. Intended for the unattended multi-hour "
+                         "PC runs, whose only transport for remote visibility is git.")
+    ap.add_argument("--commit-every", type=int, default=10,
+                    help="with --git-publish, commit+push the summary every N computed cells; "
+                         "has no effect (no git activity at all) unless --git-publish is set")
     ap.add_argument("--list-only", action="store_true")
     a = ap.parse_args()
 
@@ -248,14 +263,21 @@ def main() -> int:
             print(f"[{i}/{len(cells)}] FAILED {cell_key(c)}: {msg}", flush=True)
         if (done + failed) % 10 == 0:
             n_so_far = summarise(a.out_dir, a.summary_dir)
-            if a.commit_every and done and done % a.commit_every == 0:
-                msg = git_publish(a.summary_dir, f"{n_so_far} cells so far")
-                print(f"[grid] publish: {msg}", flush=True)
+            if a.git_publish:
+                if done and done % a.commit_every == 0:
+                    msg = git_publish(a.summary_dir, f"{n_so_far} cells so far")
+                    print(f"[grid] publish: {msg}", flush=True)
+            else:
+                print(f"[grid] results written to {a.summary_dir} -- commit manually "
+                      f"(pass --git-publish to automate this)", flush=True)
 
     n = summarise(a.out_dir, a.summary_dir)
-    if a.commit_every:
+    if a.git_publish:
         print(f"[grid] publish (final): {git_publish(a.summary_dir, f'{n} cells, run complete')}",
               flush=True)
+    else:
+        print(f"[grid] results written to {a.summary_dir} -- commit manually "
+              f"(pass --git-publish to automate this)", flush=True)
     el = (time.time() - t0) / 3600
     print(f"[grid] done={done} cached={skipped} failed={failed} rows={n} elapsed={el:.2f}h", flush=True)
     print(f"[grid] summary -> {a.summary_dir/'summary.csv'}", flush=True)
