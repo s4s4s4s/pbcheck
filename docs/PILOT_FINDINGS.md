@@ -150,3 +150,56 @@ real strata's `sigma_donor` sits near 0.35 (where the pre-registered oracle is a
 **pending** — `sigma_donor` remains an unanchored free knob of the simulator (§8(b)) — and is not taken by
 this addendum. Until it is, the gate correctly reports `INSTRUMENT NEEDS ATTENTION`: calibrated, not yet
 powered, at the pre-registered operating point.
+
+---
+
+## Addendum 2 (2026-08-15) — the validity gate passes, within a declared operating envelope
+
+A second addendum, again not a rewrite: the two sections above stand as the record of what was found, and
+what was retracted, at the time. Addendum 1 closed on "the gate correctly reports `INSTRUMENT NEEDS
+ATTENTION`: calibrated, not yet powered, at the pre-registered operating point", and named the pending
+§8(c) decision. [`AMENDMENTS.md`](AMENDMENTS.md) **Amendment 3** takes that decision, and this records the
+result of applying it.
+
+**What Amendment 3 decided.** The power criterion was being evaluated at `sigma_donor` = 0.5 — a setting the
+frozen spec never pinned, that is a free knob of our own simulator, and at which the committed grid shows
+*no test at all* reaching 0.60 at any donor count tested. Judging the instrument invalid against a threshold
+unreachable at an arbitrary knob setting conflates instrument validity with domain of applicability.
+Amendment 3 therefore re-scopes §8(c) from a point to a **declared operating envelope**: the arm is valid
+for strata inside it and makes no claim outside it. The pre-registered effect size (log2FC = 1.0, K = 200)
+and the ≥ 0.60 threshold are **unchanged**. Calibration continues to be judged at the hard regime
+(`sigma_donor` = 0.5); power is judged at the envelope boundary (`sigma_donor` = 0.35, 8 v 8). Amendment 3
+Change 2 additionally raised the permutation count 40 → 200, declared before the rerun.
+
+**The rerun** (`scripts/synthetic_gate.py`, defaults, 511.8 s; artifact
+[`../pilot/gate/synthetic_gate_2026-08-15.json`](../pilot/gate/synthetic_gate_2026-08-15.json)):
+
+| quantity | this run | Addendum 1 (40 perms) |
+|---|---|---|
+| λ_pseudobulk (at `sigma_donor` = 0.5) | **1.01** | 1.02 |
+| pseudobulk perm-null FP rate (at `sigma_donor` = 0.5) | **0.035** — 7/200, MC SE 0.013, exact 95% CI [0.014, 0.071] | 0.05 — 2/40, MC SE 0.034, unresolved |
+| pseudobulk power, log2FC = 1.0 / K = 200, at `sigma_donor` = **0.35** | **0.86** | not evaluated at this regime |
+| the same power at `sigma_donor` = 0.5 | **0.35** — unchanged, unmet, unclaimed | 0.35 |
+| λ_naive / naive floor | 54.57 / 1162 of 1500 (77.4 %) | 54.77 / 1164 of 1500 (77.6 %) |
+| verdict | **INSTRUMENT VALID WITHIN THE STATED OPERATING ENVELOPE** | INSTRUMENT NEEDS ATTENTION |
+
+**Change 2 earned its cost, and this is the cleanest result of the run.** The old 2/40 reading was fully
+compatible with a true false-positive rate of 0.12 — P(X ≤ 2 | p = 0.12, n = 40) = 0.13 — so "0.05 ≤ α"
+was a number the run could not actually support. At 200 permutations a true rate of 0.12 is excluded,
+P(X ≤ 7 | p = 0.12, n = 200) = 2·10⁻⁵. The exact interval [0.014, 0.071] also shows the honest limit of
+what 200 permutations buy: a true rate a little above α is still not excluded.
+
+**What this does NOT mean.** The verdict is scoped and must be quoted with its scope:
+
+- Power 0.60 at `sigma_donor` = 0.5 with 8 donors/group is **still not achieved** (0.35) and is **not
+  claimed** anywhere. The envelope requires minimum donors/group of 4 / 8 / 13 / 23 at `sigma_donor` of
+  0.2 / 0.35 / 0.5 / 0.7, so a stratum near 0.5 needs ≥ ~13 donors per group or must be excluded. This is
+  a **narrower** claim than the study made before, not a relaxed one.
+- **`sigma_donor` is still unanchored.** Whether any real stratum falls inside the envelope is unknown.
+  Amendment 3 supplies the per-stratum estimation mechanism — the eBayes fit's own between-donor variance,
+  already persisted in the artifact — and explicitly **not** the anchor; the conversion from the fitted
+  prior to the simulator's parameterisation is an upper bound that still has to be derived and validated.
+- **No real data has been run.** Oracle (d), the Mathys 2019 anchor (§8(d)), remains untouched, and it is
+  still the binding check if the simulators are optimistic. Every number in this document is synthetic.
+- **GO/NO-GO is not taken.** A gate that passes within a declared envelope licenses the measurement, not
+  the conclusion.
