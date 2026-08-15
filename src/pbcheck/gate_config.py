@@ -1,8 +1,9 @@
 """The gate's thresholds, in one place, with each one's provenance attached.
 
-**Everything in :data:`PRE_REGISTERED` is frozen by ``docs/PHASE0_SPEC.md``. Changing any of these
-values is a protocol change and requires a dated, numbered entry in ``docs/AMENDMENTS.md``, written
-and committed BEFORE the code that applies it.** That is not a style preference: Amendment 1 exists
+**Everything in :data:`PRE_REGISTERED` is frozen by ``docs/PHASE0_SPEC.md`` and the amendments to
+it. Changing any of these values is a protocol change and requires a dated, numbered entry in
+``docs/AMENDMENTS.md``, written and committed BEFORE the code that applies it.** That is not a style
+preference: Amendment 1 exists
 because ``scripts/synthetic_gate.py`` had quietly substituted an easier oracle (log2FC 1.5 / K 150
 in place of the pre-registered 1.0 / 200) and dropped two binding criteria. Thresholds scattered as
 literals across scripts is the condition under which that happens and goes unnoticed, so they live
@@ -39,9 +40,66 @@ LAMBDA_BAND = (0.9, 1.1)
 POWER_TARGET = 0.60
 
 #: The synthetic-positive oracle's effect size and gene count (§8(c)). Substituting an easier
-#: oracle in gate code is prohibited by Amendment 1 Change 2.
+#: oracle in gate code is prohibited by Amendment 1 Change 2. **Amendment 3 does not touch these**
+#: — it re-scopes the *region* over which POWER_TARGET binds, never the effect it binds at.
 ORACLE_LOG2FC = 1.0
 ORACLE_K = 200
+
+#: The two regimes at which the two halves of the validity gate are evaluated (Amendment 3
+#: Change 1). Before Amendment 3 both halves ran at a single ``donor_sigma`` that the frozen spec
+#: never pinned — so the power criterion was being judged at an arbitrary simulator setting where
+#: the committed grid shows NO test reaches POWER_TARGET at any donor count it tested. Amendment 3
+#: separates them:
+#:
+#: * **Calibration** (λ band, perm-null FP rate) is evaluated at the HARD regime, ``sigma_donor``
+#:   0.5 — the worst donor variance in the grid's fully-populated tier and the conservative choice
+#:   for a false-positive criterion, since the null gets harder as donor variance rises. Unchanged
+#:   from every prior run; nothing about calibration is relaxed.
+#: * **Power** is evaluated at the ENVELOPE BOUNDARY, ``sigma_donor`` 0.35 — the lowest-σ /
+#:   smallest-n point at which the selected ``ebayes`` arm is grid-shown to clear POWER_TARGET
+#:   (measured 0.793 at 8v8, calibrated: FP 0.043, λ 1.010), coinciding with Amendment 1's analytic
+#:   n*(0.35) = 8.
+#:
+#: This NARROWS what the instrument claims, and lowers no bar: power 0.60 at ``sigma_donor`` 0.5
+#: with 8 donors/group remains UNMET (measured 0.35) and is NOT claimed by anything here.
+CALIBRATION_EVAL_SIGMA = 0.5
+POWER_EVAL_SIGMA = 0.35
+
+#: The declared operating envelope (Amendment 3 Change 1): the pseudobulk arm is valid only for
+#: strata whose (``sigma_donor``, donors-per-group) lies inside it, i.e. where the selected test's
+#: power at the UNCHANGED pre-registered oracle is ≥ POWER_TARGET. Outside it the arm is not
+#: declared valid and no stratum result may be reported as a pbcheck measurement.
+#:
+#: ``min_donors_per_group`` is Amendment 1's power frontier (derived, then validated numerically to
+#: |error| < 0.033); ``grid_support`` records what the committed 146-cell grid
+#: (``pilot/testsel/summary.json``, ``72dec7b``) independently says about the same point, so the
+#: envelope can be audited against frozen data rather than taken on the derivation's word.
+#:
+#: Every number here is SYNTHETIC. ``sigma_donor`` is a free knob of our simulator and is still not
+#: anchored to any real dataset — Amendment 1's closing concern, restated by Amendments 2 and 3 and
+#: still OPEN. Whether any real stratum falls inside this envelope is unknown.
+OPERATING_ENVELOPE = (
+    MappingProxyType({
+        "sigma_donor": 0.2,
+        "min_donors_per_group": 4,
+        "grid_support": "not in the grid; Amendment 1 frontier only",
+    }),
+    MappingProxyType({
+        "sigma_donor": 0.35,
+        "min_donors_per_group": 8,
+        "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8",
+    }),
+    MappingProxyType({
+        "sigma_donor": 0.5,
+        "min_donors_per_group": 13,
+        "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12",
+    }),
+    MappingProxyType({
+        "sigma_donor": 0.7,
+        "min_donors_per_group": 23,
+        "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8",
+    }),
+)
 
 #: Minimum frozen-universe size before the pseudobulk arm may run (inclusion gate item 5; C5).
 MIN_UNIVERSE_SIZE = 200
@@ -65,6 +123,9 @@ PRE_REGISTERED = MappingProxyType({
     "power_target": POWER_TARGET,
     "oracle_log2fc": ORACLE_LOG2FC,
     "oracle_k": ORACLE_K,
+    "calibration_eval_sigma": CALIBRATION_EVAL_SIGMA,
+    "power_eval_sigma": POWER_EVAL_SIGMA,
+    "operating_envelope": tuple(dict(row) for row in OPERATING_ENVELOPE),
     "min_universe_size": MIN_UNIVERSE_SIZE,
     "min_cells": MIN_CELLS,
     "min_counts": MIN_COUNTS,
@@ -94,21 +155,36 @@ INSTRUMENT_FLOOR_RATIO_MIN = 10
 
 #: The synthetic oracle's operating point: 8v8 donors is the regime the spec says carries the
 #: headline (permutations approximately orthogonal to truth — §4/A1). ``donor_sigma`` is a FREE KNOB
-#: of the simulator and is **not** anchored to real data; both Amendment 1 and Amendment 2 close on
-#: that as the outstanding threat to every power number computed here.
+#: of the simulator and is **not** anchored to real data; Amendments 1, 2 and 3 all close on that as
+#: the outstanding threat to every power number computed here.
+#:
+#: This is the CALIBRATION regime (``donor_sigma`` = :data:`CALIBRATION_EVAL_SIGMA`, the hard point).
+#: Since Amendment 3 Change 1 the power oracle is run at :data:`POWER_EVAL_SIGMA` instead, and the
+#: gate labels which arm ran at which sigma rather than presenting one number for both.
 ORACLE_SIM = MappingProxyType({
     "n_genes": 1500,
     "n_donors_per_group": 8,
     "n_cells_per_donor": 250,
     "dispersion": 0.2,
-    "donor_sigma": 0.5,
+    "donor_sigma": CALIBRATION_EVAL_SIGMA,
 })
 
 #: Permutation counts for the synthetic gate. Not pre-registered (spec §4 pins n_perm = 1000 and
 #: n_perm_pb >= 200 for the REAL sweep); the synthetic gate runs fewer and reports its Monte-Carlo
 #: error so the resolution limit is visible rather than assumed away.
-N_PERM = 40
-N_PERM_PB = 40
+#:
+#: **40 -> 200 by Amendment 3 Change 2**, declared before the rerun that applies it. At 40 paired
+#: permutations the FP criterion's Monte-Carlo SE at p = 0.05 is sqrt(.05*.95/40) = 0.034, so the
+#: 2/40 reading of the 2026-08-15 run could not be told apart from a true rate of ~0.12; at 200 it
+#: is 0.015, which resolves it. The moderated arm makes this affordable (~5 ms/fit against the
+#: retired DESeq2-Wald arm's ~2.8 s, where 200 permutations would have cost hours).
+#:
+#: **Both constants move together, and must.** ``permutation.run_null`` pairs
+#: ``min(n_perm, n_perm_pb)`` permutations, so raising ``N_PERM_PB`` alone would leave the paired
+#: count — and therefore the FP rate and its MC SE — pinned at ``N_PERM``, producing a run that
+#: looked like 200 permutations and was not.
+N_PERM = 200
+N_PERM_PB = 200
 
 INSTRUMENT_SANITY = MappingProxyType({
     "instrument_lambda_naive_min": INSTRUMENT_LAMBDA_NAIVE_MIN,
