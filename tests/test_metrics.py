@@ -30,6 +30,22 @@ def test_lambda_over_permutations_summary():
     assert abs(out["lambda"] - 1.0) < 0.1
 
 
+def test_lambda_over_permutations_empty_and_normal_paths_share_keys():
+    """Regression: the empty/all-NaN path returned only 3 of the 4 keys the normal path returns.
+
+    A caller that expects "per_perm" to always be present (as scripts/pb_calibration_probe.py's
+    ``lam["lambda"]`` / ``lam.get("per_perm", [])`` mix does) could KeyError or silently branch on
+    shape depending on which path ran. Both paths must expose the same key set.
+    """
+    rng = np.random.default_rng(2)
+    normal = metrics.lambda_over_permutations(rng.uniform(size=(5, 100)))
+    empty = metrics.lambda_over_permutations(np.empty((0, 100)))
+    assert set(normal.keys()) == set(empty.keys())
+    assert empty["n_perm"] == 0
+    assert np.isnan(empty["lambda"])
+    assert len(empty["per_perm"]) == 0
+
+
 def test_perm_floor_fraction():
     f = metrics.perm_floor(np.array([100, 120, 110, 90]), n_genes=1000)
     assert f["median_count"] == 105

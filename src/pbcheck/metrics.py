@@ -46,7 +46,16 @@ def lambda_over_permutations(pval_matrix: np.ndarray) -> dict:
     per_perm = np.array([genomic_inflation(row) for row in pval_matrix], dtype=float)
     per_perm = per_perm[~np.isnan(per_perm)]
     if per_perm.size == 0:
-        return {"lambda": float("nan"), "lambda_iqr": float("nan"), "n_perm": 0}
+        # Same key set as the non-empty path (regression: this branch used to return only 3 of
+        # the 4 keys, so callers indexing "per_perm" directly would KeyError on an empty/all-NaN
+        # permutation set). per_perm is an empty array, not a dropped key, matching how
+        # scripts/pb_calibration_probe.py already consumes it via lam.get("per_perm", []).
+        return {
+            "lambda": float("nan"),
+            "lambda_iqr": float("nan"),
+            "n_perm": 0,
+            "per_perm": per_perm,
+        }
     return {
         "lambda": float(np.median(per_perm)),
         "lambda_iqr": float(np.subtract(*np.percentile(per_perm, [75, 25]))),
