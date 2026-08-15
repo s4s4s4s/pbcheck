@@ -33,18 +33,22 @@ class DesignReport:
     batch_confounded: dict[str, float] = field(default_factory=dict)  # batch col -> donor-level Cramer's V
     batch_separates_condition: dict[str, bool] = field(default_factory=dict)  # batch col -> perfect separation
     flags: list[str] = field(default_factory=list)
+    min_donors: int = 3  # threshold the verdict below is judged against; set by audit_design
 
     @property
     def usable_for_pseudobulk(self) -> bool:
         """Whether a donor-level pseudobulk DE is even meaningful for this design.
 
-        The threshold is 3 donors per group, matching the spec's inclusion gate (§1, item 1) — not 2.
-        A design perfectly separated by a batch/assay/pool covariate is excluded outright: its
-        inflation cannot be attributed to pseudoreplication rather than to the covariate.
+        The threshold defaults to 3 donors per group, matching the spec's inclusion gate (§1, item
+        1) — not 2 — but tracks whatever ``min_donors`` the caller passed to :func:`audit_design`,
+        so a stricter caller-chosen threshold actually changes the verdict and not just the flag
+        text (it used to hardcode 3 here regardless of ``min_donors``). A design perfectly separated
+        by a batch/assay/pool covariate is excluded outright: its inflation cannot be attributed to
+        pseudoreplication rather than to the covariate.
         """
         return (
             self.donor_nests_in_condition
-            and self.min_donors_per_group >= 3
+            and self.min_donors_per_group >= self.min_donors
             and not any(self.batch_separates_condition.values())
         )
 
@@ -176,4 +180,5 @@ def audit_design(
         batch_confounded=batch_conf,
         batch_separates_condition=batch_separates,
         flags=flags,
+        min_donors=min_donors,
     )

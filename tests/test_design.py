@@ -91,6 +91,22 @@ def test_confound_is_measured_per_donor_not_per_cell():
     )
 
 
+def test_min_donors_threshold_reaches_the_verdict():
+    """Regression: usable_for_pseudobulk hardcoded >= 3 regardless of the caller's min_donors.
+
+    audit_design(..., min_donors=5) changed the warning text (via the flags list) but not the
+    verdict, because usable_for_pseudobulk compared min_donors_per_group against a literal 3
+    instead of self.min_donors. A 4-donors/group design must pass at the default/lenient threshold
+    but fail once the caller asks for a stricter min_donors=5.
+    """
+    o = null_oracle(n_donors_per_group=4, n_cells_per_donor=100, n_genes=200, seed=9).adata
+    lenient = audit_design(o, min_donors=3)
+    strict = audit_design(o, min_donors=5)
+    assert lenient.usable_for_pseudobulk
+    assert not strict.usable_for_pseudobulk
+    assert any("smallest group" in f for f in strict.flags)
+
+
 def test_three_donor_rule_matches_the_spec_inclusion_gate():
     """Spec §1 item 1 requires >= 3 donors per group; 2 is not usable."""
     two = audit_design(null_oracle(n_donors_per_group=2, n_cells_per_donor=100, n_genes=200, seed=7).adata)
