@@ -117,3 +117,368 @@ If real strata carry `sigma_donor` ≈ 0.5–0.7, then log2FC = 1.0 / K = 200 is
 counts by **any** test, and §8(c) itself — not only the choice of test — must be amended.
 
 *Author attests: the synthetic evidence above is all that was available; no real data informed this amendment.*
+
+---
+
+## Amendment 2 (2026-08-15) — The pseudobulk arm's test becomes moderated eBayes; the paired BH is wired (erratum); B5 and C5 restored, C3 superseded, A2 deferred, the thin-donor filter implemented
+
+Amendment 1 established that the pseudobulk arm fails its binding validity gate under DESeq2-Wald and
+**deliberately left the replacement test open**, pending a comparison against the moderated methods
+(limma-voom, eBayes) it had not tested. That comparison has since been run in full and committed. This
+amendment closes the question, and settles five further items that were claimed in module docstrings but
+not implemented.
+
+Spec sections touched: §3 (pseudobulk DE model), §6 (λ), §9 items 5/6/7/8, decision rule item 1 / §8(a)
+(the criteria are unchanged; the arm they are applied to changes), §1 inclusion-gate item 2, and
+corrections A2, B5, C3, C5. Correction **C2's fairness requirement and §5 are NOT changed** — Change 2 is
+an implementation erratum against an unchanged spec.
+
+### Data visible at the time of this amendment (full disclosure)
+
+**The selection data has been seen in full, before the selection rule was written down.** This is the
+opposite of the pre-registration ideal and it is stated plainly rather than glossed: the grid was run,
+committed, and read; only then was this amendment written. That is precisely why the rule below is
+stated as a **deterministic criterion mechanically applied to already-committed data**, evaluated by a
+script anyone can re-run, rather than as a judgement made cell-by-cell. A reader who distrusts the
+choice can recompute it — the inputs are frozen in git and the criterion is arithmetic.
+
+Visible:
+
+1. **The full 146-cell test-selection grid**, `pilot/testsel/summary.{csv,json}`, committed at
+   **`72dec7b`** (2026-07-23, *"grid summary: full run on the PC (146 cells, failed=0)"*). Its axes:
+   test ∈ {ttest (Welch), pooled_t, wilcoxon, ebayes, ebayes_trend, voom, wald} × `sigma_het` ∈
+   {0.0, 0.4, 0.8, 1.2} × (`sigma_donor`, `n_donors`) tiers × generative arm ∈ {directnb, gamma,
+   lognormal}. 24 cells for each of the six donor-level tests, 2 for `wald`, `failed = 0`. Null
+   calibration is measured on **fresh** independent simulations with truth = 0 (150–3000 replicates per
+   cell), never on the donor-label permutation null — which, as Amendment 1 recorded, is calibrated by
+   construction for permutation-invariant tests and therefore carries no evidential weight here.
+2. **The analyzer's verdict**, `scripts/analyze_test_selection.py`, reproduced while writing this entry.
+3. Everything that was visible for Amendment 1.
+4. **No real data.** Oracle (d), the Mathys 2019 anchor (§8(d)), remains untouched. No CELLxGENE stratum
+   has been run and no stratum list has been pre-registered. Every number below is synthetic.
+
+### What we found
+
+**(i) The shrinkage hypothesis is NOT supported.** The grid was built to refute a specific worry: that
+variance-borrowing methods become anti-conservative as gene-level variance heterogeneity rises (as the
+realised prior degrees of freedom `d0` fall). They do not. At the decisive column (`gen_arm=directnb`,
+`sigma_donor=0.5`, 8v8, fresh null), FP rate against α = 0.05 across `sigma_het` = 0.0 / 0.4 / 0.8 / 1.2:
+
+| test | | het 0.0 | het 0.4 | het 0.8 | het 1.2 | d0 at het 1.2 |
+|---|---|---|---|---|---|---|
+| ttest (Welch) | flat | 0.030 | 0.027 | 0.029 | 0.029 | — |
+| pooled_t | flat | 0.047 | 0.044 | 0.042 | 0.045 | 0.000 (unmoderated by construction) |
+| wilcoxon | flat | 0.000 | 0.000 | 0.000 | 0.000 | — |
+| ebayes | shrink | 0.031 | 0.033 | 0.046 | **0.046** | **2.130** |
+| ebayes_trend | shrink | 0.032 | 0.032 | 0.045 | **0.048** | **2.243** |
+| voom | shrink | 0.030 | 0.032 | 0.044 | **0.041** | **2.226** |
+
+At het = 1.2 the prior is genuinely weak (`d0` ≈ 2.1–2.2 against d = 14 residual df, i.e. shrinkage
+factor `d0/(d0+d)` ≈ 0.13 — the moderation is doing real work and is not a no-op), and all three
+moderated tests remain calibrated: `ebayes` FP = 0.046 (exact-binomial P(≥ observed | rate = α) = 0.853),
+λ = 0.998; `ebayes_trend` FP = 0.048 (P = 0.733), λ = 0.997; `voom` FP = 0.041 (P = 0.993), λ = 0.999.
+Every one is inside the pre-registered λ band [0.9, 1.1] and none is significantly anti-conservative.
+
+**(ii) DESeq2-Wald fails on the grid too, independently of Amendment 1's sweep.** Its two grid cells
+(directnb, `sigma_donor` 0.5, 8v8) give FP = 0.26 (binomial P = 1.1e-17) at het 0 and FP = 0.56
+(P = 5.8e-68) at het 0.8. Amendment 1's diagnosis reproduces on a differently-seeded, independently-run
+grid.
+
+**(iii) Only the moderated tests reach the pre-registered power target anywhere in the grid.** Smallest
+donors-per-group attaining sensitivity ≥ 0.60 at the pre-registered oracle (log2FC = 1.0, K = 200), over
+*calibrated* cells only, at `sigma_het` = 0:
+
+| test | σ_donor = 0.35 | σ_donor = 0.5 | σ_donor = 0.7 |
+|---|---|---|---|
+| ttest / pooled_t / wilcoxon | > grid | > grid | > grid |
+| ebayes / ebayes_trend / voom | **8** | > grid | > grid |
+
+The unshrunken donor-level tests — including the Welch t that Amendment 1 showed to be *calibrated* —
+never reach 0.60 anywhere in the grid. Calibration alone was never the criterion; §8(c) is binding too.
+Amendment 1's refusal to fix the test on calibration evidence alone is vindicated by this table: fixing
+Welch t then would have left the arm calibrated and permanently underpowered.
+
+### Change 1 — the pseudobulk arm's test is replaced (closes the question Amendment 1 left open; §3, §9 item 5)
+
+**The selection rule, stated before its application and applied mechanically:**
+
+> Among the tests **calibrated** — FP rate not significantly above α = 0.05 at *every* `sigma_het` level
+> including 1.2, and λ ∈ [0.9, 1.1] — choose the one **maximising worst-case power across the grid**.
+> Ties are broken by **runtime**.
+
+*Applying it, with the arithmetic shown.*
+
+**Step 1 — calibration filter.** All six donor-level tests pass (table (i) above). `wald` fails and is
+eliminated. No test is eliminated by calibration, so the choice is made entirely on power.
+
+**Step 2 — worst-case power. The rule as literally written is degenerate on this grid, and that is
+reported rather than quietly repaired.** Every test — moderated and unshrunken alike — has a cell with
+power ≈ 0.000 (the `n_donors = 4`, `sigma_donor = 0.5` corner, where nothing works: the best test in that
+corner reaches 0.154). A criterion that is a 6-way tie at zero selects nothing, and would hand the whole
+decision to the runtime tie-break, which would be an accident rather than a decision.
+
+The rule is therefore evaluated in its **minimax-regret** form — worst-case power *shortfall from the
+best test in the same cell*, which is the same intent (maximise worst-case performance) made
+non-degenerate by measuring each test against what was achievable in that cell rather than against an
+absolute scale that varies by two orders of magnitude across the grid. Over the 24 fully-populated cells:
+
+| test | worst-case regret | mean regret | cells reaching power ≥ 0.60 |
+|---|---|---|---|
+| **ebayes_trend** | **0.0454** | 0.0038 | 6 |
+| **ebayes** | **0.0470** | 0.0040 | 6 |
+| voom | 0.0490 | 0.0058 | 6 |
+| pooled_t | 0.2456 | 0.0534 | 5 |
+| ttest | 0.2812 | 0.0756 | 4 |
+| wilcoxon | 0.3512 | 0.1451 | 3 |
+
+The three moderated tests separate cleanly from the three unshrunken ones by a factor of five, and are
+within 0.004 of each other — which is a tie, not a ranking.
+
+**Step 3 — the tie, made explicit.** Paired per-cell power differences over the 24 matched cells:
+
+- `ebayes` − `ebayes_trend`: mean **−0.0002**, max |difference| **0.0061**, 10 wins / 13 losses.
+- `ebayes` − `voom`: mean **+0.0018**, max |difference| 0.0159, 18 wins / 5 losses.
+
+`ebayes` and `ebayes_trend` are indistinguishable (a mean difference of 2 parts in 10 000, sign-split
+almost evenly); `voom` is very slightly behind both and never ahead on worst-case regret.
+
+**Step 4 — runtime tie-break, with the numbers corrected.** Measured from the grid's own `seconds`
+fields, paired cell-by-cell (`voom` ÷ `ebayes` on the identical configuration, n = 24 matched cells):
+**median 9.85×, range 1.06×–11.98×**; grid totals `voom` 9933.0 s vs `ebayes` 3390.8 s (2.93× overall,
+the ratio being compressed by the expensive tier-C cells where both are dominated by simulation rather
+than by the test). *A figure of "≈11× slower, ~850 s vs ~75 s per cell" was in circulation while this
+amendment was being drafted; it does not survive contact with `summary.json` and is corrected here. The
+correct statement is that `voom` costs an order of magnitude more per cell in the cheap tiers and about
+3× more over the grid as a whole.* `ebayes` vs `ebayes_trend`: 3390.8 s vs 3413.1 s over the grid —
+`ebayes` is faster by 0.7%, which is within noise and is therefore **not** the deciding consideration
+between them.
+
+**Step 5 — the decision.** `voom` is eliminated: equal-or-worse power at ~10× the per-cell cost.
+Between `ebayes` and `ebayes_trend`, power ties and runtime ties; the tie is broken toward `ebayes` as
+the **strictly simpler estimator** — `ebayes_trend` adds a natural-cubic-spline trend in mean log-CPM
+whose only justification would be a power gain, and the measured gain is −0.0002. An unjustified moving
+part in the denominator arm of the whole study is a liability, not a feature.
+
+**Selected: `ebayes`.** From this amendment forward the pseudobulk arm's test is:
+
+> **Moderated t with empirical-Bayes shrunk variances (limma-style; Smyth 2004,
+> *Stat. Appl. Genet. Mol. Biol.* 3, Article 3), on log2(CPM + 1) donor pseudobulk profiles.**
+>
+> Per gene, ordinary least squares for the two-group design `~ 1 + x` on the donor × gene matrix of
+> log2(CPM + 1) — CPM taken against the row sums of the **universe-restricted** matrix, so no gene
+> outside the frozen universe leaks into the normalisation — giving the contrast estimate `beta_g`, the
+> residual variance `s2_g` on `d = n_donors − 2` degrees of freedom, and the unscaled variance
+> `(X'X)^-1[1,1]`. A scaled-F prior (`s2_g | sigma2_g ~ sigma2_g · chisq_d/d`, `d0·s02/sigma2_g ~
+> chisq_d0`, so marginally `s2_g ~ s02·F(d, d0)`) is fitted by Smyth's `fitFDist` method of moments on
+> `log s2` via digamma/trigamma. The posterior variance is
+> `s~2_g = (d0·s02 + d·s2_g)/(d0 + d)`, the statistic is `t_g = beta_g / sqrt(s~2_g · unscaled_var_g)`,
+> referred to `t_{d + d0}`. `d0 = +inf` (complete pooling — the between-gene variance not separable from
+> sampling noise) is handled in the limit `s~2 → s02`, `t_{inf} → N(0,1)`, and is reported, never
+> silently clipped. **No mean-variance trend** (`covariate = None`): the trended variant was measured
+> and rejected in step 5. Genes with non-finite `s2` yield `p = NaN` and are dropped by BH rather than
+> given a p-value derived entirely from the prior.
+
+This is a **pure-Python re-implementation of published estimators**, not a wrapper: there is no R, rpy2,
+limma or edgeR on the machine and pbcheck targets the scanpy/scverse ecosystem, so an R dependency is
+not available. The implementation being adopted is the *same code that produced this grid* — it is
+lifted out of `scripts/pb_calibration_probe.py` into `src/pbcheck/methods/moderated.py` unchanged, with
+a test pinning the extraction against the probe's own output, so the arm the study ships is numerically
+the arm the selection evidence was measured on. It carries the probe's four numerical self-validations
+(d0 → 0 reduces to the ordinary t; homoscedastic-null calibration by KS against `t_{d+d0}`; a power gain
+over the ordinary t in the homoscedastic case; recovery of a known d0).
+
+**DESeq2-Wald is retired from the arm but its implementation is retained.** `deseq_from_pdata` stays in
+the tree, documented as superseded, so that every number in Amendment 1 and in `PILOT_FINDINGS.md`
+remains reproducible from this repository. Retiring a method by deleting the code that produced the
+retired results would make the record unfalsifiable.
+
+Spec §3's `DeseqDataSet` / `DeseqStats` block, and C1 (`poscounts` size factors) and C4 (covariate df
+rule) with it, no longer describe the arm's test. C1 and C4 are DESeq2-specific and lapse with it; the
+log2(CPM + 1) transform normalises by library size directly, which is the moderated arm's counterpart to
+a size factor. C2's requirement — no asymmetric NA between the arms — **survives and binds**, and is now
+enforced by Change 2 rather than by a DESeq2 flag.
+
+### Change 2 — fairness erratum: the paired BH was specified, implemented, tested, and never wired (§5, C2)
+
+This is **not a spec change**. Spec §5 requires both arms to be BH-corrected over one identical tested
+set, and item 4 requires that the two BH input vectors be asserted to be of the same length with
+identical membership. `src/pbcheck/mtc.py` implements exactly that as `bh_both_arms` / `PairedBH`, it has
+tests, and its own docstring (`mtc.py:73-76`) instructs *"Use `bh_both_arms` for anything whose output is
+compared across arms."*
+
+**No production caller ever did.** `permutation.run_null` (both arms, `permutation.py:126` and `:144`)
+and `scripts/synthetic_gate.py` (`:35-36`) both call the per-arm `bh_over_universe`. Every gate number
+published to date — including the ones in Amendment 1, `PILOT_FINDINGS.md`, and the README table — was
+computed with **each arm BH-corrected over its own non-NaN subset**, not over one common set.
+
+The direction of the error is known and is against the study's own thesis in one place and for it in
+another: the naive Wilcoxon arm essentially never returns NaN, while the pseudobulk arm does (DESeq2 on
+degenerate strata; the moderated arm on genes with non-finite `s2`). The pseudobulk arm was therefore
+corrected over a **smaller** m — made per-gene systematically *more liberal* than the arm it is the
+control for — and nothing reported it. Since the pseudobulk arm is the denominator of every inflation
+number, this is not cosmetic.
+
+Henceforth `run_null` and the gate use `bh_both_arms`, and its bookkeeping (`n_tested_common`,
+`n_na_naive`, `n_na_pseudobulk`, `dropped_for_fairness`) is carried into the output rather than
+discarded. **All gate numbers are recomputed under the paired BH and will shift.** Prior published
+numbers are superseded by the recomputation, not by an argument that the shift is small — that has not
+been measured yet at the time of writing.
+
+### Change 3 — B5 restored, and its literal construction measured and rejected (§6, B5)
+
+B5 pins that λ be computed from *empirical* permutation-null p-values — "rank of the observed statistic
+within the donor-permutation null" — rather than from analytic p-values, "so lambda reflects clustering
+miscalibration, not tie/discreteness artifacts". `metrics.py:39-45` cites `(spec B5)` while computing λ
+from analytic p-values; the citation was an overclaim (what the function actually does is median λ
+*across* permutations, which mitigates single-realization discreteness but is not B5's construction).
+
+**B5's construction as literally written cannot serve the purpose §6 assigns to λ, and this was
+measured, not argued.** Under the donor-permutation sharp null the real labeling is exchangeable with
+every permuted one, so the rank of the real statistic within the permutation null is uniform *by
+construction* — for any test, however miscalibrated. Measured on the null oracle (G = 400 surviving
+genes, 8v8 donors, `sigma_donor` = 0.5, 120 cells/donor, dispersion 0.2, seed 1, 30 permutations):
+
+| λ_naive computed as | value |
+|---|---|
+| analytic p-values, real labels | 22.93 |
+| analytic p-values **under the permutation null** (what the gate currently uses) | **26.08** |
+| **B5's literal empirical permutation p-values** | **0.93** |
+| the same construction applied to a *held-out permuted* labeling | 0.93 (median over 30) |
+
+The last row is the proof: B5's λ returns the identical value whether it is fed the real labeling or an
+arbitrary permuted one, i.e. it carries **zero information** about the arm's calibration. It measures
+the exchangeability of the permutation set, not the inflation of the test.
+
+**Resolution.** The binding λ criterion (decision rule item 1, §8(a)) remains λ computed from each arm's
+own p-values **under the permutation null** — which is, on reflection, exactly the clustering
+miscalibration B5 wanted: the analytic p-value is (asymptotically) the *cell*-permutation p-value, so
+its λ against the *donor*-permutation null measures precisely how much wider the true donor-level null
+is than the cell-level null the naive test assumes. B5's tie/discreteness concern is separately
+addressed by `tie_correct=True` (pinned by §2, wired in R0) and by taking the median across
+permutations. The empirical construction is **implemented and reported as a named companion diagnostic**
+— a validity check on the permutation machinery, which must sit near 1 and whose departure from 1 would
+indicate a non-exchangeable permutation set — and is explicitly **not** a calibration criterion. The
+`(spec B5)` citations in `metrics.py` are corrected to say what the code does.
+
+### Change 4 — C5 restored, with a moderated analog of `fitType` (§1 item 5, §3, C5)
+
+C5 requires a minimum frozen-universe gene count enforced before the pseudobulk test runs, and the
+`fitType` actually used to be persisted per stratum. `frozen_universe(min_size=...)` exists and is
+tested, but **no caller passes it** (`scripts/synthetic_gate.py:48` and the probe both call it bare), so
+the gate was decorative in exactly the sense C5 was written to prevent.
+
+1. All callers now pass `min_size` (default 200 genes, per inclusion-gate item 5).
+2. `fitType` is DESeq2's dispersion-trend fitting mode and lapses with DESeq2. Its **moderated analog is
+   the realised prior**, and that is what is now persisted in the gate output in its place: the fitted
+   prior degrees of freedom `d0` (with the `prior_is_complete_pooling` boolean that disambiguates
+   `d0 = +inf` from a missing value), the shrinkage factor `d0/(d0+d)`, the residual df `d`, whether a
+   mean-variance trend was used (`s0_squared_is_trended`, `False` for the selected arm), `s0^2`, and the
+   count of genes rendered untestable by a non-finite `s2`. These are the moderated arm's equivalent of
+   "which model actually got fitted here", and a run whose `d0` collapsed or whose prior went to complete
+   pooling is now visible in the artifact instead of being invisible.
+
+### Change 5 — C3 is SUPERSEDED (retired with rationale) (C3)
+
+C3 requires the pseudobulk DEG count to be reported **both ways** — DESeq2's native
+independent-filtered `padj` and re-BH over the frozen universe — to show the choice changes neither
+calibration nor the GO decision. Independent filtering is a DESeq2 feature. With DESeq2 retired from the
+arm (Change 1) there is no native filtered `padj` to cross-check against, and the check has no referent.
+C3 is therefore **retired, not deferred**: it is not work outstanding, it is a check whose subject no
+longer exists.
+
+Two things are put in its place, both cheap, and both serving C3's actual purpose (that the arm's
+significance calls not be an artifact of one p-value-processing choice):
+
+1. **Prior-strength disclosure** — the realised `d0` and shrinkage factor from Change 4. The moderated
+   analog of "how much did the filtering choice matter" is "how much did the prior matter", and it is
+   now reported rather than assumed negligible.
+2. **A p-value uniformity check on the permutation null** — the moderated arm's null p-values are
+   tested against Uniform(0,1), reported alongside λ. Where independent filtering would have distorted
+   the null, this shows it directly.
+
+Note that C2's motivation for `cooks_filter=False` — no asymmetric NA between the arms — is unaffected
+and is now carried by Change 2's paired BH, which handles NAs from *any* source rather than from
+DESeq2's filters specifically. That is a strictly stronger guarantee than the flag it replaces.
+
+### Change 6 — A2 is DEFERRED to Phase 1, honestly (§4, A2)
+
+A2 requires the permutation set to be **cell-count stratified** — restricted to (or reweighted toward)
+label assignments whose per-group total cell count is close to the real split. What
+`permutation.py:148-163` actually does is log per-group cell totals and check that the real split lies
+inside the permutation range (`real_split_inside_perm_range`, `real_split_percentile_in_perms`). That is
+a range check, not stratification, and the code comment labelling the block `---- A2:` reads as though
+the correction were satisfied. **It is not, and the comment is corrected to say so.**
+
+Full stratification is deferred to Phase 1, with the rationale stated so the deferral can be argued
+with:
+
+- **It is real statistical work, not wiring.** Restricting or reweighting a permutation set on a
+  covariate changes the null distribution being sampled and requires deciding the matching tolerance,
+  what to do when the restricted set is empty, and whether the resulting null is still exact. Doing it
+  by feel inside an engineering pass is how a pre-registered study acquires an unrecorded protocol
+  change.
+- **It is infeasible at the donor counts the spec's own inclusion gate admits.** At the 3v3 minimum
+  there are C(6,3) − 2 = 18 permutations in total; filtering them on cell-count proximity leaves single
+  digits, and the floor's Monte-Carlo error would swamp the confound it is meant to remove.
+- **The confound it targets is asymmetric between the arms, and the pseudobulk arm is the one that
+  matters here.** Donor pseudobulk profiles are aggregated once and are label-invariant: a permutation
+  changes only the donor→condition map, so per-group cell-count imbalance cannot move the pseudobulk
+  arm's inputs at all. It is the naive per-cell arm whose statistic scales with cell count. Since the
+  binding validity gate this amendment exists to repair is about the *pseudobulk* arm, A2 does not gate
+  it. It does bear on the naive arm's floor, which is a Phase 1 headline quantity — hence Phase 1, not
+  "never".
+- The range check is retained and reported meanwhile, and is what it says it is: a check that the real
+  split is not outside the permutation cell-count distribution. Where it fails, the floor comparison is
+  size-confounded and must be read as such.
+
+**A2 is recorded here as partially addressed. Any docstring or comment claiming otherwise is corrected
+in the same change.**
+
+### Change 7 — the thin-donor filter (`min_cells` / `min_counts`) is implemented manually (§1 item 2, §3)
+
+Spec §1 inclusion-gate item 2 pins "≥ 10 cells per donor in that cell_type (donors below threshold are
+**dropped, not merged**)" and §3 pins the aggregation call
+`dc.pp.pseudobulk(..., min_cells=10, min_counts=1000)`. R0 documented the resulting hole: **decoupler
+2.x removed those parameters**, so `build_pseudobulk` accepted `min_cells` / `min_counts` and silently
+never applied them. The pre-registered filter has never run.
+
+Implementing an equivalent filter ourselves is a protocol-affecting change, which is why R0 stopped at
+documenting it and deferred it here. **Decision: implement it.** After aggregation, a donor × cell_type
+pseudobulk profile is **dropped** — never merged into another donor, never back-filled — when it derives
+from fewer than `min_cells` cells or when its summed counts are below `min_counts`. Defaults stay at the
+pre-registered 10 and 1000. The number of profiles dropped and the reason is recorded, so a stratum
+losing donors to the filter is visible rather than silently smaller; the existing "≥ 3 donors per group
+post-aggregation, else SKIP" rule (§3) then applies to what survives.
+
+This is a **re-implementation of the pre-registered intent in a library that no longer offers it**, not
+a new criterion: the thresholds, the semantics ("dropped, not merged") and the placement (after
+aggregation, before the universe is frozen) are all as §1/§3 already specify.
+
+### What this does NOT settle
+
+- **`sigma_donor` remains unanchored to real data.** Amendment 1's closing concern stands in full and is
+  *not* relaxed by the test change. The power frontier above makes it sharper, not softer: the selected
+  arm reaches power 0.60 at 8 donors per group when `sigma_donor` = 0.35, and **nowhere in the grid** at
+  `sigma_donor` = 0.5 or 0.7. If real strata carry `sigma_donor` ≈ 0.5–0.7 then the pre-registered
+  oracle (log2FC = 1.0, K = 200) is unreachable at realistic donor counts by *any* test in the grid, and
+  §8(c) itself — not the choice of test — is what must be amended. `sigma_donor` must still be pinned to
+  a real empirical mean-dispersion / donor-variance trend (§8(b)) before any minimum-donor
+  stratum-inclusion rule is pre-registered.
+- **A2 stratification is deferred, not solved** (Change 6). The naive arm's floor remains a
+  cell-count-confounded quantity guarded only by a range check.
+- **The real-data anchor is still untouched.** Oracle (d), Mathys 2019 (§8(d)), has not been run. Every
+  number in this amendment — every FP rate, every λ, every power figure, and the entire selection
+  argument — comes from our own generative model. A moderated test calibrated on synthetic NB data with
+  a log-normal donor random effect is *not* thereby shown calibrated on real snRNA-seq, where the
+  mean-variance relation, zero inflation and donor heterogeneity are all ours to get wrong. The binding
+  check remains the real anchor, and it is still pending.
+- **The selection rule was applied to data already seen** (opening section). Re-running the grid with
+  different seeds would be a genuine, and so far unperformed, robustness check on the choice.
+- **Whether the arm passes its gate under the paired BH is not known at the time of writing.** Change 2
+  shifts every gate number; the grid evidence predicts the moderated arm is calibrated at these regimes,
+  but the gate has not yet been run under the combined changes. If it fails, that is a result and it
+  comes back here — no threshold in `PHASE0_SPEC.md` is to be touched to make it pass.
+
+*Author attests: the synthetic evidence above is all that was available; no real data informed this
+amendment. The selection data was seen in full before the rule was written, which is disclosed above and
+is why the rule is arithmetic and re-runnable rather than discretionary.*
