@@ -37,6 +37,14 @@ def build_perms(donors, true_test_set, *, n_perm=1000, seed=0, max_enumerate=200
 
     ``true_test_set`` is the set of donors that are really in the test group. Each returned
     permutation is a set of donors assigned to the test group (size = |true_test_set|).
+
+    Enumerate outright when ``total <= max_enumerate`` (small D, cheap to list exhaustively). When
+    D is larger but the number of *distinct available* sets (``total`` minus the identity and its
+    complement) still does not exceed ``n_perm``, also enumerate rather than rejection-sample:
+    rejection sampling draws WITHOUT replacement from a pool no bigger than the request, so the
+    `while len(perms) < n_perm` loop can never fill and hangs forever (e.g. 5v5, C(10,5) = 252
+    available sets, default n_perm = 1000 — this used to hang indefinitely before this fix). Only
+    when more distinct sets exist than requested is rejection sampling used, where it terminates.
     """
     donors = list(donors)
     n_test = len(true_test_set)
@@ -45,8 +53,9 @@ def build_perms(donors, true_test_set, *, n_perm=1000, seed=0, max_enumerate=200
 
     from math import comb
     total = comb(len(donors), n_test)
+    available = total - (2 if complement != true_test_set else 1)
     perms: list[frozenset] = []
-    if total <= max_enumerate:
+    if total <= max_enumerate or available <= n_perm:
         for combo in combinations(donors, n_test):
             s = frozenset(combo)
             if s == true_test_set or s == complement:

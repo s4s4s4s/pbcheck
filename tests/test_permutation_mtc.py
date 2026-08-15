@@ -20,6 +20,26 @@ def test_perms_exclude_identity_and_complement_small_D():
     assert all(len(p) == 3 for p in perms)
 
 
+def test_perms_5v5_with_default_n_perm_terminates():
+    """Regression: build_perms used to hang forever on a 5v5 design with default n_perm.
+
+    C(10,5) = 252, so only 250 distinct non-trivial label-sets exist (252 minus the identity and
+    its complement) -- fewer than the default n_perm=1000. The old code always rejection-sampled
+    once total > max_enumerate (default 200), so `while len(perms) < n_perm` could never reach
+    1000 distinct draws from a pool of 250 and looped forever. The fix falls back to full
+    enumeration whenever the available distinct-set count is <= n_perm, so this must now return
+    promptly with exactly the 250 available sets.
+    """
+    donors = [f"d{i}" for i in range(10)]
+    true_test = set(donors[:5])
+    perms = build_perms(donors, true_test)  # default n_perm=1000, max_enumerate=200
+    assert len(perms) == 250
+    assert true_test not in perms
+    assert (set(donors) - true_test) not in perms
+    assert all(len(p) == 5 for p in perms)
+    assert len(set(perms)) == 250  # distinct
+
+
 def test_perms_sampled_when_large_D():
     donors = [f"d{i}" for i in range(16)]  # C(16,8) huge -> sampling path
     true_test = set(donors[:8])
