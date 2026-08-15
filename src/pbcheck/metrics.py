@@ -37,11 +37,23 @@ def genomic_inflation(pvals: np.ndarray) -> float:
 
 
 def lambda_over_permutations(pval_matrix: np.ndarray) -> dict:
-    """Lambda summarized across permutation-null realizations.
+    """Lambda summarized across permutation-null realizations. **The binding calibration measure.**
 
-    ``pval_matrix`` is (n_perm x G): each row is one arm's p-values under one permuted labeling.
-    Returns the median lambda across permutations plus its spread (robust to Wilcoxon p-value
-    discreteness in any single realization, spec B5).
+    ``pval_matrix`` is (n_perm x G): each row is one arm's own p-values under one permuted
+    labeling. Returns the median lambda across permutations plus its spread.
+
+    This is the quantity decision rule item 1 / §8(a) binds on. Note what it is: the arm's
+    *nominal* p-values evaluated where the correct answer is "no association". For the naive
+    per-cell arm the nominal p-value is (asymptotically) the **cell**-permutation p-value, so its
+    lambda against the **donor**-permutation null measures exactly how much wider the true
+    donor-level null is than the cell-level null the naive test assumes — i.e. the clustering
+    miscalibration.
+
+    CITATION CORRECTED (Amendment 2 Change 3). This docstring previously cited "(spec B5)" for the
+    median-across-permutations step. That was an overclaim: taking the median mitigates p-value
+    discreteness in a single realization, but it is not B5's construction, which is
+    :func:`empirical_perm_pvalues`. B5's tie/discreteness concern is met here by ``tie_correct=True``
+    in the naive arm (pinned by spec §2) together with this median.
     """
     per_perm = np.array([genomic_inflation(row) for row in pval_matrix], dtype=float)
     per_perm = per_perm[~np.isnan(per_perm)]
@@ -62,6 +74,42 @@ def lambda_over_permutations(pval_matrix: np.ndarray) -> dict:
         "n_perm": int(per_perm.size),
         "per_perm": per_perm,
     }
+
+
+def empirical_perm_pvalues(real_pvals: np.ndarray, null_pval_matrix: np.ndarray) -> np.ndarray:
+    """Spec B5's construction: rank the observed statistic within the donor-permutation null.
+
+    Per gene, ``p_emp = (1 + #{permutations at least as extreme as the real labeling}) /
+    (1 + n_perm)``; "at least as extreme" is read off the arm's own p-values (a smaller p is a more
+    extreme statistic), so this works for any arm without re-deriving its statistic. The ``+1``
+    is the standard bias correction — it keeps the estimator valid and bounds the minimum attainable
+    p-value at ``1/(1 + n_perm)``, which is also its resolution limit.
+
+    WHAT THIS DOES AND DOES NOT MEASURE — read before using it (Amendment 2 Change 3).
+    Under the donor-permutation **sharp null** the real labeling is exchangeable with every permuted
+    one, so this rank is uniform **by construction**, for any test, however miscalibrated. Measured
+    on the null oracle while Amendment 2 was written: lambda from this construction = 0.93 on data
+    where the arm's lambda under the permutation null was 26.08 — and it returned the identical 0.93
+    when fed a held-out *permuted* labeling instead of the real one. It therefore carries **zero
+    information about the arm's calibration** and must never be used as the calibration criterion,
+    despite B5's wording; :func:`lambda_over_permutations` is that criterion.
+
+    What it is good for, and what it is reported as: a validity check on the permutation machinery
+    itself. It must sit near 1; a departure means the permutation set is not exchangeable with the
+    real labeling (an unbalanced or leaked permutation construction), which would invalidate every
+    other number taken from the same null.
+    """
+    real = np.asarray(real_pvals, dtype=float)
+    null = np.asarray(null_pval_matrix, dtype=float)
+    if null.ndim != 2 or null.shape[1] != real.shape[0]:
+        raise ValueError(f"null matrix {null.shape} does not align with {real.shape[0]} genes")
+    n_perm = null.shape[0]
+    if n_perm == 0:
+        return np.full(real.shape[0], np.nan)
+    with np.errstate(invalid="ignore"):
+        at_least_as_extreme = np.nansum(null <= real[None, :], axis=0)
+    p = (1.0 + at_least_as_extreme) / (1.0 + n_perm)
+    return np.where(np.isnan(real), np.nan, p)
 
 
 def perm_floor(ndeg_per_perm: np.ndarray, n_genes: int) -> dict:

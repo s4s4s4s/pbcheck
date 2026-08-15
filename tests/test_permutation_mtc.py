@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from pbcheck.permutation import build_perms, _labels_for
+from pbcheck.permutation import build_perms, labels_for, _labels_for
 from pbcheck import mtc
 from pbcheck.methods.de import DEResult
 
@@ -50,8 +50,13 @@ def test_perms_sampled_when_large_D():
 
 
 def test_labels_for_maps_test_and_ref():
-    labels = _labels_for(pd.Index(["a", "b", "c"]), {"a", "c"}, "disease", "ctrl")
+    labels = labels_for(pd.Index(["a", "b", "c"]), {"a", "c"}, "disease", "ctrl")
     assert list(labels) == ["disease", "ctrl", "disease"]
+
+
+def test_private_labels_for_alias_still_resolves():
+    """``scripts/pb_calibration_probe.py`` imports the private name and is left untouched."""
+    assert _labels_for is labels_for
 
 
 def test_bh_over_universe_length_and_missing():
@@ -172,3 +177,41 @@ def test_monte_carlo_error_and_split_check_are_reported():
     assert np.isclose(mc["pb_fp_rate_mc_se"], np.sqrt(p * (1 - p) / n))
     # And the headline gap must be large relative to its own sampling error.
     assert mc["floor_gap_over_mc_se"] > 5
+
+
+def test_run_null_carries_the_paired_bh_bookkeeping():
+    """Amendment 2 Change 2: cross-arm numbers come from one common tested set, and it is visible.
+
+    The erratum being closed is that ``bh_both_arms`` existed, was tested, and no production caller
+    used it. A test that only checked #DEG would not have caught that -- so this asserts the paired
+    bookkeeping is actually present in the output, which is only possible if the paired path ran.
+    """
+    import warnings
+    warnings.filterwarnings("ignore")
+    from oracles import null_oracle
+    from pbcheck.permutation import run_null
+    from pbcheck.gene_universe import frozen_universe
+    from pbcheck.methods.pseudobulk import build_pseudobulk
+
+    o = null_oracle(n_donors_per_group=4, n_cells_per_donor=60, n_genes=200, seed=12)
+    uni = frozen_universe(build_pseudobulk(o.adata), min_size=50)
+    r = run_null(o.adata, uni, n_perm=8, n_perm_pb=5, fdr=0.05)
+
+    assert r["monte_carlo"]["bh_mode"].startswith("paired")
+    assert len(r["paired_bh"]) == r["n_perm_paired"] == 5
+    for bk in r["paired_bh"] + [r["paired_bh_real"]]:
+        assert set(bk) == {"n_tested_common", "n_na_naive", "n_na_pseudobulk",
+                           "n_dropped_for_fairness"}
+        # The common set is what BH saw on BOTH sides; it can never exceed the universe.
+        assert 0 < bk["n_tested_common"] <= len(uni)
+        assert bk["n_dropped_for_fairness"] == len(uni) - bk["n_tested_common"]
+
+    # Real-label p-values are carried so the B5 empirical construction has a reference (spec §4).
+    assert r["naive_pvals_real"].shape == (len(uni),)
+    assert r["pb_pvals_real"].shape == (len(uni),)
+    # The realised prior of the moderated arm rides along (the fitType analog, spec C5).
+    assert "prior_df_d0" in r["pb_moderation"]
+
+    # Naive-only permutations beyond the paired set are reported separately, not pooled into the
+    # cross-arm comparison.
+    assert len(r["naive_ndeg_solo"]) == r["n_perm_naive"] == 8
