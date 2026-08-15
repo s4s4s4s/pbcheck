@@ -96,7 +96,7 @@ src/pbcheck/          # the auditor engine (methods/)
 pilot/                # Phase 0 artifacts: committed test-selection grid + results, no code
 scripts/              # the harness: synthetic gate, calibration probe, selection analyzer
 synthetic/            # synthetic-oracle generators with known ground truth
-tests/                # unit + regression tests (oracles are the correctness spec)
+tests/                # unit + regression + property tests (oracles are the correctness spec)
 docs/                 # PHASE0_SPEC.md (methodology), AMENDMENTS.md, ENV_NOTES.md
 ```
 
