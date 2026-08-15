@@ -48,7 +48,20 @@ packages = ["src/pbcheck"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-filterwarnings = ["ignore::FutureWarning", "ignore::DeprecationWarning"]
+# Targeted, not blanket (R3): audited with `pytest -q -W default` after temporarily disabling the
+# per-test-file `warnings.filterwarnings("ignore")` calls (which would otherwise mask everything).
+# Exactly one warning fires anywhere in the suite: anndata's ImplicitModificationWarning when the
+# synthetic oracles build an AnnData from an obs frame with a default integer index
+# (`synthetic/oracles.py`'s `ad.AnnData(X=X, obs=obs)`, before `obs_names` is set explicitly).
+# Its reported source module is CPython's `functools` (the singledispatch wrapper anndata's own
+# warning call routes through), not anndata or the oracle module, so no module qualifier is used —
+# matching on it would be pinning an internal dispatch implementation detail. Neither FutureWarning
+# nor DeprecationWarning fires anywhere in the suite as of this stack (requirements.lock), so the
+# previous blanket ignores of both were silencing nothing here; anything real from a future numpy /
+# pandas / scanpy upgrade will now surface instead of being swallowed.
+filterwarnings = [
+    "ignore:Transforming to str index\\.:anndata._warnings.ImplicitModificationWarning",
+]
 
 [tool.ruff]
 line-length = 100
