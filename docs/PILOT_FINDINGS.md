@@ -109,3 +109,44 @@ was evaluated at a substituted effect size. With the criteria restored, the inst
 **Net, as of 2026-07-22:** the naive-arm measurement stands and reproduces exactly. The pseudobulk validity
 gate is **not** satisfied — and since that arm is the denominator of every inflation number, no figure here
 may be read as a finding until the gate is met. See [`AMENDMENTS.md`](AMENDMENTS.md), Amendment 1.
+
+---
+
+## Addendum (2026-08-15) — the pseudobulk arm's test was replaced; calibration now passes, power still does not
+
+This is an addendum, not a rewrite: everything above stands as the record of what was found and retracted at
+the time. What follows is what changed since, under [`AMENDMENTS.md`](AMENDMENTS.md) Amendment 2.
+
+Amendment 1 (above) left the pseudobulk arm's replacement test open, pending a comparison against the
+moderated methods it had not tested. That comparison is the committed 146-cell test-selection grid,
+`pilot/testsel/summary.{csv,json}` (`72dec7b`), read by `scripts/analyze_test_selection.py`: six donor-level
+tests (Welch t, pooled t, Wilcoxon, `ebayes`, `ebayes_trend`, `voom`) plus `wald`, swept over `sigma_het`,
+`sigma_donor`/donor-count tiers, and three generative arms. All six donor-level tests are calibrated on the
+grid; `wald` is not. Among the calibrated tests, the three moderated ones (`ebayes`, `ebayes_trend`, `voom`)
+separate cleanly on worst-case power (minimax regret), are within noise of each other, and `ebayes` is chosen
+— simplest estimator, no measurable power cost against `ebayes_trend`, ~10× cheaper than `voom` for an
+equal-or-worse power. Full arithmetic is in Amendment 2, Change 1.
+
+Re-running the gate (`scripts/synthetic_gate.py`) under the moderated arm, with the paired BH now actually
+wired into `run_null` (Amendment 2, Change 2 — an erratum: it had been specified and tested since before
+Amendment 1 but no production caller used it), gives:
+
+| quantity | this run (2026-08-15) | Amendment-1-era (DESeq2-Wald) |
+|---|---|---|
+| λ_pseudobulk | **1.02** (in-band [0.9, 1.1]) | 1.25 (out of band) |
+| pseudobulk perm-null FP rate | **0.05** at α = 0.05 — marginal: 2/40 permutations, Monte-Carlo SE 0.034, cannot yet separate 0.05 from ~0.12 | 0.35–0.50 |
+| pseudobulk power (log2FC = 1.0, K = 200, the pre-registered oracle) | **0.35** | 0.47–0.57 |
+| required power (§8(c)) | ≥ 0.60 | ≥ 0.60 |
+
+Calibration moved from clearly failing to meeting its criteria (with the FP-rate reading marked marginal
+rather than clean — more permutations are needed to resolve it). Power did **not** move to passing, and this
+is not a surprise: it is exactly what the grid predicts. At `sigma_donor = 0.5` — the gate's operating point
+— no test in the grid, moderated or not, reaches power 0.60 anywhere; the moderated tests only clear 0.60 at
+`sigma_donor = 0.35` (smallest sufficient n = 8 donors/group). See Amendment 2's power-frontier table.
+
+This sharpens, rather than resolves, the open question both amendments have carried from the start: whether
+real strata's `sigma_donor` sits near 0.35 (where the pre-registered oracle is achievable) or near 0.5–0.7
+(where Amendment 1 already noted that §8(c) itself, not the test, would need amending). That decision is
+**pending** — `sigma_donor` remains an unanchored free knob of the simulator (§8(b)) — and is not taken by
+this addendum. Until it is, the gate correctly reports `INSTRUMENT NEEDS ATTENTION`: calibrated, not yet
+powered, at the pre-registered operating point.
