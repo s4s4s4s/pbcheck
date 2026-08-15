@@ -159,11 +159,11 @@ from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
-import anndata as ad
-import numpy as np
-import pandas as pd
-from scipy.special import digamma, polygamma
-from scipy.stats import chi2, mannwhitneyu, t as t_dist, ttest_ind
+import anndata as ad  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+from scipy.special import digamma, polygamma  # noqa: E402
+from scipy.stats import chi2, mannwhitneyu, t as t_dist, ttest_ind  # noqa: E402
 
 _REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_REPO / "src"))

@@ -10,7 +10,34 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
+  lint:
+    name: ruff check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dev extra (ruff only, no scientific stack needed for lint)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      # ruff format --check is deliberately NOT run here: this is a pre-registered scientific
+      # repo, and a lot of existing code predates a formatting policy. Reformatting it wholesale
+      # in a lint-hardening commit would pollute `git blame` on files the analysis depends on.
+      # `ruff check` (real lint rules: unused imports, etc.) is enforced; formatting is not yet.
+      - name: ruff check
+        run: python -m ruff check .
+
   test:
     name: pytest (py${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}

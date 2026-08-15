@@ -19,12 +19,12 @@ from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
-import numpy as np
-import pandas as pd
-import scanpy as sc
-import decoupler as dc
-from pydeseq2.dds import DeseqDataSet
-from pydeseq2.ds import DeseqStats
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import scanpy as sc  # noqa: E402
+import decoupler as dc  # noqa: E402
+from pydeseq2.dds import DeseqDataSet  # noqa: E402
+from pydeseq2.ds import DeseqStats  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "synthetic"))
 from oracles import null_oracle, positive_oracle, no_donor_effect_oracle  # noqa: E402

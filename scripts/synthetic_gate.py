@@ -17,7 +17,7 @@ from pathlib import Path
 
 warnings.filterwarnings("ignore")
 
-import numpy as np
+import numpy as np  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "synthetic"))
 from oracles import null_oracle, positive_oracle  # noqa: E402
