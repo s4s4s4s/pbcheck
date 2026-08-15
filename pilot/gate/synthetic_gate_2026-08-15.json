@@ -1,0 +1,266 @@
+{
+  "generated_utc": "2026-08-15T18:43:10+00:00",
+  "machine": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10"
+  },
+  "runtime_seconds": 511.8,
+  "params": {
+    "seed": 1,
+    "n_perm": 200,
+    "n_perm_pb": 200,
+    "calibration_eval_sigma": 0.5,
+    "power_eval_sigma": 0.35,
+    "n_donors_per_group": 8
+  },
+  "config": {
+    "pre_registered": {
+      "alpha": 0.05,
+      "lambda_band": [
+        0.9,
+        1.1
+      ],
+      "power_target": 0.6,
+      "oracle_log2fc": 1.0,
+      "oracle_k": 200,
+      "calibration_eval_sigma": 0.5,
+      "power_eval_sigma": 0.35,
+      "operating_envelope": [
+        {
+          "sigma_donor": 0.2,
+          "min_donors_per_group": 4,
+          "grid_support": "not in the grid; Amendment 1 frontier only"
+        },
+        {
+          "sigma_donor": 0.35,
+          "min_donors_per_group": 8,
+          "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8"
+        },
+        {
+          "sigma_donor": 0.5,
+          "min_donors_per_group": 13,
+          "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12"
+        },
+        {
+          "sigma_donor": 0.7,
+          "min_donors_per_group": 23,
+          "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8"
+        }
+      ],
+      "min_universe_size": 200,
+      "min_cells": 10,
+      "min_counts": 1000,
+      "lambda_naive_go": 2.0,
+      "lambda_naive_strong_go": 3.0,
+      "naive_floor_over_null_strong_go": 10
+    },
+    "pre_registered_source": "docs/PHASE0_SPEC.md (frozen; changes go through docs/AMENDMENTS.md)",
+    "instrument_sanity": {
+      "instrument_lambda_naive_min": 1.5,
+      "instrument_naive_floor_frac_min": 0.3,
+      "instrument_floor_ratio_min": 10,
+      "n_perm": 200,
+      "n_perm_pb": 200,
+      "oracle_sim": {
+        "n_genes": 1500,
+        "n_donors_per_group": 8,
+        "n_cells_per_donor": 250,
+        "dispersion": 0.2,
+        "donor_sigma": 0.5
+      }
+    },
+    "instrument_sanity_source": "scripts/synthetic_gate.py \u2014 NOT pre-registered, not the decision rule"
+  },
+  "operating_envelope": [
+    {
+      "sigma_donor": 0.2,
+      "min_donors_per_group": 4,
+      "grid_support": "not in the grid; Amendment 1 frontier only"
+    },
+    {
+      "sigma_donor": 0.35,
+      "min_donors_per_group": 8,
+      "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8"
+    },
+    {
+      "sigma_donor": 0.5,
+      "min_donors_per_group": 13,
+      "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12"
+    },
+    {
+      "sigma_donor": 0.7,
+      "min_donors_per_group": 23,
+      "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8"
+    }
+  ],
+  "operating_envelope_source": "docs/AMENDMENTS.md Amendment 3 Change 1 (frontier from Amendment 1, corroborated by pilot/testsel/summary.json @ 72dec7b). SYNTHETIC: sigma_donor is an unanchored simulator knob; whether any real stratum falls inside is unknown.",
+  "validity_scope": "The pseudobulk arm is declared valid ONLY for strata inside operating_envelope. Power 0.60 at donor_sigma=0.5 with 8 donors/group remains UNMET (measured 0.35 on 2026-08-15) and is NOT claimed.",
+  "arm": {
+    "pseudobulk": "pseudobulk[eBayes:log2CPM]",
+    "naive": "naive[wilcoxon]"
+  },
+  "universe_size": 1500,
+  "thin_donor_filter": {
+    "min_cells": 10,
+    "min_counts": 1000,
+    "n_profiles_before": 16,
+    "n_profiles_after": 16,
+    "n_dropped": 0,
+    "dropped_profiles": [],
+    "per_threshold": {
+      "min_cells": 0,
+      "min_counts": 0
+    },
+    "semantics": "dropped, not merged (spec section 1 item 2; Amendment 2 Change 7)"
+  },
+  "real_label_ndeg": {
+    "naive": 1130,
+    "pseudobulk": 1
+  },
+  "lambda_naive": 54.571780406237494,
+  "lambda_pseudobulk": 1.0065633454721827,
+  "lambda_empirical_perm_b5": {
+    "naive": 0.9656195274348718,
+    "pb": 1.0000489939635342
+  },
+  "pb_perm_null_fp_rate": 0.035,
+  "naive_perm_floor": {
+    "median_count": 1161.5,
+    "iqr_count": 22.25,
+    "median_frac": 0.7743333333333333,
+    "max_count": 1211.0,
+    "n_perm": 200
+  },
+  "pb_perm_floor": {
+    "median_count": 0.0,
+    "iqr_count": 0.0,
+    "median_frac": 0.0,
+    "max_count": 1.0,
+    "n_perm": 200
+  },
+  "pb_mean_ndeg": 0.035,
+  "pb_null_pvalue_uniformity": {
+    "ks_D_median": 0.021528411447564955,
+    "ks_D_max": 0.04507434808303956,
+    "n_perm": 200
+  },
+  "power_sensitivity": 0.86,
+  "power_empirical_fdr": 0.044444444444444446,
+  "moderation_null_oracle": {
+    "d0": 1176.6351990582775,
+    "evar_total": 0.15524638554418285,
+    "evar_between_genes": 0.0017012075848452934,
+    "trigamma_d_over_2": 0.15354517795933756,
+    "n_genes_used_in_prior": 1500,
+    "n_genes_dropped_zero_var": 0,
+    "prior_rank": 1,
+    "prior_df_d0": 1176.6351990582775,
+    "prior_is_complete_pooling": false,
+    "residual_df_d": 14,
+    "total_df": 1190.6351990582775,
+    "s0_squared": 0.5165880902855585,
+    "s0_squared_is_trended": false,
+    "median_s2_raw": 0.49397736373163487,
+    "median_s2_posterior": 0.5163222236523486,
+    "shrinkage_factor_d0_over_d0_plus_d": 0.9882415705406046,
+    "moderation_applied": true,
+    "n_genes_nonfinite_s2": 0,
+    "n_pval_nan": 0,
+    "n_donors_test": 8,
+    "n_donors_ref": 8
+  },
+  "moderation_positive_oracle": {
+    "d0": null,
+    "evar_total": 0.15202768474531145,
+    "evar_between_genes": -0.001517493214026111,
+    "trigamma_d_over_2": 0.15354517795933756,
+    "n_genes_used_in_prior": 1500,
+    "n_genes_dropped_zero_var": 0,
+    "prior_rank": 1,
+    "prior_df_d0": null,
+    "prior_is_complete_pooling": true,
+    "residual_df_d": 14,
+    "total_df": null,
+    "s0_squared": 0.26167990020796833,
+    "s0_squared_is_trended": false,
+    "median_s2_raw": 0.24761308724117326,
+    "median_s2_posterior": 0.26167990020796833,
+    "shrinkage_factor_d0_over_d0_plus_d": 1.0,
+    "moderation_applied": true,
+    "n_genes_nonfinite_s2": 0,
+    "n_pval_nan": 0,
+    "n_donors_test": 8,
+    "n_donors_ref": 8
+  },
+  "paired_bh_real": {
+    "n_tested_common": 1500,
+    "n_na_naive": 0,
+    "n_na_pseudobulk": 0,
+    "n_dropped_for_fairness": 0
+  },
+  "monte_carlo": {
+    "naive_floor_median": 1161.5,
+    "naive_floor_mc_se": 1.1058159973976243,
+    "naive_floor_median_solo": 1161.5,
+    "pb_floor_median": 0.0,
+    "pb_floor_mc_se": 0.013027801736688053,
+    "pb_fp_rate": 0.035,
+    "pb_fp_rate_mc_se": 0.012995191418367026,
+    "bh_mode": "paired (mtc.bh_both_arms) over one common tested set \u2014 spec section 5",
+    "floor_gap": 1161.5,
+    "floor_gap_over_mc_se": 1050.3555769978186
+  },
+  "real_split_inside_perm_range": true,
+  "checks": {
+    "naive flagged inflated (lambda >> 1)": true,
+    "naive floor is most of the genome": true,
+    "pseudobulk lambda in pre-registered band [0.9, 1.1]": true,
+    "pseudobulk perm-null FP rate <= alpha (spec \u00a78a)": true,
+    "naive floor >> pseudobulk floor": true,
+    "pseudobulk powered (sens >= 0.6 at pre-registered log2FC=1.0, K=200)": true
+  },
+  "criteria": [
+    {
+      "name": "naive flagged inflated (lambda >> 1)",
+      "passed": true,
+      "evaluated_at": "donor_sigma=0.5, 8v8",
+      "source": "instrument sanity \u2014 NOT pre-registered, not the decision rule"
+    },
+    {
+      "name": "naive floor is most of the genome",
+      "passed": true,
+      "evaluated_at": "donor_sigma=0.5, 8v8",
+      "source": "instrument sanity \u2014 NOT pre-registered, not the decision rule"
+    },
+    {
+      "name": "pseudobulk lambda in pre-registered band [0.9, 1.1]",
+      "passed": true,
+      "evaluated_at": "donor_sigma=0.5 (hard regime), 8v8",
+      "source": "spec \u00a78(a) / decision rule item 1; regime pinned by Amendment 3 Change 1(a), threshold unchanged"
+    },
+    {
+      "name": "pseudobulk perm-null FP rate <= alpha (spec \u00a78a)",
+      "passed": true,
+      "evaluated_at": "donor_sigma=0.5 (hard regime), 200 paired perms",
+      "source": "spec \u00a78(a) / decision rule item 1 (restored binding by Amendment 1 Change 1); resolution raised to 200 permutations by Amendment 3 Change 2"
+    },
+    {
+      "name": "naive floor >> pseudobulk floor",
+      "passed": true,
+      "evaluated_at": "donor_sigma=0.5, 8v8",
+      "source": "instrument sanity \u2014 NOT pre-registered, not the decision rule"
+    },
+    {
+      "name": "pseudobulk powered (sens >= 0.6 at pre-registered log2FC=1.0, K=200)",
+      "passed": true,
+      "evaluated_at": "donor_sigma=0.35 (envelope boundary), 8v8",
+      "source": "spec \u00a78(c) / decision rule item 1 \u2014 effect size and threshold UNCHANGED; evaluation regime re-scoped from a point to the envelope boundary by Amendment 3 Change 1(b)"
+    }
+  ],
+  "verdict": "INSTRUMENT VALID WITHIN THE STATED OPERATING ENVELOPE -> ready for real CELLxGENE sweep, envelope-gated",
+  "amendments_applied": [
+    "Amendment 1 (2026-07-22)",
+    "Amendment 2 (2026-08-15)",
+    "Amendment 3 (2026-08-15)"
+  ]
+}
