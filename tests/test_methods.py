@@ -27,10 +27,8 @@ from pbcheck.methods.naive import naive_de
 warnings.filterwarnings("ignore")
 
 
-def test_naive_arm_passes_the_settings_the_spec_pins_verbatim(monkeypatch):
+def test_naive_arm_passes_the_settings_the_spec_pins_verbatim(monkeypatch, small_null_adata):
     """Spec §2: ``tie_correct=True`` and ``pts=True``, captured from the real call."""
-    from oracles import null_oracle
-
     seen = {}
     real = sc.tl.rank_genes_groups
 
@@ -40,8 +38,7 @@ def test_naive_arm_passes_the_settings_the_spec_pins_verbatim(monkeypatch):
 
     monkeypatch.setattr(sc.tl, "rank_genes_groups", spy)
 
-    o = null_oracle(n_donors_per_group=3, n_cells_per_donor=40, n_genes=80, seed=21)
-    naive_de(o.adata)
+    naive_de(small_null_adata)
 
     assert seen.get("method") == "wilcoxon"
     # tie_correct: scRNA-seq counts are heavily tied (mostly zeros); without it the Wilcoxon normal
@@ -52,23 +49,20 @@ def test_naive_arm_passes_the_settings_the_spec_pins_verbatim(monkeypatch):
     assert seen.get("pts") is True
 
 
-def test_naive_arm_omits_tie_correct_for_the_t_test_variant(monkeypatch):
+def test_naive_arm_omits_tie_correct_for_the_t_test_variant(monkeypatch, small_null_adata):
     """``tie_correct`` is defined only for the rank test; passing it to the t-test variant errors."""
-    from oracles import null_oracle
-
     seen = {}
     real = sc.tl.rank_genes_groups
     monkeypatch.setattr(sc.tl, "rank_genes_groups",
                         lambda *a, **k: (seen.update(k), real(*a, **k))[1])
 
-    o = null_oracle(n_donors_per_group=3, n_cells_per_donor=40, n_genes=80, seed=22)
-    naive_de(o.adata, method="t-test_overestim_var")
+    naive_de(small_null_adata, method="t-test_overestim_var")
 
     assert "tie_correct" not in seen
     assert seen.get("pts") is True     # the robustness variant still carries pts
 
 
-def test_naive_arm_returns_the_pts_column_it_actually_gets():
+def test_naive_arm_returns_the_pts_column_it_actually_gets(small_null_adata):
     """``pts=True`` must reach the result table, not just the call.
 
     Recorded honestly: on scanpy 1.12.2, ``rank_genes_groups_df`` returns ``pct_nz_group`` but NOT
@@ -77,10 +71,7 @@ def test_naive_arm_returns_the_pts_column_it_actually_gets():
     sensitivity check (spec §6/B5) wants both fractions, so on this scanpy version it has only one
     side available — a real gap, asserted here as it is rather than as it should be.
     """
-    from oracles import null_oracle
-
-    o = null_oracle(n_donors_per_group=3, n_cells_per_donor=40, n_genes=80, seed=23)
-    res = naive_de(o.adata)
+    res = naive_de(small_null_adata)
     assert "pct_group" in res.table.columns
 
 
