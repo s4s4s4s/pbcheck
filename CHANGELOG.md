@@ -160,3 +160,128 @@ culminating in Amendment 2.
   `~ 1 + x`, and a partial confound is tagged and neutralised by the permutation null, not
   modelled. Committing this manifest is not the §1 pre-registration of the
   stratum list.
+
+### Real-data harness, module 2 — the counts gate (2026-08-15)
+
+- Added: `pbcheck.io_counts` (spec §9 item 2), the `X`-reading half of the selection pipeline. It
+  settles the two §1 inclusion-gate items obs cannot decide and fills the columns `census_select`
+  had to leave `pending`. **Item 4** (`check_integer_counts` / `assert_integer_counts`): integrality
+  is tested on the *values*, not on the dtype, because Census raw is routinely `float32` holding
+  0.0/1.0/7.0 and rejecting a float dtype would throw away most of the Census; fractional values
+  (a normalised or log1p matrix — §10 risk 6), non-finite values and negative values each fail with
+  their own reason, and the response is a **DROP recorded in the manifest, never a rounding**. On a
+  sparse matrix only the stored entries are scanned and nothing is ever densified, so the check
+  costs the nonzeros rather than the 12 GB dense form of a real stratum. **Item 5 / C5**
+  (`frozen_universe_check`): the universe is built with the arm's own code —
+  `methods.pseudobulk.build_pseudobulk` (thin donors dropped, not merged, at the pre-registered
+  `MIN_CELLS`/`MIN_COUNTS`) then `gene_universe.frozen_universe` — and `require_min_size` turns a
+  small universe into a SKIP whose *measured size is still recorded*, since "too small" without the
+  number cannot be audited. §3's "≥ 3 pseudosamples per group post-aggregation" is measured at the
+  same time and reported as its own skip status: a donor can clear item 2's ≥ 10 cells and still
+  fall below `min_counts` = 1000, which is only visible once counts are in hand.
+- Added: the rest of the pending columns — `median_counts_per_cell_by_group` from `X` (only when it
+  was pending; when `census_select` already read it from the Census's own `raw_sum`, the snapshot's
+  value is kept and the X-derived one recorded beside it), and the §1 pre-screen's
+  `sequencing_depth_bin`, computed by calling `census_select.confound_prescreen` with no other
+  covariates rather than re-deriving the donor-level Cramér's V and the singleton-level rule a
+  second time. `update_manifest_row(row, adata)` returns a **new** row and never mutates its input,
+  `admitted_to_sweep` stays `False` on every row (Amendment 3's `sigma_donor` anchor is still OPEN),
+  and `fitType` / `cell_type_ontology_depth` stay `pending` because they belong to the pseudobulk
+  arm (C5 / Amendment 2 Change 4) and to `controls` (D5).
+- Added: `reconcile_with_obs_snapshot()` — the obs snapshot and the load are **separate acts**, so a
+  load with fewer cells or a missing donor produces a discrepancy **flag** and the row keeps the
+  numbers it was committed with. Two differences are recognised rather than flagged: donors the obs
+  gate itself recorded as dropped-thin (a load filters on dataset/cell type/disease, not on donor,
+  so they come back), and a per-cell depth agreeing with the snapshot's `raw_sum` medians to 0.1%.
+  The first allowance is **bounded and the bound is checked**: a donor the snapshot dropped at 4
+  cells that arrives with 400 is not that decision reapplied but the two acts disagreeing about the
+  fact §1 item 2 was applied to, so it is compared against `MIN_CELLS`, listed, flagged, and
+  `agrees` is False. And when the integrality gate has failed the reconciliation runs with
+  `compare_magnitudes=False`: donor and cell counts stay meaningful whatever the values are, but no
+  loaded median is reported and the depth cross-check cannot fire — otherwise a ×0.5 rescale would
+  be reported twice, once truthfully as a failed integer check and once as a spurious "depth
+  discrepancy". The "nothing derived from a refused matrix" rule binds at every depth of the row,
+  not only at its top level.
+- Added: `load_stratum()` / `load_contrast()`, the only network-touching functions — a thin
+  `cellxgene_census.get_anndata` wrapper with a lazy import, asking for the **raw** layer (§1) at
+  `census_select.CENSUS_VERSION`, imported rather than restated so the pin has one home. It records
+  the integrality verdict in `uns` and deliberately does **not** raise on a failure: §1's answer to
+  a non-integer stratum is a drop in the manifest, and a loader that aborted the sweep could not
+  report D4's excluded fraction. The obs-column argument is chosen by reading the installed
+  signature (`obs_column_names` vs the older `column_names={"obs": …}`), the same API-drift
+  discipline `docs/ENV_NOTES.md` records for decoupler and PyDESeq2.
+- Added: `tests/test_io_counts.py` (52 tests, no network, no `cellxgene-census`) — integral floats
+  pass and fractional values drop with their reason; a sparse matrix that raises on `toarray` proves
+  the sparse path is never densified; a 50-gene stratum is a C5 SKIP that still reports 50; the
+  manifest row is asserted unchanged byte for byte; the Census wrapper is driven against a stub
+  module, including the older-client argument fallback and that a handle passed in is not closed.
+  Four of them are regressions from the adversarial review of the first draft: no magnitude of a
+  refused matrix survives anywhere inside `load_vs_obs_snapshot`, a ×0.5 rescale is not re-reported
+  as a depth discrepancy, a donor that is no longer thin in the load is flagged instead of netted
+  out, and one that is still thin stays unflagged (so the new check cannot over-fire).
+- Note: filling items 4 and 5 removes two admission blockers and **admits nothing**. The extended
+  manifest keeps `census_select`'s columns and adds four (`integer_check_detail`,
+  `frozen_universe_detail`, `load_vs_obs_snapshot`, `counts_provenance`); `io_counts.emit_manifest`
+  exists so those reach the CSV, since `census_select.emit_manifest` writes its own shorter field
+  list, and its header carries a `counts_gate` block stating plainly that counts-gate exclusions are
+  *not* part of the obs-only excluded fraction next to it (D4).
+
+### Real-data harness — the Census candidate run (2026-08-16)
+
+- Added: `scripts/census_candidates.py`, the driver that runs `census_select` over the **whole**
+  pinned Census, and `.github/workflows/census-candidates.yml`, the manual job that runs it. The
+  driver adds no method: every gate, threshold, column and exclusion reason is `census_select`'s,
+  nothing in either module changed to accommodate it, and no command-line option can move a
+  pre-registered number — the option list is asserted by a test, as is the absence of any
+  `census_version` argument anywhere in the driver.
+- Added: the two-pass streaming scheme, which exists because the naive shape does not fit the
+  machine. After the §1 `value_filter` ~50-65 M cells remain, and `query_obs`'s
+  `.concat().to_pandas()` peaks somewhere between 8 GB and 30+ GB depending on whether the Census
+  returns `donor_id` dictionary-encoded or as Python objects — unknowable in advance on a 16 GB
+  runner, and an OOM kill five hours in tells you nothing. **Pass 1** streams the four stratum
+  columns straight off the SOMA reader with no `.concat()`, folding each Arrow batch into a
+  `(dataset_id, cell_type, disease, donor_id) -> cells` counter that grows with the number of
+  distinct keys rather than with the number of cells; addition is commutative, so the result cannot
+  depend on where the Census cut its batches (pinned by a test that re-cuts and re-orders the
+  stream — batch boundaries are not part of what the pinned version pins). **Pass 2** re-reads each
+  surviving dataset with one scoped query and hands the **per-cell** frame to `screen_strata`
+  unmodified — the inclusion gate counts *rows*, so feeding it the pass-1 aggregate would report
+  every donor as holding a single cell and the whole Census as failing the gate. The coarse filter
+  is deliberately conservative (§1 items 2 and 1 only; item 3's nesting rule is left to pass 2),
+  and `tests/test_census_candidates.py` cross-checks that implication against the real
+  `apply_inclusion_gate` on the same synthetic rows rather than against a hand-written
+  expectation, because a filter that silently drops a usable stratum leaves no row, no reason and
+  no count behind.
+- Fixed (before it could bite): the scoped `value_filter` escapes literals as **Python** literals,
+  not SQL ones. TileDB-SOMA parses a value filter with `ast.parse(expr, mode="eval")`, so the SQL
+  escape `'O''Brien'` is implicit string concatenation — it parses, means `"OBrien"`, matches
+  nothing, and the stratum would vanish from the manifest without an error anywhere. Cell-type
+  labels are ontology free text and do carry apostrophes. Every scoped read is additionally checked
+  for the keys it asked for and for emptiness where pass 1 counted cells, so a filter that stops
+  applying fails loudly instead of producing a quietly short manifest.
+- Added: a dataset above `--max-cells-per-dataset-query` (default 2 M) is **split, not skipped** —
+  one query per cell type, which partitions the dataset's strata exactly, since a stratum is
+  `(dataset_id × cell_type)`. A test asserts the split produces byte-identical manifest rows. The
+  split stops there: a cut on `disease` would sever a contrast from its `normal` arm, and a cut on
+  `donor_id` would sever a group from its donors. A single cell type over the cap is queried
+  anyway — dropping a stratum for being large would bias the candidate list toward small ones.
+- Fixed (adversarial review of the first draft): a run in which **no** dataset survived the coarse
+  filter used to exit 0. Zero survivors across the whole Census is not an empty result — it is a
+  moved threshold, a renamed stratum column or a `REFERENCE_LEVEL` that no longer matches the
+  Census's `normal` — and the manifest it writes is well-formed, nearly empty and indistinguishable
+  from a real one, so CI would have been green over a regression. `exit_code()` now fails that run
+  loudly, and separately fails one in which every selected dataset failed, while a single flaky
+  dataset out of sixty still exits 0 with its name in `notes.failed_datasets`: that run carries its
+  result, and discarding five hours of work over one dropped connection would be its own bug.
+- Added: `tests/test_census_candidates.py` (33 tests) — no network, and no `cellxgene-census`,
+  including a test that the driver does not import it at module level, which is what keeps the
+  suite runnable on the development machine. The Census access path is exercised against a SOMA
+  stand-in that *applies* the equality clauses of the filter and can be told to fail a given
+  dataset, so a mis-escaped literal comes back empty there exactly as it would on S3 and all three
+  exit paths (partial failure, total failure, nothing survived) run end to end through `main()`.
+- Note: the run is manual (`workflow_dispatch`, `dry_run` defaulting to true), not cancellable by
+  a second dispatch, capped at 330 minutes against the runner's hard 6-hour kill, and its output is
+  an **artifact, never a commit** — `pilot/results/` is gitignored, and a candidate list that
+  reached git by way of a CI job would have pre-registered itself by accident. Every row still
+  carries `admitted_to_sweep = False`, and the manifest header records that D4's excluded fractions
+  are computed over the datasets pass 2 actually read, not over the whole Census.

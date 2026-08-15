@@ -65,6 +65,13 @@ markers = [
 # nor DeprecationWarning fires anywhere in the suite as of this stack (requirements.lock), so the
 # previous blanket ignores of both were silencing nothing here; anything real from a future numpy /
 # pandas / scanpy upgrade will now surface instead of being swallowed.
+#
+# A second warning appeared with tests/test_io_counts.py and is deliberately NOT filtered: decoupler
+# 2.2.0's `dc.pp.pseudobulk` calls `obs.select_dtypes(include="object")`, which pandas 3 flags
+# (Pandas4Warning) because it still returns the new `str` columns. It fires only for obs frames whose
+# columns are plain strings — which is exactly what a real Census obs slice looks like, and why the
+# io_counts tests build them that way rather than as Categoricals. It is upstream's to fix and ours
+# to keep visible until decoupler does.
 filterwarnings = [
     "ignore:Transforming to str index\\.:anndata._warnings.ImplicitModificationWarning",
 ]

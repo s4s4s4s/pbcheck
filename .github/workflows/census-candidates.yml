@@ -1,0 +1,117 @@
+# The one job in this repo that touches real data. It reads the whole pinned CELLxGENE Census
+# (~60 M cells after the §1 value_filter) and produces the CANDIDATE stratum manifest — not the
+# §1 pre-registration, and not an admission of anything: every row carries admitted_to_sweep=False.
+#
+# Manual only. It is multi-hour, it reaches the network for gigabytes, and its result is an
+# artifact rather than a commit, so there is nothing for a push or a pull request to gain from it.
+# The regular `tests` workflow deliberately does NOT install the [census] extra; this one does, and
+# it is the only place a cellxgene-census / tiledbsoma resolution is exercised at all.
+name: census candidates
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: pass 2 reads only a handful of datasets (spread across the size range) to calibrate the full run. Uncheck for the real thing."
+        type: boolean
+        default: true
+      max_datasets:
+        description: "Cap the datasets pass 2 reads, largest first (0 = no cap)."
+        type: number
+        default: 0
+      artifact_retention_days:
+        description: "How long to keep the manifest + log artifact."
+        type: number
+        default: 30
+
+# Deliberately NOT cancel-in-progress (the `tests` workflow is): a five-hour run that is killed
+# by a second dispatch produces nothing at all, and the Census is pinned, so two concurrent runs
+# would compute the same answer twice. Queue instead.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+# The Census is public and anonymous — no secrets, no credentials, nothing to write.
+permissions:
+  contents: read
+
+jobs:
+  candidates:
+    name: candidate manifest (dry_run=${{ inputs.dry_run }})
+    runs-on: ubuntu-latest
+    # A public runner is killed at 6 h with no artifact. Stopping at 5.5 h leaves the upload step
+    # (if: always()) time to run, so a run that hits the wall still returns its partial log — which
+    # is what makes the next dispatch's budget an informed decision rather than a guess.
+    timeout-minutes: 330
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # cellxgene-census is unpinned in pyproject on purpose: the SDK is a client for a pinned
+      # dataset, and package_versions() records whatever actually resolved into the manifest
+      # header. The pin that matters — the Census version — is in census_select.py, not here.
+      - name: Install the package with the [census] extra
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[census]"
+
+      # The counterpart of the `tests` workflow's stack report, for the half of the stack that
+      # workflow never installs. The Census version and the value_filter are printed from the
+      # package so the log states the protocol the run was made under, not a copy of it.
+      - name: Report the resolved Census stack and the pinned protocol
+        run: |
+          python -c "import cellxgene_census, tiledbsoma, pyarrow, pandas, numpy; [print(f'{m.__name__}=={m.__version__}') for m in (cellxgene_census, tiledbsoma, pyarrow, pandas, numpy)]"
+          python -c "from pbcheck import census_select as cs; print('census_version:', cs.CENSUS_VERSION); print('value_filter:', cs.VALUE_FILTER)"
+
+      # `set -e` is deliberately off: the driver's exit status must survive the pipe into tee so
+      # the step still fails, while the tail below still reaches the job summary either way. A
+      # failed run's last 60 lines are the whole point of dispatching a dry run.
+      - name: Build the candidate manifest
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          MAX_DATASETS: ${{ inputs.max_datasets }}
+          # Cell-type labels are ontology free text and carry non-ASCII ("Muller cell" is spelled
+          # with an umlaut in CL), and the driver prints them in its top-candidates summary. If the
+          # runner's stdout ever resolved to ASCII, that print would die AFTER the manifest was
+          # written — a red run, and a lost log, for a formatting reason.
+          PYTHONIOENCODING: utf-8
+        run: |
+          set -uo pipefail
+          args=(--max-datasets "${MAX_DATASETS:-0}")
+          if [ "${DRY_RUN}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          echo "python scripts/census_candidates.py ${args[*]}"
+          python scripts/census_candidates.py "${args[@]}" 2>&1 | tee census-candidates.log
+          status=${PIPESTATUS[0]}
+          {
+            echo "### Census candidate manifest (dry_run=${DRY_RUN}, exit ${status})"
+            echo
+            echo '```'
+            tail -n 60 census-candidates.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "${status}"
+
+      # if: always() — a partial log from a run that timed out or died mid-pass is the timing
+      # calibration for the next dispatch, and losing it costs another five hours to recover.
+      # The manifest itself is uploaded, never committed: pilot/results/ is gitignored, and a
+      # candidate list that lands in git by way of a CI job has pre-registered itself by accident.
+      - name: Upload the manifest and the run log
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: census-candidates-${{ github.run_id }}
+          path: |
+            pilot/results/census_candidates/*.json
+            pilot/results/census_candidates/*.csv
+            census-candidates.log
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: warn

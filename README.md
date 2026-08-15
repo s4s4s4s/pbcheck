@@ -89,12 +89,30 @@ Built and exercised by the test suite:
 - **Census stratum selection** (`census_select`, obs only, no network in the tests): opens the Census at the
   pinned version `2025-01-30` (never a mutable alias), forms `(dataset_id × cell_type)` strata with one
   `disease vs normal` contrast per disease term, applies the inclusion-gate items metadata can decide,
-  pre-screens confounding per donor and emits a **candidate** manifest. It admits nothing: integer counts and
-  universe size are pending on `io_counts`, and `sigma_donor` / envelope membership are pending on the anchor
-  Amendment 3 leaves open.
+  pre-screens confounding per donor and emits a **candidate** manifest.
 
-Specified but **not** built — the rest of the real-data harness (`io_counts`, `controls`, `decision`,
-`report`), the `risk_score`, the HTML report, and the no-raw-counts mode. See
+- **The counts gate** (`io_counts`, no network in the tests): the two inclusion-gate items only the count
+  matrix can decide. Raw integrality is checked on the *values* rather than the dtype — Census raw is
+  `float32` holding 0.0/1.0/7.0, and those are counts — with a normalised or log-transformed matrix
+  **dropped, never rounded**, and only the stored entries of a sparse `X` scanned. The frozen universe is
+  then sized with the arm's own aggregation and the C5 minimum applied, and the pending manifest columns
+  (integer check, universe size, counts per cell, sequencing-depth bin) are filled. Where the load disagrees
+  with the obs snapshot it was planned from, the row keeps its committed numbers and gains a discrepancy
+  flag. It admits nothing either: `sigma_donor` and envelope membership stay pending on the anchor
+  Amendment 3 leaves open, so every row still carries `admitted_to_sweep = False`.
+
+- **The candidate run over the whole Census** (`scripts/census_candidates.py`, dispatched manually from the
+  `census candidates` workflow): two passes, because one query does not fit the machine. A streaming pass
+  folds ~50-65 M cells into per-`(dataset, cell type, disease, donor)` counts without ever materialising
+  them, deciding only *which* datasets are worth reading; a second pass re-reads each of those and hands
+  the per-cell frame to `census_select.screen_strata` unchanged. The coarse filter is conservative by
+  construction — it may admit a dataset the gate then rejects, never the reverse — and the test suite
+  cross-checks that against the real inclusion gate rather than against a hand-written expectation. Its
+  output is a CI artifact (manifest JSON + CSV + run log), never a commit, and it admits nothing. **The run
+  itself has not been made yet**; the driver and its job exist.
+
+Specified but **not** built — the rest of the real-data harness (`controls`, `decision`, `report`), the
+`risk_score`, the HTML report, and the no-raw-counts mode. See
 [`pilot/README.md`](pilot/README.md), which also lists the spec corrections that are named in module
 docstrings but not yet implemented, so that nothing here reads as done when it is not.
 
@@ -117,7 +135,7 @@ on real data. Statistics are verified by hand against these oracles, not assumed
 ```
 src/pbcheck/          # the auditor engine (methods/)
 pilot/                # Phase 0 artifacts: committed test-selection grid + gate runs, no code
-scripts/              # the harness: synthetic gate, calibration probe, selection analyzer
+scripts/              # the harness: synthetic gate, calibration probe, selection analyzer, Census candidate run
 synthetic/            # synthetic-oracle generators with known ground truth
 tests/                # unit + regression + property tests (oracles are the correctness spec)
 docs/                 # PHASE0_SPEC.md (methodology), AMENDMENTS.md, ENV_NOTES.md
