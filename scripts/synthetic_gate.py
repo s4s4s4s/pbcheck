@@ -18,6 +18,18 @@ As of Amendment 2 (2026-08-15) the pseudobulk arm's test is moderated eBayes, bo
 corrected over one common tested set, and the run records the realised prior (the moderated analog
 of DESeq2's ``fitType``, C5) plus a null p-value uniformity check (the replacement for the retired
 C3 independent-filtering cross-check).
+
+As of Amendment 3 (2026-08-15) the two halves of the validity gate are evaluated at **two different
+regimes**, each labelled in the output and in the artifact:
+
+* **calibration** (λ band, perm-null FP rate, and the naive-arm instrument checks) at the hard point
+  ``donor_sigma`` = :data:`pbcheck.gate_config.CALIBRATION_EVAL_SIGMA` — unchanged, unrelaxed;
+* **power** at ``donor_sigma`` = :data:`pbcheck.gate_config.POWER_EVAL_SIGMA`, the boundary of the
+  declared operating envelope, at the UNCHANGED pre-registered effect size (log2FC = 1.0, K = 200).
+
+The envelope itself is printed and written to the artifact, because a verdict of "valid" here is
+valid **within a stated domain** and must not be readable as unconditional. A stratum outside the
+envelope is outside what this instrument claims; see docs/AMENDMENTS.md, Amendment 3 Change 1.
 """
 
 from __future__ import annotations
@@ -83,6 +95,24 @@ def null_pvalue_uniformity(pval_matrix):
             "n_perm": len(ds)}
 
 
+def envelope_lines():
+    """The declared operating envelope, as console lines (Amendment 3 Change 1(c)).
+
+    Printed on every run, next to the verdict, so that "INSTRUMENT VALID" can never be read as an
+    unconditional claim: the arm is valid for strata inside this region and is not declared valid
+    outside it.
+    """
+    out = ["  operating envelope (Amendment 3 Change 1) — the arm is declared valid ONLY inside it:",
+           "      sigma_donor   min donors/group   grid support"]
+    for r in gc.OPERATING_ENVELOPE:
+        out.append(f"      {r['sigma_donor']:>11}   {r['min_donors_per_group']:>16}   "
+                   f"{r['grid_support']}")
+    out.append("      (synthetic throughout; sigma_donor is an UNANCHORED simulator knob, so whether")
+    out.append("       any real stratum falls inside this envelope is still unknown — Amendment 1's")
+    out.append("       closing concern, restated by Amendments 2 and 3 and still open)")
+    return out
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--seed", type=int, default=1,
@@ -98,10 +128,19 @@ def main(argv=None) -> int:
 
     t0 = time.time()
     sim = dict(gc.ORACLE_SIM)
-    donor_sigma = sim.pop("donor_sigma")
+    # Amendment 3 Change 1: donor_sigma is no longer one number for the whole run. The calibration
+    # arms stay at the HARD regime (the conservative choice for a false-positive criterion, and
+    # exactly where every previous run measured them); the power oracle moves to the envelope
+    # boundary, which is the regime at which the arm actually claims ≥ POWER_TARGET. It is popped
+    # here so that neither call can silently inherit the other's sigma.
+    sim.pop("donor_sigma")
+    calib_sigma = gc.CALIBRATION_EVAL_SIGMA
+    power_sigma = gc.POWER_EVAL_SIGMA
+    n_d = sim["n_donors_per_group"]
 
-    print("Building synthetic NULL oracle (donor structure, truth = 0 DE)...")
-    null = null_oracle(seed=a.seed, donor_sigma=donor_sigma, **sim)
+    print(f"Building synthetic NULL oracle (donor structure, truth = 0 DE, "
+          f"donor_sigma={calib_sigma} — the hard calibration regime)...")
+    null = null_oracle(seed=a.seed, donor_sigma=calib_sigma, **sim)
     pdata = build_pseudobulk(null.adata)          # thin-donor filter runs here (Change 7)
     # C5, restored (Amendment 2 Change 4): the minimum-universe gate is ENFORCED, not accepted and
     # ignored. A stratum below it must SKIP rather than contribute a meaningless lambda and floor.
@@ -141,10 +180,16 @@ def main(argv=None) -> int:
 
     # Spec §8(c) pre-registers K=200 at |log2FC|=1.0. Running an easier oracle here would be
     # exactly the goalpost-move pre-registration exists to prevent. See docs/AMENDMENTS.md.
+    # The EFFECT SIZE is untouched by Amendment 3 and stays exactly as §8(c) froze it; what
+    # Amendment 3 Change 1(b) changes is only WHERE the threshold binds — donor_sigma moves from
+    # the arbitrary hard point to the boundary of the declared envelope. Power 0.60 at
+    # donor_sigma=0.5 with 8v8 remains unmet and unclaimed; it is not re-tested here and is not
+    # asserted anywhere.
     print(f"\nBuilding synthetic POSITIVE oracle ({gc.ORACLE_K} true DE genes, "
-          f"|log2FC|={gc.ORACLE_LOG2FC}, shared)...")
+          f"|log2FC|={gc.ORACLE_LOG2FC}, shared; donor_sigma={power_sigma} — the envelope "
+          f"boundary)...")
     pos = positive_oracle(n_de=gc.ORACLE_K, log2fc=gc.ORACLE_LOG2FC, seed=a.seed + 1,
-                          donor_sigma=donor_sigma, **sim)
+                          donor_sigma=power_sigma, **sim)
     pos_uni = frozen_universe(build_pseudobulk(pos.adata), min_size=gc.MIN_UNIVERSE_SIZE)
     pos_paired, pos_moderation = paired_real_label(pos, pos_uni)
     pos_pb = pos_paired.pseudobulk
@@ -166,17 +211,19 @@ def main(argv=None) -> int:
         return "calibrated" if lo <= x <= hi else ("INFLATED" if x > hi else "under")
 
     print("\n" + "=" * 72)
-    print(f"  SYNTHETIC GATE READOUT (instrument calibration on known truth, "
-          f"{sim['n_donors_per_group']}v{sim['n_donors_per_group']} donors)")
+    print(f"  SYNTHETIC GATE READOUT (instrument calibration on known truth, {n_d}v{n_d} donors)")
     print("=" * 72)
     print(f"  pseudobulk arm                      = {pb.method}")
+    print(f"  calibration regime                  = donor_sigma {calib_sigma} (hard point)")
+    print(f"  power regime                        = donor_sigma {power_sigma} (envelope boundary)")
     print(f"  lambda_naive (perm-null p-values)   = {lam_naive['lambda']:6.2f}  -> {band(lam_naive['lambda'])}")
     print(f"  lambda_pseudobulk                   = {lam_pb['lambda']:6.2f}  -> {band(lam_pb['lambda'])}")
     print(f"  pseudobulk perm-null FP rate        = {pb_fp_rate:6.2f}  (target <= {FDR}, "
           f"MC SE {null_res['monte_carlo']['pb_fp_rate_mc_se']:.3f})")
     print(f"  naive perm-floor  (median #DEG)     = {floor['median_count']:6.0f}  ({100*floor['median_frac']:.1f}% of {G} genes)")
     print(f"  pseudobulk perm-floor (median #DEG) = {pb_floor['median_count']:6.0f}  (mean {pb_mean_ndeg:.2f})")
-    print(f"  pseudobulk power (positive oracle)  = {sensitivity:6.2f}  (target >= {gc.POWER_TARGET})")
+    print(f"  pseudobulk power (positive oracle)  = {sensitivity:6.2f}  (target >= {gc.POWER_TARGET}"
+          f", at donor_sigma {power_sigma})")
     print(f"  pseudobulk empirical FDR (positive) = {emp_fdr:6.2f}  (incl. chance donor imbalance; "
           f"true FDR calib. is the perm-null above)")
     print("-" * 72)
@@ -203,25 +250,48 @@ def main(argv=None) -> int:
     # not both calibrated and powered, every inflation number above is uninterpretable and the study
     # is VOID. The two pre-registered calibration criteria are therefore wired in as pass/fail here,
     # at the spec's own thresholds — not narrated afterwards in prose.
-    checks = {
-        "naive flagged inflated (lambda >> 1)":
-            lam_naive["lambda"] > gc.INSTRUMENT_LAMBDA_NAIVE_MIN,
-        "naive floor is most of the genome":
-            floor["median_frac"] > gc.INSTRUMENT_NAIVE_FLOOR_FRAC_MIN,
-        f"pseudobulk lambda in pre-registered band [{lo}, {hi}]":
-            lo <= lam_pb["lambda"] <= hi,
-        "pseudobulk perm-null FP rate <= alpha (spec §8a)":
-            pb_fp_rate <= FDR,
-        "naive floor >> pseudobulk floor":
-            floor["median_count"] > gc.INSTRUMENT_FLOOR_RATIO_MIN * max(pb_floor["median_count"], 1),
-        f"pseudobulk powered (sens >= {gc.POWER_TARGET} at pre-registered "
-        f"log2FC={gc.ORACLE_LOG2FC}, K={gc.ORACLE_K})":
-            sensitivity >= gc.POWER_TARGET,
-    }
-    for name, ok in checks.items():
+    #
+    # Each criterion carries the regime it was evaluated at and the document that pins it, because
+    # after Amendment 3 the two halves of the gate no longer run at the same donor_sigma and a bare
+    # PASS/FAIL list would hide that.
+    sanity = "instrument sanity — NOT pre-registered, not the decision rule"
+    criteria = [
+        ("naive flagged inflated (lambda >> 1)",
+         lam_naive["lambda"] > gc.INSTRUMENT_LAMBDA_NAIVE_MIN,
+         f"donor_sigma={calib_sigma}, {n_d}v{n_d}", sanity),
+        ("naive floor is most of the genome",
+         floor["median_frac"] > gc.INSTRUMENT_NAIVE_FLOOR_FRAC_MIN,
+         f"donor_sigma={calib_sigma}, {n_d}v{n_d}", sanity),
+        (f"pseudobulk lambda in pre-registered band [{lo}, {hi}]",
+         lo <= lam_pb["lambda"] <= hi,
+         f"donor_sigma={calib_sigma} (hard regime), {n_d}v{n_d}",
+         "spec §8(a) / decision rule item 1; regime pinned by Amendment 3 Change 1(a), "
+         "threshold unchanged"),
+        ("pseudobulk perm-null FP rate <= alpha (spec §8a)",
+         pb_fp_rate <= FDR,
+         f"donor_sigma={calib_sigma} (hard regime), {null_res['n_perm_paired']} paired perms",
+         "spec §8(a) / decision rule item 1 (restored binding by Amendment 1 Change 1); "
+         "resolution raised to 200 permutations by Amendment 3 Change 2"),
+        ("naive floor >> pseudobulk floor",
+         floor["median_count"] > gc.INSTRUMENT_FLOOR_RATIO_MIN * max(pb_floor["median_count"], 1),
+         f"donor_sigma={calib_sigma}, {n_d}v{n_d}", sanity),
+        (f"pseudobulk powered (sens >= {gc.POWER_TARGET} at pre-registered "
+         f"log2FC={gc.ORACLE_LOG2FC}, K={gc.ORACLE_K})",
+         sensitivity >= gc.POWER_TARGET,
+         f"donor_sigma={power_sigma} (envelope boundary), {n_d}v{n_d}",
+         "spec §8(c) / decision rule item 1 — effect size and threshold UNCHANGED; evaluation "
+         "regime re-scoped from a point to the envelope boundary by Amendment 3 Change 1(b)"),
+    ]
+    checks = {name: ok for name, ok, _, _ in criteria}
+    for name, ok, at, _ in criteria:
         print(f"  [{'PASS' if ok else 'FAIL'}] {name}")
-    verdict = ("INSTRUMENT VALID -> ready for real CELLxGENE sweep" if all(checks.values())
-               else "INSTRUMENT NEEDS ATTENTION")
+        print(f"         evaluated at {at}")
+    print("-" * 72)
+    for line in envelope_lines():
+        print(line)
+    verdict = ("INSTRUMENT VALID WITHIN THE STATED OPERATING ENVELOPE "
+               "-> ready for real CELLxGENE sweep, envelope-gated"
+               if all(checks.values()) else "INSTRUMENT NEEDS ATTENTION")
     elapsed = time.time() - t0
     print("=" * 72)
     print(f"  {verdict}")
@@ -233,8 +303,20 @@ def main(argv=None) -> int:
             "generated_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "machine": {"platform": platform.platform(), "python": platform.python_version()},
             "runtime_seconds": round(elapsed, 1),
-            "params": {"seed": a.seed, "n_perm": a.n_perm, "n_perm_pb": a.n_perm_pb},
+            "params": {"seed": a.seed, "n_perm": a.n_perm, "n_perm_pb": a.n_perm_pb,
+                       "calibration_eval_sigma": calib_sigma, "power_eval_sigma": power_sigma,
+                       "n_donors_per_group": n_d},
             "config": gc.manifest(),
+            # Amendment 3 Change 1(c): the validity domain is a first-class output, not a footnote.
+            "operating_envelope": [dict(r) for r in gc.OPERATING_ENVELOPE],
+            "operating_envelope_source":
+                "docs/AMENDMENTS.md Amendment 3 Change 1 (frontier from Amendment 1, corroborated "
+                "by pilot/testsel/summary.json @ 72dec7b). SYNTHETIC: sigma_donor is an unanchored "
+                "simulator knob; whether any real stratum falls inside is unknown.",
+            "validity_scope":
+                "The pseudobulk arm is declared valid ONLY for strata inside operating_envelope. "
+                "Power 0.60 at donor_sigma=0.5 with 8 donors/group remains UNMET (measured 0.35 on "
+                "2026-08-15) and is NOT claimed.",
             "arm": {"pseudobulk": pb.method, "naive": nv.method},
             "universe_size": G,
             "thin_donor_filter": thin,
@@ -256,8 +338,11 @@ def main(argv=None) -> int:
             "monte_carlo": null_res["monte_carlo"],
             "real_split_inside_perm_range": null_res["real_split_inside_perm_range"],
             "checks": {k: bool(v) for k, v in checks.items()},
+            "criteria": [{"name": n, "passed": bool(ok), "evaluated_at": at, "source": src}
+                         for n, ok, at, src in criteria],
             "verdict": verdict,
-            "amendments_applied": ["Amendment 1 (2026-07-22)", "Amendment 2 (2026-08-15)"],
+            "amendments_applied": ["Amendment 1 (2026-07-22)", "Amendment 2 (2026-08-15)",
+                                   "Amendment 3 (2026-08-15)"],
         }
         a.out.parent.mkdir(parents=True, exist_ok=True)
         a.out.write_text(json.dumps(artifact, indent=2, default=str), encoding="utf-8")
