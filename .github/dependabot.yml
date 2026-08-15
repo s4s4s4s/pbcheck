@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # github-actions only, monthly. pip is deliberately NOT enrolled here: this is a bleeding-edge
+  # scientific stack (numpy 2.4 / pandas 3.0 / scanpy 1.12 — see docs/ENV_NOTES.md) where a weekly
+  # pip-update PR would mostly be noise a solo maintainer has to triage, not a real signal. The
+  # CI "Report the resolved scientific stack" step (.github/workflows/tests.yml, `test` job) is
+  # the drift detector by design instead: it prints what actually resolved on every push, so
+  # drift is visible without a bot filing a PR nobody asked for.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
