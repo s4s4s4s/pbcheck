@@ -144,9 +144,8 @@ def test_monte_carlo_error_and_split_check_are_reported():
     Both were absent: the 'SE << floor gap' calibration check could only ever pass by assertion,
     and the per-permutation cell totals were logged for one arm and never consumed by anything.
     """
-    import sys, warnings
+    import warnings
     warnings.filterwarnings("ignore")
-    sys.path.insert(0, "synthetic")
     from oracles import null_oracle
     from pbcheck.permutation import run_null
     from pbcheck.gene_universe import frozen_universe
