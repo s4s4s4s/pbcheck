@@ -168,7 +168,7 @@ def run_cell(c: dict, out_dir: Path, python: str, n_cpus: int) -> tuple[bool, st
 SUMMARY_FIELDS = [
     "tier", "gen_arm", "test", "sigma_het", "sigma_donor", "n_donors", "n_perm",
     "lambda_pb", "fp_rate", "fp_binom_p", "mean_rejections",
-    "power", "power_sd", "n_power_reps", "prior_df_d0", "shrinkage", "seconds",
+    "power", "power_sd", "power_se", "n_power_reps", "prior_df_d0", "shrinkage", "seconds",
 ]
 
 
@@ -195,8 +195,15 @@ def summarise(out_dir: Path, summary_dir: Path) -> int:
             "fp_binom_p": o.get("fp_rate_binomial_p_greater"),
             "mean_rejections": o.get("mean_rejections_perm_null"),
             "power": o.get("power_at_pre_registered"),
-            "power_sd": o.get("power_sd"),
-            "n_power_reps": o.get("n_power_reps"),
+            # The probe's own names -- it writes power_sd_across_datasets / power_se /
+            # power_n_reps, never power_sd / n_power_reps. Reading the latter silently
+            # yielded None for every cell of the grid committed at 72dec7b, which is why
+            # its power figures carry no recoverable Monte-Carlo error (docs/AMENDMENTS.md,
+            # Amendment 3). power_se is carried too: the SE, not the SD, is what bounds the
+            # frontier claims. Both are None when --n-power-reps 1 (n = 1, no MC estimate).
+            "power_sd": o.get("power_sd_across_datasets"),
+            "power_se": o.get("power_se"),
+            "n_power_reps": o.get("power_n_reps"),
             "prior_df_d0": d.get("prior_df_d0"),
             "shrinkage": d.get("shrinkage_factor_d0_over_d0_plus_d"),
             "seconds": o.get("seconds_elapsed"),
