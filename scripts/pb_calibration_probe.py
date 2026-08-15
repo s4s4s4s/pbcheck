@@ -1,5 +1,15 @@
 """Pseudobulk-arm calibration probe (DIAGNOSTIC — not part of the frozen Phase 0 pipeline).
 
+FROZEN AS EVIDENCE
+-------------------
+This script generated the evidence base for both Amendment 1 and Amendment 2
+(``docs/AMENDMENTS.md``): the DESeq2-Wald failure, the Welch-t diagnosis, and the
+146-cell test-selection grid that chose moderated eBayes. It is deliberately **not**
+refactored, renamed, or folded into ``src/pbcheck`` — every number those amendments
+cite must stay reproducible by re-running this exact file. New pseudobulk-arm work
+belongs in ``src/pbcheck``, not here; this file only grows targeted, minimal fixes
+(e.g. following a rename in the module it imports from) so it keeps running.
+
 WHY THIS EXISTS
 ---------------
 ``scripts/synthetic_gate.py`` reports the pseudobulk arm as valid while, at 8v8 donors, it
@@ -40,7 +50,7 @@ Reused (the real pipeline, not a reimplementation):
   * ``pbcheck.methods.pseudobulk.build_pseudobulk``          — decoupler donor aggregation.
   * ``pbcheck.gene_universe.frozen_universe``                — label-agnostic frozen universe.
   * ``pbcheck.methods.pseudobulk.deseq_from_pdata``          — the Wald arm, verbatim.
-  * ``pbcheck.permutation.build_perms`` / ``_labels_for``    — the donor-permutation null.
+  * ``pbcheck.permutation.build_perms`` / ``labels_for``     — the donor-permutation null.
   * ``pbcheck.mtc.bh_over_universe``                         — identical BH for every arm.
   * ``pbcheck.metrics.genomic_inflation`` / ``lambda_over_permutations`` / ``perm_floor``.
 
@@ -176,7 +186,7 @@ from pbcheck import metrics, mtc  # noqa: E402
 from pbcheck.gene_universe import frozen_universe  # noqa: E402
 from pbcheck.methods.de import DEResult  # noqa: E402
 from pbcheck.methods.pseudobulk import build_pseudobulk, deseq_from_pdata  # noqa: E402
-from pbcheck.permutation import _labels_for, build_perms  # noqa: E402
+from pbcheck.permutation import build_perms, labels_for  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Frozen constants. These are the pre-registered values (docs/PHASE0_SPEC.md).
@@ -1054,7 +1064,7 @@ def _null_permutation(sim_kw, test, n_perm, seed, n_cpus, gen_arm="lognormal", s
     ndeg = np.zeros(len(perms), dtype=int)
     diag, diags, nan_counts = {}, [], []
     for i, tset in enumerate(perms):
-        cond = _labels_for(donor_names, tset, "disease", "ctrl")   # engine
+        cond = labels_for(donor_names, tset, "disease", "ctrl")   # engine
         res = run_test(pdata_u, universe, cond, test, n_cpus=n_cpus)
         p_i = res.table["pval"].reindex(pd.Index(universe, name="gene")).to_numpy()
         pvals[i] = p_i
