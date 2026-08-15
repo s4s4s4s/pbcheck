@@ -10,6 +10,8 @@ Both arms are scored through the same frozen, label-agnostic universe + identica
 
 import warnings
 
+import pytest
+
 warnings.filterwarnings("ignore")
 
 from oracles import null_oracle, no_donor_effect_oracle, positive_oracle  # noqa: E402
@@ -17,6 +19,11 @@ from pbcheck.methods import naive_de, pseudobulk_de  # noqa: E402
 from pbcheck.methods.pseudobulk import build_pseudobulk  # noqa: E402
 from pbcheck.gene_universe import frozen_universe  # noqa: E402
 from pbcheck import mtc  # noqa: E402
+
+# Every test in this module runs both arms end-to-end (naive + pseudobulk DE, BH, on real
+# oracle-generated data) rather than exercising one function in isolation — the slowest tests in
+# the suite, and the ones `pytest -m "not slow"` is for.
+pytestmark = pytest.mark.slow
 
 COMMON = dict(n_genes=800, n_donors_per_group=4, n_cells_per_donor=200, dispersion=0.2, seed=11)
 

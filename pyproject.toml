@@ -51,6 +51,9 @@ packages = ["src/pbcheck"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: DESeq2-touching or multi-permutation end-to-end tests; `pytest -m 'not slow'` skips them.",
+]
 # Targeted, not blanket (R3): audited with `pytest -q -W default` after temporarily disabling the
 # per-test-file `warnings.filterwarnings("ignore")` calls (which would otherwise mask everything).
 # Exactly one warning fires anywhere in the suite: anndata's ImplicitModificationWarning when the

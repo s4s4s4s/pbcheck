@@ -105,6 +105,7 @@ def test_the_arm_is_moderated_ebayes_and_reports_its_prior(oracle):
     assert 0.0 <= m["shrinkage_factor_d0_over_d0_plus_d"] <= 1.0
 
 
+@pytest.mark.slow
 def test_deseq_path_is_retained_for_reproducibility(oracle):
     """The superseded arm must still run: Amendment-1-era numbers have to stay reproducible."""
     from pbcheck.methods.pseudobulk import deseq_from_pdata

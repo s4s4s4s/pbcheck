@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from pbcheck.permutation import build_perms, labels_for, _labels_for
 from pbcheck import mtc
@@ -143,6 +144,7 @@ def test_bh_complete_null_reference_is_median_zero_not_alpha_times_G():
     assert np.mean(counts) < 0.05 * G / 100  # nowhere near alpha*G = 75
 
 
+@pytest.mark.slow
 def test_monte_carlo_error_and_split_check_are_reported():
     """Spec §4 requires the MC error and that the real split be checked against the permutations.
 
@@ -179,6 +181,7 @@ def test_monte_carlo_error_and_split_check_are_reported():
     assert mc["floor_gap_over_mc_se"] > 5
 
 
+@pytest.mark.slow
 def test_run_null_carries_the_paired_bh_bookkeeping():
     """Amendment 2 Change 2: cross-arm numbers come from one common tested set, and it is visible.
 
