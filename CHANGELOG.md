@@ -84,3 +84,35 @@ culminating in Amendment 2.
   DESeq2/multi-permutation end-to-end tests; Hypothesis property tests added for `build_perms`
   and BH monotonicity; self-tests added for the synthetic oracles; the grid driver's git side
   effects de-fanged (opt-in `--git-publish`, errors no longer swallowed).
+
+### Amendment 3 — the validity gate passes, within a stated envelope (2026-08-15)
+
+- Added: **Amendment 3** (`docs/AMENDMENTS.md`), written and committed before the code that applies
+  it. **Change 1** re-scopes §8(c)'s power criterion from a point to a declared **operating
+  envelope**: the pre-registered effect size (log2FC = 1.0, K = 200) and the ≥ 0.60 threshold are
+  **unchanged**, and what changes is the region over which the instrument claims validity —
+  calibration stays binding at the hard regime (`sigma_donor` = 0.5), power becomes binding at the
+  envelope boundary (`sigma_donor` = 0.35, 8v8, where the committed grid measures `ebayes` at
+  0.793), and the gate must report the envelope (minimum donors/group 4 / 8 / 13 / 23 at
+  `sigma_donor` 0.2 / 0.35 / 0.5 / 0.7, from Amendment 1's frontier). This **narrows** the claimed
+  validity domain rather than lowering a bar: power 0.60 at `sigma_donor` = 0.5 with 8 donors/group
+  stays unmet at 0.35 and unclaimed, and strata near 0.5 will need ≥ ~13 donors/group or exclusion.
+  Real-sweep stratum inclusion now also requires a per-stratum `sigma_donor` estimate; the amendment
+  supplies the mechanism (the eBayes fit's own between-donor variance) and states plainly that the
+  **anchor remains open**. **Change 2** raises the gate's permutation count 40 → 200, declared before
+  the rerun that applies it.
+- Changed: `gate_config` gains `CALIBRATION_EVAL_SIGMA`, `POWER_EVAL_SIGMA` and `OPERATING_ENVELOPE`
+  (each row carrying its grid corroboration); `N_PERM` and `N_PERM_PB` both go 40 → 200, since
+  `run_null` pairs `min(n_perm, n_perm_pb)` and raising one alone would have changed nothing.
+  `scripts/synthetic_gate.py` runs the two arms at their two regimes, labels which is which
+  everywhere, prints the envelope next to the verdict, and records each criterion with its
+  evaluation regime and source document.
+- Added: the gate run artifact `pilot/gate/synthetic_gate_2026-08-15.json` — **all six criteria pass**
+  (511.8 s): λ_pseudobulk 1.01, permutation-null FP rate 0.035 (7/200, MC SE 0.013, exact 95% CI
+  [0.014, 0.071]), pseudobulk floor 0 against a naive floor of 1162/1500 (77.4%) at λ_naive 54.57,
+  and power 0.86 at the envelope boundary. Change 2 did what it was declared to do: the old 2/40
+  reading was compatible with a true FP rate of 0.12 (P = 0.13), which 200 permutations exclude
+  (P = 2·10⁻⁵).
+- Changed: docs truth sync — README and `pilot/README.md` updated to the Amendment 3 gate numbers and
+  to the envelope caveat, with the verdict stated as *valid within the stated operating envelope* and
+  never as an unqualified "valid".

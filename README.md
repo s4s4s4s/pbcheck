@@ -14,36 +14,52 @@
 | Real CELLxGENE data | **not touched.** No dataset has been run, no stratum list pre-registered |
 | Every number below | from synthetic oracles with known ground truth — instrument calibration, **not a finding** |
 | Pseudobulk arm's test | **moderated eBayes** (Amendment 2), replacing the DESeq2-Wald arm Amendment 1 found miscalibrated |
-| Calibration (λ, FP rate) | **criteria met** — see the table below, including the FP-rate caveat |
-| Power at the pre-registered operating point | **not met** — 0.35 vs the required ≥ 0.60. Not a bug: the grid predicts no test clears 0.60 at this σ_donor; the fix is a pending §8(c) decision, not more engineering |
-| Instrument validity | **still not established**, for the power reason above — see [Amendment 2](docs/AMENDMENTS.md) |
+| Calibration (λ, FP rate) | **criteria met**, now at 200 permutations — the earlier marginal FP reading is resolved, see below |
+| Power at the pre-registered effect size | **met, inside a stated envelope only** — 0.86 vs the required ≥ 0.60 at σ_donor = 0.35 with 8 donors/group. At σ_donor = 0.5 it is still **0.35: unmet, and not claimed** |
+| Instrument validity | **established only within the operating envelope** declared by [Amendment 3](docs/AMENDMENTS.md) — minimum donors/group 4 / 8 / 13 / 23 at σ_donor 0.2 / 0.35 / 0.5 / 0.7. Outside it this instrument makes no claim |
+| Whether any *real* stratum falls inside that envelope | **unknown.** σ_donor is an unanchored knob of our own simulator — open since Amendment 1, still open |
 | GO / NO-GO | not taken |
 
-Reproduce the calibration run yourself — CPU only, no downloads, deterministic, about two minutes:
+Reproduce the calibration run yourself — CPU only, no downloads, deterministic, about nine minutes:
 
 ```bash
 python scripts/synthetic_gate.py
 ```
 
 On a synthetic null with donor structure where the true number of DE genes is **exactly zero**, and a synthetic
-positive at the pre-registered effect size (log2FC = 1.0, K = 200), default parameters, most recent run 117.9s:
+positive at the pre-registered effect size (log2FC = 1.0, K = 200), default parameters, most recent run 511.8s
+at 200 permutations ([full artifact](pilot/gate/synthetic_gate_2026-08-15.json)):
 
 | quantity | value | reads as |
 |---|---|---|
-| naive per-cell λ | **54.77** | grossly inflated |
-| naive false-positive floor | **1164 / 1500 genes (77.6%)** | the error calls three quarters of the genome |
+| naive per-cell λ | **54.57** | grossly inflated |
+| naive false-positive floor | **1162 / 1500 genes (77.4%)** | the error calls three quarters of the genome |
 | donor-pseudobulk floor | **0** | correct FDR control under the null |
-| pseudobulk λ | **1.02** | ✅ inside the pre-registered [0.9, 1.1] — was 1.25 under the retired DESeq2-Wald test |
-| pseudobulk perm-null FP rate | **0.05** at target ≤ 0.05 | marginal: 2/40 permutations, Monte-Carlo SE 0.034 — this run cannot distinguish 0.05 from ~0.12; needs more permutations to call it cleanly |
-| pseudobulk power (log2FC = 1.0, K = 200) | **0.35** | ❌ below the required ≥ 0.60 |
+| pseudobulk λ | **1.01** | ✅ inside the pre-registered [0.9, 1.1] — was 1.25 under the retired DESeq2-Wald test |
+| pseudobulk perm-null FP rate | **0.035** at target ≤ 0.05 | ✅ 7/200 permutations, Monte-Carlo SE 0.013, exact 95% CI [0.014, 0.071]. The previous 2/40 reading was compatible with a true rate of 0.12 (P = 0.13); at 200 permutations that is excluded (P = 2·10⁻⁵) |
+| pseudobulk power (log2FC = 1.0, K = 200), **at σ_donor = 0.35** | **0.86** | ✅ above the required ≥ 0.60 — but read the envelope caveat below |
+| the same power at σ_donor = 0.5 | **0.35** | ❌ below 0.60. Unchanged, unclaimed, and the reason the envelope exists |
 
 The first two lines are why the tool is worth building. The calibration lines are why the test was replaced
-(Amendment 2) and why replacing it worked: λ and the FP rate are now where the pre-registration asks them to
-be, modulo the Monte-Carlo caveat above. The power line is why the instrument is still not valid: at this
-σ_donor no test in the committed selection grid reaches 0.60, moderated tests included, so this is not an
-engineering gap to close but an open question — whether §8(c)'s pre-registered effect size is realistic for
-real strata — that has not yet been decided. The gate script reports this honestly as
-`INSTRUMENT NEEDS ATTENTION` rather than quietly passing.
+(Amendment 2) and why replacing it worked — and the FP rate is no longer a marginal reading leaning on 40
+permutations: Amendment 3 raised the count to 200 *before* the run, and the number resolved cleanly below α.
+
+**The power line needs its caveat stated, not buried.** It is 0.86 because Amendment 3 re-scoped *where*
+§8(c)'s threshold binds — to σ_donor = 0.35, the boundary of a declared operating envelope — not because
+anything got easier. The pre-registered effect size (log2FC = 1.0, K = 200) and the ≥ 0.60 bar are
+**unchanged**. At σ_donor = 0.5 the arm still delivers 0.35, no test in the committed selection grid clears
+0.60 there at any donor count tested, and that failure stands on the record. What changed is that the
+instrument now states the region it is valid in instead of being judged at an arbitrary simulator setting:
+
+| σ_donor | 0.2 | 0.35 | 0.5 | 0.7 |
+|---|---|---|---|---|
+| minimum donors per group | 4 | 8 | 13 | 23 |
+
+This **narrows** what pbcheck claims. A stratum near σ_donor ≈ 0.5 will need ≥ ~13 donors per group or must
+be excluded — a stricter rule than existed before. And because σ_donor has never been anchored to real data,
+**whether real strata land inside this envelope is still unknown**; Amendment 3 supplies the mechanism for
+estimating it per stratum but explicitly not the anchor. The gate prints the envelope next to its verdict and
+reports `INSTRUMENT VALID WITHIN THE STATED OPERATING ENVELOPE` — never an unqualified "valid".
 
 ## The problem
 
@@ -93,7 +109,7 @@ on real data. Statistics are verified by hand against these oracles, not assumed
 
 ```
 src/pbcheck/          # the auditor engine (methods/)
-pilot/                # Phase 0 artifacts: committed test-selection grid + results, no code
+pilot/                # Phase 0 artifacts: committed test-selection grid + gate runs, no code
 scripts/              # the harness: synthetic gate, calibration probe, selection analyzer
 synthetic/            # synthetic-oracle generators with known ground truth
 tests/                # unit + regression + property tests (oracles are the correctness spec)

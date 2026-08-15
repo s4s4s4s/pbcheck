@@ -6,19 +6,29 @@ run the **same code** over real public datasets and see whether the naive-vs-pse
 where the confounds are messy. Methodology: [`../docs/PHASE0_SPEC.md`](../docs/PHASE0_SPEC.md).
 
 > [!important]
-> **The instrument is still not validated, but the reason changed.** Amendment 1's finding — that the
-> pseudobulk arm (then DESeq2-Wald) fails calibration — is **superseded** by
-> [Amendment 2](../docs/AMENDMENTS.md): the arm's test was replaced with moderated eBayes, and under it
-> `lambda_pseudobulk` sits inside the pre-registered [0.9, 1.1] band and the permutation-null false-positive
-> rate meets its target (0.05 against alpha = 0.05, though only 2/40 permutations — Monte-Carlo SE 0.034
-> means this run cannot yet distinguish 0.05 from ~0.12). Both calibration criteria of the binding validity
-> gate (spec §8(a)) are therefore met, for the first time. **Power is not**: sensitivity at the
-> pre-registered effect size (log2FC = 1.0, K = 200; §8(c)) is 0.35 against the required 0.60, and the
-> committed test-selection grid shows no test — moderated or not — clears 0.60 at this `sigma_donor`. That
-> points to a pending decision about §8(c) itself, not an implementation gap. Because the pseudobulk arm is
-> the denominator of every inflation number, no result here may be read as a finding until the gate passes
-> in full. Any further change to the frozen protocol will be recorded, dated, in `../docs/AMENDMENTS.md`
-> before it is applied.
+> **The instrument now passes its validity gate — within a stated operating envelope, and not outside it.**
+> The history matters and is kept: Amendment 1 found the pseudobulk arm (then DESeq2-Wald) miscalibrated;
+> [Amendment 2](../docs/AMENDMENTS.md) replaced its test with moderated eBayes, which fixed calibration but
+> left power at 0.35 against the required 0.60; [Amendment 3](../docs/AMENDMENTS.md) re-scoped **where**
+> §8(c)'s threshold binds, from an arbitrary simulator setting to the boundary of a declared envelope, and
+> raised the permutation count 40 → 200 before re-running. The 2026-08-15 run
+> ([`gate/synthetic_gate_2026-08-15.json`](gate/synthetic_gate_2026-08-15.json), 511.8 s) passes all six
+> criteria: `lambda_pseudobulk` 1.01 in the pre-registered [0.9, 1.1] band and permutation-null FP rate
+> 0.035 (7/200, MC SE 0.013) — both at the hard regime `sigma_donor` = 0.5 — and sensitivity 0.86 against
+> the required 0.60 at the **unchanged** pre-registered effect size (log2FC = 1.0, K = 200), evaluated at
+> the envelope boundary `sigma_donor` = 0.35 with 8 donors/group.
+>
+> **Read the scope before reading the verdict.** Power 0.60 at `sigma_donor` = 0.5 with 8 donors/group is
+> **still unmet (0.35) and is not claimed**; the envelope requires minimum donors/group of 4 / 8 / 13 / 23
+> at `sigma_donor` 0.2 / 0.35 / 0.5 / 0.7, so a stratum near 0.5 needs ≥ ~13 donors per group or must be
+> excluded. That is a *narrower* claim than before, not a relaxed one. And `sigma_donor` itself has never
+> been anchored to real data, so **whether any real stratum falls inside the envelope is unknown** —
+> Amendment 3 supplies the per-stratum estimation mechanism and explicitly not the anchor. Stratum
+> inclusion in the real sweep therefore now requires a per-stratum `sigma_donor` estimate and envelope
+> membership, on top of everything §1 already pins. Because the pseudobulk arm is the denominator of every
+> inflation number, no result here may be read as a finding, and every number in this repo is still
+> synthetic. Any further change to the frozen protocol will be recorded, dated, in
+> `../docs/AMENDMENTS.md` before it is applied.
 
 ## What is done (this repo, runs offline)
 
