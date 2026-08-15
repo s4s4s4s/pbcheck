@@ -100,6 +100,32 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  lock:
+    name: pytest from requirements.lock (reproducibility)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.lock
+
+      # Install FROM the frozen lock, then the package itself with --no-deps so pip cannot
+      # reach past the lock for anything. This is the reproducibility job: it answers "does the
+      # exact stack that generated requirements.lock still work?" The `test` job above answers a
+      # different question — "does a fresh resolve of pyproject.toml's unpinned bounds still
+      # work?" — and is the drift detector; this job does not replace it.
+      - name: Install from requirements.lock
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.lock
+          python -m pip install -e . --no-deps
+
+      - name: Run tests
+        run: python -m pytest -q
+
   build:
     name: build sdist/wheel + twine check + install smoke test
     runs-on: ubuntu-latest
