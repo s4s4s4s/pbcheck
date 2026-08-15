@@ -48,8 +48,3 @@ class DEResult:
 
     def n_significant(self, fdr: float = 0.05, lfc: float | None = None) -> int:
         return len(self.significant(fdr=fdr, lfc=lfc))
-
-
-def restrict_to(table: pd.DataFrame, genes) -> pd.DataFrame:
-    """Reindex a DE table to a fixed gene universe (missing genes -> NaN, i.e. untested)."""
-    return table.reindex(pd.Index(genes))

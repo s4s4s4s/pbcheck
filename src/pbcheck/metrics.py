@@ -131,12 +131,15 @@ def signal_above_floor(real_ndeg: int, floor_median_count: float) -> float:
     """naive #DEG(real) / naive #DEG(perm-null median). ~1 => calls are essentially the floor.
 
     Decision-relevant ONLY in high-donor strata (>= 8v8); leak-contaminated at 3v3 (spec A1/§6).
+    Reserved for the Phase 0 real-data analysis (spec §6); exercised by tests.
     """
     denom = max(floor_median_count, 1.0)
     return float(real_ndeg / denom)
 
 
 def jaccard(a: set, b: set) -> float:
+    """Jaccard similarity of two gene-call sets. Reserved for the Phase 0 real-data analysis
+    (spec §6); exercised by tests."""
     if not a and not b:
         return float("nan")
     return len(a & b) / len(a | b)
