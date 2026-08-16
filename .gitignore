@@ -52,3 +52,6 @@ Thumbs.db
 # committed record is the dated JSON/CSV, which already carries every per-seed replicate; the
 # ledger is a cache, following pilot/testsel/ committing only its summary.
 pilot/upper_bound_check/replicates.jsonl
+
+# Claude Code session scratch (worktrees are ephemeral; agents and skills ARE tracked)
+.claude/worktrees/

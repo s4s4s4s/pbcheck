@@ -636,3 +636,23 @@ culminating in Amendment 2.
   is not evidence of absence — and the sentence is withdrawn on the record. σ = 0.2 is the one
   envelope row with no grid support at all, so an arm-side excess sitting exactly there earns more
   disclosure, not less.
+
+### The repository starts carrying its own map and reviewers (2026-08-16)
+
+- Added: `.claude/agents/` — the five profile agents (`repo-scout`, `mechanic`, `terminal-runner`,
+  `deep-diagnostician`, `reviewer`), each pinning its own model and tool set. They live **in the
+  repository** rather than in a machine's user directory, because that is the only way a cloud
+  session gets them; until now every role had to be improvised from a generic agent with a briefing
+  pasted into the prompt.
+- Added: `.claude/skills/pbcheck-map/SKILL.md` — the map a session reads instead of walking the tree
+  blind: what the project is, what each module, script and document owns, what is frozen and why
+  editing it is a protocol violation rather than a style question, the amendment discipline, the
+  current state with numbers re-derived from the artifacts, and the traps. Every path in it was
+  confirmed to exist and every number recomputed (367 tests at `c3c2556`, 251 analysis-set strata
+  over 12 datasets plus 106 controls, `admitted_to_sweep` false on all 357). It references code by
+  module, function and document section, never by line number, so it cannot rot into a document that
+  lies without looking broken.
+- Noted in that map rather than silently repaired: `pilot/gate/synthetic_gate_2026-08-15.json` still
+  reports the 511.8 s runtime it was committed with, which predates the engine work of the following
+  day. Its correctness numbers reproduce exactly; only the timing is historical, and regenerating
+  cited evidence to refresh a stopwatch would be the wrong trade.
