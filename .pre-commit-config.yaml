@@ -8,6 +8,16 @@
 # the R3 task brief) and are excluded from the fixing hooks below so their bytes are never
 # touched by a mechanical pass — end-of-file-fixer would otherwise add PHASE0_SPEC.md's missing
 # trailing newline.
+#
+# The committed RUN ARTIFACTS under pilot/ are excluded for the same reason, one degree stronger:
+# they are cited evidence, and pilot/preregistration/ is additionally pinned BY HASH in
+# docs/PREREGISTRATION_STRATUM_LIST.md and by scripts/freeze_stratum_list.py, which refuses to run
+# against a source whose sha256 has moved. Two of them end without a trailing newline, because
+# json.dump writes none: the CI candidate manifest, and pilot/gate/synthetic_gate_2026-08-15.json.
+# This was not hypothetical — running `pre-commit run --all-files` while adding the freeze rewrote
+# the gate artifact, whose numbers Amendment 3's addendum, the README and CHANGELOG all quote.
+# The hooks had simply never been run over it (pre-commit is configured here but not installed as
+# a git hook). A mechanical pass must not be able to edit evidence, so it no longer can.
 repos:
   - repo: local
     hooks:
@@ -22,12 +32,21 @@ repos:
     rev: v5.0.0
     hooks:
       - id: end-of-file-fixer
-        exclude: ^docs/(PHASE0_SPEC|AMENDMENTS)\.md$
+        exclude: ^(docs/(PHASE0_SPEC|AMENDMENTS)\.md$|pilot/(preregistration|gate|testsel)/)
       - id: trailing-whitespace
-        exclude: ^docs/(PHASE0_SPEC|AMENDMENTS)\.md$
+        exclude: ^(docs/(PHASE0_SPEC|AMENDMENTS)\.md$|pilot/(preregistration|gate|testsel)/)
       - id: check-yaml
       - id: check-added-large-files
         # pilot/testsel/summary.{csv,json} are committed run artifacts (~64KB / ~22KB); the
-        # largest tracked file in the repo is ~71KB (scripts/pb_calibration_probe.py). 500KB
-        # gives headroom without letting an actual accidental large-file commit through.
+        # largest tracked *source* file in the repo is ~71KB (scripts/pb_calibration_probe.py).
+        # 500KB gives headroom without letting an actual accidental large-file commit through.
+        #
+        # pilot/preregistration/ is excluded rather than accommodated by raising the cap. It holds
+        # the §1 pre-registration evidence — the whole-Census candidate manifest of CI run
+        # 31910799023 (6.6 MB JSON + 4.5 MB CSV) and the frozen stratum list derived from it. Those
+        # are deliberately committed at full size: the pre-registration's claim is that a reader
+        # can re-derive every number in docs/PREREGISTRATION_STRATUM_LIST.md, and a truncated or
+        # externally hosted artifact cannot support it. Raising the cap instead would have
+        # disarmed the guard for the whole tree to admit two known files.
+        exclude: ^pilot/preregistration/
         args: [--maxkb=500]

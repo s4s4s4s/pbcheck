@@ -1,0 +1,24 @@
+# The pre-registration artifacts are hash-pinned, not read as text.
+#
+# `pilot/preregistration/` holds the frozen §1 stratum list and the CI candidate manifest it was
+# derived from. `docs/PREREGISTRATION_STRATUM_LIST.md` records their sha256 sums, and
+# `scripts/freeze_stratum_list.py` refuses to run against a source whose hash does not match —
+# so their bytes are the evidence, not a rendering of it.
+#
+# Without `-text`, git's end-of-line conversion would rewrite them per platform: the committed CSV
+# came off a Linux runner with CRLF terminators, `core.autocrlf=true` on a Windows checkout would
+# rewrite the JSON to CRLF, and either change breaks the recorded hash. The byte-identity test in
+# `tests/test_stratum_list_freeze.py` would then pass on one CI leg and fail on another, which is
+# worse than failing everywhere. Diffing these files is not how they are audited; hashing them is.
+#
+# `pilot/gate/` and `pilot/testsel/` are cited evidence too — `.pre-commit-config.yaml` excludes
+# them from the fixing hooks on exactly that ground — and they are deliberately NOT marked here.
+# They were committed with LF and are checked out with CRLF under `core.autocrlf=true`, so adding
+# `-text` would make the working tree's CRLF bytes canonical and the next `git add` would rewrite
+# all three blobs: measured, at the commit that added this line, 8909 -> 9174 bytes for
+# `pilot/gate/synthetic_gate_2026-08-15.json`, 21811 -> 21958 for `pilot/testsel/summary.csv` and
+# 63081 -> 65856 for `pilot/testsel/summary.json`. Protecting evidence by rewriting it is not
+# protecting it. The asymmetry is therefore real and intended: `pilot/preregistration/` is pinned by
+# hash and must be byte-stable across platforms; the other two are protected from the fixing hooks
+# only, and their bytes stay whatever git already stores.
+pilot/preregistration/** -text

@@ -58,8 +58,9 @@ where the confounds are messy. Methodology: [`../docs/PHASE0_SPEC.md`](../docs/P
   does not fit a 16 GB runner: a streaming pass folds ~50-65 M cells into per-`(dataset, cell type, disease,
   donor)` counts without materialising them and decides only *which* datasets are worth reading; a second
   pass re-reads each of those and hands the per-cell frame to `census_select.screen_strata` unchanged. It
-  adds no method and moves no threshold. Its tests run offline like everything else listed here — **the run
-  itself has not been made**, see below
+  adds no method and moves no threshold. Its tests run offline like everything else listed here. **The run
+  has been made** — GitHub Actions run `31910799023`, 2026-08-15 — and its manifest is committed under
+  [`preregistration/`](preregistration/) as the evidence of the §1 freeze; see below
 - `synthetic/oracles.py` + `scripts/synthetic_gate.py` — validation on known truth (§8 b/c)
 
 ### Known gaps in what is listed above
@@ -109,13 +110,11 @@ Per spec §9, in order. Items 1 and 2 (`census_select`, `io_counts`) are built a
 `[census]` extra is needed only to *fetch* — every check in either module runs on a locally supplied
 `AnnData`, and their tests use no network at all.
 
-Before any of the modules below: **the candidate run itself has not been made.** The driver and its CI job
-exist; nothing has yet read the real Census. The first dispatch is the `census candidates` workflow with
-`dry_run: true` — pass 1 streams the whole Census either way, and the cells/second it reports is the only
-honest input to the full run's budget against the runner's hard 6-hour kill. Its output is an artifact
-(candidate manifest + log), uploaded and not committed. What comes back is a list of **candidates**: the
-choice of 8–12 datasets from it, and the freezing of that choice, is the separate human act described at the
-end of this section.
+The candidate run has been made (`31910799023`, 2026-08-15): 2190 stratum-contrasts over 73 datasets, of
+which 1197 are candidates across 68 datasets. Its output was a CI artifact, as designed — `pilot/results/`
+is gitignored so that a candidate list cannot pre-register itself by reaching git through a CI job — and a
+copy of it now sits in [`preregistration/`](preregistration/) because the §1 freeze cites it and evidence
+that expires with an artifact is not auditable.
 
 1. **`controls.py`** — cells-per-donor sweep (the primary conditioning axis, D1), donors-per-group
    sweep, depth-match downsampling, cell-type annotation ontology depth (D5 — still a `pending`
@@ -126,19 +125,48 @@ end of this section.
 3. **`report.py`** — jinja2 HTML: per-stratum/per-dataset tables, null-distribution plots,
    floor-vs-cells-per-donor curves, λ, oracle pass/fail, provenance manifest.
 
-Not a module, and not automatable: **the §1 pre-registration of the stratum list itself** — choosing
-8–12 datasets that *span* the outcome space and freezing that list by commit before any metric is
-computed. `census_select` proposes candidates and stamps every row `admitted_to_sweep = False`, and
-`io_counts` — which settles two of that row's blockers — leaves it `False` too; selecting from them
-is a judgement, and admission additionally needs the per-stratum `sigma_donor` estimate and envelope
-membership Amendment 3 leaves open.
+Not a module, and not automatable: **the §1 pre-registration of the stratum list itself.** That act has
+now been performed — see below. `census_select` proposes candidates and stamps every row
+`admitted_to_sweep = False`, and `io_counts` — which settles two of that row's blockers — leaves it
+`False` too; the freeze fixes *what will be measured* and does not admit any of it, since admission still
+needs the counts gate plus the per-stratum `sigma_donor` estimate and envelope membership Amendment 3
+leaves open.
 
-## First pass (spec §1)
+## First pass (spec §1) — FROZEN 2026-08-16
 
-8–12 datasets chosen to **span** the outcome space (strong-effect, subtle, varied assay/tissue/donor
-count, cells-per-donor across pre-registered bins) — not cherry-picked wins. Real anchor: **Mathys
-2019** AD snRNA-seq, to reproduce Murphy & Skene 2023 qualitatively (§8 d). Pre-register the stratum
-list first.
+[**`../docs/PREREGISTRATION_STRATUM_LIST.md`**](../docs/PREREGISTRATION_STRATUM_LIST.md) is the §1
+pre-registration, made before any metric was computed on any of these strata. It fixes **12 independent
+datasets** and the **251 stratum-contrasts** they carry, by a deterministic rule — every candidate row of
+those twelve, no stratum-level hand-picking — over the committed manifest of CI run `31910799023`
+(sha256 `33f8a800…`). It also pre-registers the **cells-per-donor bins** that §1 references three times and
+never states (`[10,30) [30,100) [100,300) [300,1000) [1000,3000) [3000,inf)`, all six occupied), and
+declares **Layer B** in advance, at all four tiers of the operating envelope: the envelope keeps 11 of
+the 12 datasets at `sigma_donor` ≈ 0.2, **7** at ≈ 0.35, **5** at ≈ 0.5 and **3** at ≈ 0.7. Three of the
+four are below §1's own 8–12 floor, and the failure starts at ≈ 0.35 — `gate_config.POWER_EVAL_SIGMA`,
+the instrument's nominal operating point — not at 0.5. The study would be unexecutable there in its
+pre-registered form, which is a result to report rather than something to design around. §6 also records
+what the manifest could have supported instead: **21** of its 68 candidate-bearing datasets clear 13v13
+and **12** clear 23v23, so a twelve-dataset list optimised for donor counts would have survived the
+truncation. The shortfall is a cost of §1 (iii)'s coverage axes, not a property of the public data.
+
+The artifacts are [`preregistration/stratum_list_2026-08-16.{json,csv}`](preregistration/), regenerated
+byte-identically by `../scripts/freeze_stratum_list.py` (`--check` verifies both committed halves). They
+carry the 251 analysis-set strata **and** the 27 within-collection control strata of the two
+same-collection siblings, told apart by a `role` column; a control never enters the D2 denominator and
+promoting one to an independent dataset is an amendment. The proposal the twelve were chosen from is
+committed and hash-pinned beside them as
+[`preregistration/stratum_list_proposal_2026-08-16.md`](preregistration/) — the reasoning, not part of the
+binding act. From that commit onward the list changes only through
+[`../docs/AMENDMENTS.md`](../docs/AMENDMENTS.md).
+
+Real anchor: **Mathys 2019** AD snRNA-seq, to reproduce Murphy & Skene 2023 qualitatively (§8 d). It is
+**not** a member of the stratum list — it is the binding oracle — and it is absent from CELLxGENE
+Discover (2216-dataset index searched 2026-08-16, zero hits) *and* from the pinned release itself, whose
+1573 datasets were enumerated directly because absence from Discover does not imply absence from Census
+(6 of those 1573 are no longer listed in Discover; none is Mathys). The Census path is therefore closed.
+The remaining path is Synapse `syn18485175`, which needs a ROSMAP DUA — applied for 2026-08-16, not
+granted at the time of writing — and a second loader that §9's plan does not contain. It does not block
+the freeze and the freeze does not weaken it; the pre-registration's §8 records the whole position.
 
 ## Decision rule (short form)
 

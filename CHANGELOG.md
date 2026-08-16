@@ -342,3 +342,136 @@ culminating in Amendment 2.
   reached git by way of a CI job would have pre-registered itself by accident. Every row still
   carries `admitted_to_sweep = False`, and the manifest header records that D4's excluded fractions
   are computed over the datasets pass 2 actually read, not over the whole Census.
+
+### The §1 stratum list is pre-registered (2026-08-16)
+
+- Added: `docs/PREREGISTRATION_STRATUM_LIST.md` — the act §1 demands ("Pre-register the stratum
+  list before computing any metric"), performed before any metric was computed on any of these
+  strata. **Not an amendment**: it changes no threshold and supersedes no section. It fixes
+  **12 independent datasets** and the **251 stratum-contrasts** they carry, and from this commit
+  every change to either goes through `docs/AMENDMENTS.md`.
+- Added: the evidence, committed in full rather than referenced —
+  `pilot/preregistration/census_candidates_run31910799023_2026-08-15.{json,csv}`, the whole-Census
+  candidate manifest of CI run **31910799023** (sha256 `33f8a800…`, 6 630 446 bytes, and
+  `09eb110d…`, 4 513 660 bytes; `generated_utc` 2026-08-15T22:18:37Z, Census `2025-01-30`).
+  `pilot/results/` stays gitignored — a manifest that reached git through a CI job "would have
+  pre-registered itself by accident" — so the copy lives under `pilot/preregistration/`, put there
+  by a deliberate human act with the document attached. A pre-registration whose evidence expires
+  with a CI artifact is not auditable.
+- Added: **the selection rule is deterministic and is code, not a table.** Every manifest row with
+  `gate_status == "candidate"` belonging to one of the twelve datasets is in the analysis set;
+  every other row is out. The twelve dataset ids are the whole of the judgement and the 251 strata
+  are its arithmetic consequence — no stratum, cell type, disease term or donor-count tier is
+  chosen by hand (§10 risk 13). The per-dataset "recommended strata" tables of the 2026-08-16
+  proposal document were reading aids and are recorded as **not** the frozen set, so the smaller
+  list cannot later be mistaken for the pre-registration.
+- Added: `scripts/freeze_stratum_list.py`, which emits
+  `pilot/preregistration/stratum_list_2026-08-16.{json,csv}`. It refuses to run unless the source
+  artifact's size, sha256 and header stamps all match the pinned values (the hash guards the file,
+  the stamps guard the constant), and it **recomputes every figure it declares** — per-dataset
+  stratum counts and donor ceilings, the total, the Layer B subsets, the bin occupancy — aborting
+  on any disagreement rather than silently re-deriving. The output carries no generation timestamp
+  and no package versions, so regeneration is byte-identical on every platform; `--check` verifies
+  the committed artifact against a fresh run.
+- Added: **the cells-per-donor bins (D1), pre-registered numerically for the first time.** The spec
+  references "the pre-registered bins" three times (decision rule item 2, §1 (iii), §7 item 3) and
+  never states them, which strictly made §1 (iii) unsatisfiable. They are now
+  `[10,30) [30,100) [100,300) [300,1000) [1000,3000) [3000,inf)` — half-decade log bins anchored at
+  the inclusion gate's own 10-cells-per-donor floor, chosen independently of these data so no edge
+  can have been fitted. All six are occupied over the frozen set's 502 group medians (range
+  11.0 … 6671.5). This closes a gap in §1; it is not a change to it.
+- Added: **Layer B, the pre-declared truncation, at all four tiers of the operating envelope.**
+  Survivors of the twelve: 11 datasets / 227 strata at `sigma_donor` ≈ 0.2, **7 / 150** at ≈ 0.35,
+  **5 / 94** at ≈ 0.5, **3 / 30** at ≈ 0.7. **Three of the four are below §1's own "8–12 datasets"
+  floor** — every tier except the most optimistic — and the failure starts at ≈ 0.35, which is
+  `gate_config.POWER_EVAL_SIGMA`, the envelope boundary Amendment 3 Change 1(b) makes binding and
+  the instrument's own nominal operating point. The study in its pre-registered form is not
+  executable there, recorded now, quoting Amendment 3, as "a live outcome of this study, not a
+  failure mode to be designed around". Declaring the surviving subset before the anchor exists is
+  what removes the freedom to pick a convenient one afterwards. The verdict column is
+  `below_spec_dataset_floor`, computed from the manifest and parsed back out of the document by the
+  tests, never typed.
+- Added: **what the manifest could have supported instead, stated before the anchor exists.** Of
+  the 68 candidate-bearing datasets, **62 / 33 / 21 / 12** hold a stratum at ≥ 4v4 / ≥ 8v8 /
+  ≥ 13v13 / ≥ 23v23, and only **3** hold an exactly-3v3 stratum — none of which clears 13v13, so
+  §1 (iii)'s mandatory 3v3 anchor costs a dataset slot at the hard tiers. A §1 (iii)-compliant
+  twelve optimised for donor counts could therefore have retained **12 / 12 / 11 / 11**, attained
+  by Rexach plus eleven of the twelve ≥ 23v23 datasets: above §1's floor at every tier. **The
+  truncation is therefore a consequence of selecting for §1 (iii)'s coverage axes rather than for
+  donor counts, not a property of the public data at this Census pin** — worse for the study on
+  feasibility, better on integrity, and impossible to reassemble the list on donor counts later and
+  call it the original plan.
+- Added: **the two same-collection siblings are frozen, not merely named.** All 27 of their
+  candidate strata (SEA-AD MTG 18, Emphysema immune 9) are emitted under
+  `within_collection_control_rows` with `role = "within_collection_control"`, where the 251 carry
+  `role = "analysis_set"`; the CSV twin holds both blocks, 278 data rows, told apart by that
+  column. A result from one is reported as a within-collection control, never enters the D2
+  denominator, and promoting one to an independent dataset is an amendment. Naming them without
+  freezing them had left 27 runnable, unlisted strata selectable after the fact.
+- Added: `pilot/preregistration/stratum_list_proposal_2026-08-16.md` (sha256 `50872414…`, 92 589
+  bytes), the proposal the choice of twelve was made from — committed because §3.2, §4.2 and §8
+  cited it six times for the per-dataset rationale, the rejected datasets, **five named reserves**,
+  the third 5′ candidate and the Mathys search method, and it existed only in a scratch directory:
+  the one act of discretion in the freeze was justified by a file no reader could open. It is the
+  reasoning, **not** part of the binding act, and it is committed byte-for-byte as circulated
+  (errors included); where it disagrees with the document, the document governs. The reserves
+  matter most: §9 item 7 forbids substituting a replacement for a stratum that fails the counts
+  gate, and pinning the list makes such a substitution detectable.
+- Fixed (a circulated figure, corrected rather than absorbed): the 2026-08-16 proposal states
+  Rexach's envelope ceiling as `min(A,B) = 11`. **It is 10** — the dataset's best design is A = 11
+  versus B = 10 and no Rexach control group exceeds 10 donors, so the 11 was `max(n_donors_A)` read
+  as the ceiling. Nothing downstream moves (Rexach was outside the σ = 0.5 tier either way), and
+  the error, its cause and its magnitude are on the record.
+- Note: the freeze **admits nothing**. All four blockers stand on all 2190 source rows and all 251
+  frozen ones (`integer_check`, `frozen_universe_size`, `sigma_donor_estimate`,
+  `envelope_membership`), `pooled` is `unresolved` on 1197/1197 candidates so the
+  donor-pseudobulk-is-calibrated claim is unavailable on this entire list (a property of the Census
+  pin, not of the selection), and the counts gate may still shrink the list — a shrinkage is a
+  reported outcome, never a re-selection. §8(d)'s Mathys 2019 anchor is recorded in its own section:
+  absent from CELLxGENE Discover entirely (full 2216-dataset index searched 2026-08-16, zero hits
+  on six needles over every field of every record) **and absent from the pinned release itself** —
+  the 1573 datasets published under `cell-census/2025-01-30/h5ads/` were enumerated directly,
+  because "absent from Discover ⇒ absent from Census" does not follow: **6 of those 1573 are no
+  longer listed in Discover**, and each was identified from its own h5ad (two unrelated
+  collections) before the conclusion was allowed to stand. `cellxgene-census` could not be
+  installed to read `census_info/datasets` through SOMA: `tiledbsoma` publishes no Windows wheel at
+  any version. So the Census path is closed; the Synapse path needs a ROSMAP DUA — applied for on
+  2026-08-16, **not granted at the time of writing** — and a second loader that §9's plan does not
+  contain. It does not block the freeze and the freeze does not weaken it.
+- Added: `tests/test_stratum_list_freeze.py` (77 tests, no network) — the source hashes and the
+  proposal's; the twelve ids and the 251 strata re-derived from the raw manifest rather than
+  through the module being tested, in both directions (nothing extra, nothing quietly omitted);
+  Rexach's ceiling of 10; every bin occupied and the bins tiling `[10, inf)` from the gate's own
+  floor; **all four** Layer B tiers equal to the envelope arithmetic with their
+  `below_spec_dataset_floor` verdicts re-derived; §6's two tables parsed back out of the document
+  and compared cell by cell, so a hand-typed verdict cannot disagree with the artifact; the
+  manifest-wide 62 / 33 / 21 / 12 and the counterfactual's 12 / 12 / 11 / 11 with its explicit
+  witness list; the 27 control strata, their role field and their disjointness from the 251; no row
+  admitted; neither sibling in the analysis set; byte-identical regeneration and both committed
+  halves equal to a fresh run. Ten tests drive the guards themselves — a wrong stratum count, a
+  wrong Layer B subset, a **dropped** Layer B tier, a wrong manifest tier census, a wrong
+  counterfactual maximum, a wrong sibling count, a sibling promoted into the D2 denominator, an
+  unlabelled disease arm, and a missing or tampered source CSV must each abort the freeze — so the
+  verification cannot become decorative the way `gate_config`'s history warns.
+- Fixed: `load_source` **skipped the CSV hash check when the file was absent**
+  (`csv_path is not None and csv_path.exists()`), so deleting the CSV turned a failing hash check
+  into a passing run. A named-and-absent evidence file now aborts, as does one of the wrong size.
+  The same guard covers the newly pinned proposal document. `--check` now compares **both**
+  committed halves rather than the JSON alone.
+- Added: `.gitattributes` marking `pilot/preregistration/` as `-text`. The committed CSV came off a
+  Linux runner with CRLF terminators and `core.autocrlf` would rewrite the JSON on a Windows
+  checkout; either conversion moves a recorded hash and would make the byte-identity test pass on
+  one CI leg and fail on another. `.pre-commit-config.yaml` excludes the same directory from
+  `check-added-large-files` rather than raising the 500 KB cap for the whole tree.
+  `pilot/gate/` and `pilot/testsel/` are deliberately **not** marked, and `.gitattributes` now says
+  why: they were committed with LF and are checked out with CRLF, so `-text` would make the working
+  tree canonical and the next `git add` would rewrite all three blobs (measured: 8909 → 9174,
+  21811 → 21958 and 63081 → 65856 bytes). Protecting evidence by rewriting it is not protecting it.
+- Fixed (found by running the repo's own hooks while adding the above): `pre-commit run
+  --all-files` **rewrote `pilot/gate/synthetic_gate_2026-08-15.json`.** `json.dump` writes no
+  trailing newline, `end-of-file-fixer` appended one, and that artifact is cited evidence — its
+  numbers appear in Amendment 3's addendum, the README status table and this changelog. The hooks
+  are configured but not installed as a git hook, so nothing had ever run them over it. The
+  fixing hooks now exclude `pilot/gate/`, `pilot/testsel/` and `pilot/preregistration/` alongside
+  the two frozen protocol documents, on the same principle: a mechanical pass must not be able to
+  edit evidence. The modification was reverted; no artifact byte changed.
