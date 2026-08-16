@@ -769,3 +769,870 @@ back, and the finding comes back to this log.
 amendment. Every figure quoted was re-derived from committed artifacts or re-run while writing, not
 copied from an earlier entry; where a number could not be verified — the grid's per-cell power
 Monte-Carlo error — that is said rather than glossed.*
+
+---
+
+## Amendment 4, Part A (2026-08-16) — a per-stratum `sigma_donor` estimator and an operating-envelope membership rule: the derivation, the estimator, the gating rule, and PRE-DECLARED validation criteria; Amendment 3's "upper bound" is corrected
+
+Amendment 3 Change 1 declared an operating envelope and made stratum inclusion in the real sweep
+conditional on two new things: a **per-stratum estimate of `sigma_donor`**, and **membership in that
+envelope** at the stratum's own donors-per-group. It supplied a *mechanism* for the first —
+`sqrt(s0^2) · ln 2` from the moderated arm's own fit — declared the mechanism unvalidated, and closed
+by recording that
+
+> Deriving and validating the correction — against the simulator, where the truth is known — is
+> required work that this amendment does **not** do and does **not** authorise skipping.
+
+This entry is that work. It is split into two parts, and the split is the point.
+
+### Why this entry is in two parts, and what binds when
+
+**Part A — this section — is written and committed BEFORE the validation grid is run.** It fixes the
+estimand, the derivation, the estimator, the aggregation rule, the gating rule, the validation grid,
+and the numeric criteria **V1–V9** that decide whether the estimator is fit to gate stratum
+admission. **Part B is a dated addendum written after the run**: the V1–V9 outcome table, the
+mechanical application of the functional-selection rule with its arithmetic, the resulting constant
+in `gate_config`, and the consequences of any failure.
+
+The ordering is not a formality. Amendment 1 exists because `scripts/synthetic_gate.py` had quietly
+substituted an easier oracle and dropped two binding criteria, and `gate_config`'s own docstring
+names that episode as the reason its thresholds live in one file instead of scattered as literals. A
+validation whose PASS criteria are written after its numbers are read is not a validation; it is a
+description. Every threshold below is therefore stated now, with its arithmetic. **No threshold below
+is to be moved after the run.** A criterion that fails is a result, is reported as a failure, and
+comes back to this log — the formula Amendments 2 and 3 both closed on.
+
+Two consequences of the split are recorded so they cannot be dropped quietly. First, the constants
+below may enter `gate_config`'s `PRE_REGISTERED` block as a new `SIGMA_GATE` group only **after** this
+Part A is committed, and never in the same commit as the run that uses them. Second, the functional
+slot of Change 3 is left open **in code as well as in prose** — `envelope_membership(...)` takes
+`functional` as a required argument with **no default** until Part B supplies one — so that no
+implicit choice can be made by a default value while the choice is formally open. That single slot is
+the only thing in this entry left to be decided later, and it is decided by a rule stated here, not by
+judgement exercised there.
+
+Spec sections touched: **§1 (inclusion gate)** — Amendment 3's two new per-stratum requirements
+acquire a definition and a decision procedure. **Nothing else in the frozen spec is touched.** §8(c)'s
+effect size (log2FC = 1.0, K = 200) and threshold (≥ 0.60), §8(a)'s calibration criteria, and
+Amendment 3's envelope table are unchanged by this entry and are not weakened by it.
+
+### Data visible at the time of this amendment (full disclosure)
+
+1. **Everything visible for Amendments 1, 2 and 3**, unchanged.
+2. **The frozen stratum list**, `docs/PREREGISTRATION_STRATUM_LIST.md` and
+   `pilot/preregistration/stratum_list_2026-08-16.json`, committed **earlier the same day**: 251
+   stratum-contrasts over 12 independent datasets, `admitted_to_sweep = False` on every row, and **no
+   metric computed on any of them**. This amendment is the work its §9 item 2 names as the blocker,
+   and its §6 tiers become decidable exactly when Part B lands. It was read while writing this entry,
+   and its distributional figures are used below as *the range the estimator must cover*: group
+   medians of 11.0 … 6671.5 cells per donor with 85 of 502 group medians in the `[10, 30)` bin, median
+   counts per cell 284 … 56 841.5, and `min(n_A, n_B)` from 3 to 39.
+3. **The simulator's development seed range, `seed ∈ [1, 999]`, is disclosed as seen.** The estimator
+   will be developed and debugged against it, and the probe numbers in Correction 1 below were already
+   measured on it while writing this entry. The confirmatory grid runs on a declared, non-overlapping
+   seed range (Change 5) and has **not** been run.
+4. **The confirmatory grid has not been run and no estimator has been validated.** Nothing in this
+   entry claims that the estimator works. `src/pbcheck/sigma_donor.py` does not exist at the time of
+   writing.
+5. **No real data.** Oracle (d), the Mathys 2019 anchor (§8(d)), remains untouched; the freeze records
+   that its Census path is closed and the Synapse path gated on a ROSMAP data-use agreement begun
+   2026-08-16. No CELLxGENE stratum has been loaded. Every number below is synthetic, and
+   `sigma_donor` remains a free knob of our own simulator.
+6. **What is new here and was measured for it**: ten probe cells of Amendment 3's quantity on
+   development seeds — six over 16 seeds, two over 8, two on a single seed — tabulated under Correction
+   1. They are the evidence that Amendment 3's claim is false, and they make the expected outcome of
+   V9b known in advance, which is disclosed where V9b is stated. They are **not** the validation, which
+   is V1–V9 and is unrun.
+
+### What Amendment 3 left open, and precisely which part of it this closes
+
+Amendment 3's own closing item, quoted rather than paraphrased:
+
+> **`sigma_donor` is still not anchored to real data.** This is the third consecutive amendment to
+> close on it and it is *not* resolved here. Change 1 supplies the envelope and the estimation
+> mechanism; it does not supply the estimate, the validated conversion from `s0^2` to `donor_sigma`,
+> or the empirical mean-dispersion / donor-variance trend §8(b) asks for. Until that exists, the
+> envelope is a statement about our simulator's coordinates, and **whether any real stratum falls
+> inside it is unknown**.
+
+**What Part A closes: the middle clause — the validated conversion.** Part A specifies the estimator
+that replaces the mechanism, derives it from the simulator's generative model term by term, and fixes
+the criteria under which it may be called validated. Part B either validates it or records that it
+failed. On success, `sigma_donor_estimate` and `envelope_membership` stop being `PENDING` columns in
+`census_select`'s manifest and become computed columns with a stated error direction.
+
+**What Part A does not close, stated with the same precision.**
+
+* **§8(b)'s real empirical mean–dispersion / donor-variance trend.** The estimator is derived in the
+  simulator's coordinates and validated against the simulator's truth. That establishes that it
+  recovers `donor_sigma` *from data the simulator generated*; it establishes nothing about whether
+  real snRNA-seq between-donor variation is the log-normal random effect the simulator imposes. A
+  perfectly validated estimator of the wrong model's parameter is still wrong. §8(d) remains the
+  binding real check and remains unrun.
+* **The pooling question.** `pooled` is `unresolved` on all 1197 candidates and all 251 frozen strata:
+  the pinned Census exposes no library/pool identifier, so D3's answer is its "where pooling cannot be
+  resolved" state. Donor pseudobulk is therefore a **lower bound** on the correct replication unit
+  throughout, and every `sigma_donor` estimate inherits that caveat rather than resolving it. Part A
+  carries the caveat into the manifest and does not pretend to fix it.
+* **Whether any real stratum lands inside the envelope at all.** This amendment supplies the measuring
+  instrument, not the measurement. The freeze's §6 scenario table stays arithmetic under a
+  hypothetical σ until the estimator has run on real strata, and at σ ≈ 0.5 the surviving set is 5 of
+  12 datasets, below §1's own 8–12 floor. A negative answer remains a live outcome.
+
+---
+
+### Correction 1 to Amendment 3 Change 1 — `sqrt(s0^2) · ln 2` is NOT an upper bound on `donor_sigma`, and the direction of its error is the dangerous one
+
+This is placed first rather than folded into the derivation, because it reverses a statement this log
+has already published and that two further committed documents have since repeated.
+
+**The statement being corrected**, quoted from Amendment 3 Change 1:
+
+> **That conversion is a mechanism, not an anchor, and the difference is load-bearing.** `s2_g`
+> contains the donor random effect **plus** residual NB sampling noise and the compression of the `+1`
+> offset at low expression, so `sqrt(s0^2) · ln 2` is an **upper bound** on `donor_sigma`, not an
+> estimate of it.
+
+**Why it is wrong.** The sentence names three ingredients and then treats all three as additive
+contaminations of the donor effect. Two of them are. The third is not: the `+1` in `log2(CPM + 1)` is
+a **multiplicative attenuation** applied to everything inside the logarithm, the donor random effect
+included. Writing it out — the full derivation is Change 1, this is only its consequence — with
+`a = CPM/(1 + CPM)`:
+
+```
+Y = log2(1 + C)      =>      dY/d ln C = (1/ln 2) · C/(1 + C) = a / ln 2
+Var_within-group(Y)  ≈  (a² / ln 2²) · (σ² + v_tech)
+```
+
+so the arm's own fit sees `s2_g ≈ a_g² (σ² + v_g) / ln 2²`, and Amendment 3's quantity is
+
+```
+sqrt(s0²) · ln 2   ≈   ā · sqrt(σ² + v̄)
+```
+
+There are two distortions and they point in **opposite** directions: `+ v̄` inflates, `ā ≤ 1` deflates.
+Amendment 3 named both and kept only the first. The quantity is an upper bound on σ if and only if
+
+```
+ā² (σ² + v̄)  ≥  σ²        ⟺        v̄  ≥  σ² (1 − ā²)/ā²  =  σ² (1/ā² − 1)
+```
+
+and it is an **under**statement whenever the technical variance is smaller than that. Nothing
+guarantees that it is not.
+
+**Worked arithmetic, at a point that is ordinary rather than adversarial.** Take `ā = 0.9` — a gene at
+CPM = 9. In a 15 000-gene universe the mean CPM is 10⁶/15 000 = 66.7 and the distribution is heavily
+right-skewed, so under the simulator's own gene-mean distribution CPM = 9 is the 14th percentile, and
+in real data, whose low expression tail is far heavier, it is commoner still. Take `v̄ = 0.011` (a donor
+of a few thousand cells; see Change 1.3) and a true `σ = 0.35`:
+
+* required for the bound to hold: `v̄ ≥ 0.1225 × (1/0.81 − 1) = 0.1225 × 0.234568 = 0.028735`;
+* actual: `ā² v̄ = 0.81 × 0.011 = 0.00891` against `σ²(1 − ā²) = 0.1225 × 0.19 = 0.023275` — the
+  inequality fails by a factor of 2.6;
+* value returned: `sqrt(0.81 × (0.1225 + 0.011)) = sqrt(0.108135) = 0.3288`.
+
+**The mechanism returns 0.329 against a truth of 0.350 — a 6 % understatement — and Amendment 3 would
+have a reader treat it as a ceiling.**
+
+**Where the reversal lives, and why the intuition points the wrong way.** Substituting the derived
+technical term `v ≈ 1/T + φ·r_d` (Change 1.3) with `T = C·L/10⁶`, `L` the donor's universe-restricted
+library size, the per-gene condition `a² v ≥ σ²(1 − a²)` becomes, exactly,
+
+```
+10⁶ · C / L   +   φ · r_d · C²    ≥    σ² · (1 + 2C)
+```
+
+For genes with `C ≫ 1` and a donor deep enough that the dispersion term `φ r_d C²` is subdominant,
+both sides grow linearly in `C`, the gene's own expression cancels, and what remains is a statement
+about the **donor's library size alone**:
+
+```
+the bound survives only while     L  ≲  10⁶ / (2σ²)
+        σ = 0.2  →  1.25e7                 σ = 0.35 →  4.08e6
+        σ = 0.5  →  2.00e6                 σ = 0.7  →  1.02e6
+```
+
+This is the opposite of what "the compression of the `+1` offset **at low expression**" suggests, and
+the inversion is worth stating plainly, because a reader checking the claim will otherwise look in the
+wrong place:
+
+* **Shallower data does not produce the failure — it prevents it.** Thinning a stratum raises `1/T`,
+  raises `v̄`, and pushes the quantity *up*, away from the reversal. The failure needs technical noise
+  to be *small*. In the noiseless limit the quantity converges to exactly `ā·σ`, which is below `σ` for
+  every `ā < 1`. **Amendment 3's bound is least true on the cleanest data.**
+* **What sets `ā` is the universe, not the depth.** CPM is a *within-universe relative* quantity:
+  scaling every gene's mean by a constant scales `T` and `L` together and leaves CPM unchanged. The
+  attenuation is therefore governed by how many genes share the million — median CPM ≈
+  `(10⁶/G) · e^(−s²/2)` for log-normal gene means of log-sd `s` — and not by sequencing depth at all.
+  At the simulator's `G = 1500` the median CPM is ≈ 300 and `ā ≈ 0.997`; at a realistic frozen universe
+  of `G ≈ 15 000` it is ≈ 30 and `ā ≈ 0.97`, with a long low tail beneath.
+
+**The sign of Amendment 3's error is therefore a property of the stratum, not a constant**, and the
+frozen list straddles the threshold in both directions: its group medians run 11.0 … 6671.5 cells per
+donor and 284 … 56 841.5 counts per cell, so donor libraries across the 251 span several orders of
+magnitude around every `L` tabulated above. (Those two ranges are marginals from the freeze §4.2/§5
+and are not paired per stratum; the point is the span, not a product.) That is precisely why a
+*validated estimator* is required and a bound of unknown sign is no substitute for one.
+
+**Why this is the dangerous direction and not a technicality.** Understating σ admits strata for which
+the pseudobulk arm is not declared valid. That arm is the denominator of every inflation number in the
+study; spec §10 ranks "pseudobulk denominator collapse" as risk 1, the single most dangerous failure,
+and decision rule item 1 makes it **VOID → NO-GO**. A ceiling that is really a floor converts the
+envelope from a protection into a rubber stamp — and it fails silently, because the reader has been
+told the number errs the other way.
+
+**What this correction does and does not change.**
+
+* Amendment 3's **envelope is untouched**. The table of `(sigma_donor, min_donors_per_group)` is a
+  statement about power at given `(σ, n)`; nothing here bears on it. Change 1 (a), (b) and (c) stand in
+  full, as does Change 2.
+* The **status of the mechanism** changes: `sqrt(s0²)·ln 2` is demoted from "upper bound on
+  `donor_sigma`" to **an audit quantity of unknown error sign**. It goes on being computed and written
+  beside every estimate (Change 4 item 6), because comparing it against `σ̂` is how a reader sees that
+  the correction did work — but it may not gate anything, in either direction.
+* **No measurement is retracted.** No stratum was ever admitted on the strength of it:
+  `admitted_to_sweep` is `False` on all 2190 rows of the candidate manifest and all 251 frozen strata,
+  and `sigma_donor_estimate` is `PENDING` on every one. The error has not propagated into any published
+  number. That is a debt the freeze's refusal to admit anything happens to have covered, not evidence
+  that the claim was harmless.
+* **Three committed texts repeat the erroneous claim, and they are named here rather than silently
+  edited**: `src/pbcheck/census_select.py`'s `PENDING_FIELDS["sigma_donor_estimate"]` ("states it is an
+  UPPER BOUND, not an estimate"), and `docs/PREREGISTRATION_STRATUM_LIST.md` §6 ("an unvalidated upper
+  bound") and §9 item 2 ("stated in terms that the quantity is an **upper bound**"). Both documents
+  were correct to *cite* Amendment 3 and are wrong only by inheritance. They are corrected in the
+  commit that next touches their owning code — Part B — and not before, so that the correction and its
+  evidence land together.
+
+**Criterion V9 exists to demonstrate this empirically rather than leave it resting on the algebra
+above.** It is pre-declared in Change 5, with both clauses and both numbers.
+
+#### The measurement behind Correction 1 (development seeds, disclosed)
+
+Ten probe cells, run while writing this entry through the arm's own code path (`build_pseudobulk` →
+`frozen_universe` → `moderated.log_cpm` → `wls_two_group` → `fit_f_dist`) at 8 v 8 donors, dispersion
+0.2, simulator defaults otherwise. `L̃` is the median donor universe-restricted library size; `ā` the
+median of `CPM/(1 + CPM)`. Rows are ordered by `L̃/L_crit`, with `L_crit = 10⁶/(2σ²)` from the closed
+form above — a quantity computed from the design, not fitted to the results. Six cells were run over 16
+development seeds, two over 8, and two on a single seed; the seed count is a column, and no row is read
+for more than its seed count supports.
+
+| universe / depth | σ | `L̃` | med. CPM | `ā` | seeds | mean `sqrt(s0²)·ln 2` | ratio to σ | below σ | `L̃/L_crit` |
+|---|---|---|---|---|---|---|---|---|---|
+| 1000 genes, 30 cells, `mean_log_mu = 0` | 0.35 | 6.12e4 | 461.7 | 0.9978 | 16 | 0.4216 | 1.205 | 0/16 | 0.015 |
+| 1000 genes, 30 cells | 0.35 | 1.63e5 | 461.3 | 0.9978 | 16 | 0.3886 | 1.110 | 0/16 | 0.040 |
+| 1000 genes, 300 cells, `mean_log_mu = 0` | 0.35 | 6.02e5 | 464.1 | 0.9978 | 16 | 0.3599 | 1.028 | 0/16 | 0.15 |
+| 1000 genes, 300 cells | 0.35 | 1.63e6 | 463.6 | 0.9978 | 16 | 0.3536 | 1.010 | 1/16 | 0.40 |
+| 1500 genes, 250 cells | 0.35 | 2.11e6 | 302.3 | 0.9967 | 16 | 0.3533 | 1.009 | 1/16 | 0.52 |
+| **`ORACLE_SIM`: 1500 genes, 250 cells** | **0.50** | 2.12e6 | 282.3 | 0.9965 | 16 | **0.5006** | **1.001** | **7/16** | **1.06** |
+| 15 000 genes, 300 cells | 0.20 | 2.62e7 | 31.5 | 0.9692 | 1 | **0.1955** | **0.977** | 1/1 | 2.10 |
+| 15 000 genes, 100 cells | 0.35 | 8.91e6 | 30.2 | 0.9682 | 8 | **0.3415** | **0.976** | **8/8** | 2.18 |
+| 15 000 genes, 300 cells | 0.35 | 2.62e7 | 30.3 | 0.9683 | 8 | **0.3318** | **0.948** | **8/8** | 6.42 |
+| 15 000 genes, 300 cells | 0.50 | 2.60e7 | 28.4 | 0.9660 | 1 | **0.4669** | **0.934** | 1/1 | 13.0 |
+
+Four things are read off this table and nothing further is claimed from it.
+
+1. **The reversal is real, and it is ordered by exactly the quantity the derivation says orders it.**
+   Reading down the table, `L̃/L_crit` climbs from 0.015 to 13 and the ratio falls monotonically from
+   1.205 to 0.934, crossing 1 where the closed form says it should. The threshold is a heuristic — it is
+   taken at the median gene and drops the `φ r C²` term, whereas `fit_f_dist`'s location is a log-scale
+   central value over the whole gene distribution (its estimator is a mean of
+   `e_g = log s2_g − digamma(d/2) + log(d/2)`), so the aggregate is nearer
+   `GM_g(a_g) · sqrt(GM_g(σ² + v_g))` than the median-gene expression, and two approximation errors of
+   opposite sign are partly cancelling. It is quoted for orientation only and **no code reads it**. What
+   it does earn is this: the single cell it places on the boundary is the single cell that measures as
+   being on the boundary.
+2. **That crossing sits inside the gate's own operating point.** `gate_config.ORACLE_SIM` is 1500 genes,
+   250 cells per donor, 8 v 8, `donor_sigma` = 0.5 — the calibration regime the gate has run at since
+   Amendment 3 — and there the quantity averages **0.5006 against 0.5000** over 16 seeds (sd 0.0021,
+   SE of the mean 0.0005), with **7 of 16 individual realisations below the truth**. A quantity that
+   falls under the value it is supposed to bound on nearly half of single draws is not an upper bound;
+   it is an estimate whose bias happens to be about +0.1 % at this one geometry. At σ = 0.35 on the same
+   geometry the margin is +0.9 %, one realisation in 16 below. Neither is a margin an admission rule can
+   rest on — and the fact that the claim is *nearly* true in the only regime that has ever been
+   exercised is a large part of why it went unchallenged for an amendment.
+3. **Shallow is the wrong place to look, exactly as derived.** The two `mean_log_mu = 0` cells — the
+   intuitive "low expression" probe — move *away* from the reversal, to ratios 1.028 and 1.205 with 0 of
+   16 realisations below σ in either, because thinning adds technical noise without touching CPM.
+   Anyone hunting this failure by thinning the data will conclude the bound is safe, and the thinner
+   they make it the safer it will look.
+4. **Against a realistic universe the shortfall is not a rounding error, and it is not noise.** At
+   15 000 genes — an order of magnitude closer to a real frozen universe than the simulator's 1500 — the
+   quantity reads **2.3 % to 6.6 % below the truth at every σ probed**. The two cells measured over 8
+   seeds are below σ on **8 of 8** realisations with a replicate sd of **0.0003**, because `s0²` over
+   15 000 genes is a very stable quantity: at 300 cells the mean is 0.3318 against a truth of 0.35, a
+   gap of 0.018 against a standard error of the mean of 0.0001. This is a systematic offset, not a
+   sampling accident. The remaining two rows are single realisations far from the boundary and are read
+   only for their sign.
+
+These are development-seed probes, disclosed as such, and each row is read only as far as its seed count
+allows. Together they establish that Amendment 3's claim is false — a counterexample suffices for that.
+The pre-registered quantitative statement is V9's, on disjoint confirmatory seeds.
+
+---
+
+### Change 1 — the estimand, and the derivation term by term (§1)
+
+#### 1.1 The estimand
+
+> **A stratum's `sigma_donor`** is the value that, substituted into `synthetic/oracles.py::simulate`,
+> reproduces that stratum's between-donor dispersion as the pseudobulk arm's own statistic sees it:
+> the standard deviation, on the **natural-log** scale, of the per-(gene, donor) log-normal random
+> effect `re[g,d] = exp(N(−σ²/2, σ²))`.
+
+Three properties of the definition are load-bearing.
+
+**It is pooled over both groups.** The arm's statistic is `wls_two_group`'s pooled residual variance on
+`d = n_A + n_B − 2` degrees of freedom, and Amendment 3's envelope was computed for exactly that
+statistic. Per-group estimates `σ̂_A` and `σ̂_B` are reported as diagnostics and gate nothing.
+
+**Where the groups are unbalanced, the envelope's `n` is `min(n_A, n_B)`.** That is already this
+repository's convention — `census_select.envelope_max_sigma_supported`, from which the frozen
+artifact's column of the same name is built — it is conservative, and it is kept unchanged.
+
+**The simulator has one σ for all genes; a real stratum has a distribution `{σ_g}`.** The estimand is
+therefore a *functional* of that distribution, and which functional is the single question Part A
+deliberately leaves open (Change 3). Everything else here is fixed.
+
+#### 1.2 The generative model, quoted from the code
+
+For cell `c` of donor `d`, gene `g`, group `k`, from `synthetic/oracles.py::simulate`:
+
+```
+counts[c,g] ~ NB(mean = λ, Var = λ + φ λ²),      λ = depth_c · μ_g · re[g,d] · fc[g,k]
+depth_c = exp(N(0, s_dep²)),      s_dep = depth_log_sigma = 0.3
+re[g,d] = exp(N(−σ²/2, σ²)),      σ = donor_sigma, NATURAL log
+μ_g     = exp(N(mean_log_mu, mean_log_sigma²)),      defaults 1.0 and 1.2
+```
+
+Pseudobulk is decoupler's `mode='sum'`: `T[d,g] = Σ_c counts[c,g]`. The library is the row sum of the
+**universe-restricted** matrix, `L_d = Σ_{g∈U} T[d,g]` (`moderated.log_cpm`) — universe restriction is
+part of the arm and is preserved by the estimator. `C = 10⁶·T/L`, and the tested scale is
+`Y = log2(C + 1)`. Write `b_gd = ln re[g,d] ~ N(−σ²/2, σ²)`, `S_d = Σ_c depth_c`, `Q_d = Σ_c depth_c²`.
+
+#### 1.3 T1 — NB sampling noise of the pseudobulk sum
+
+Conditional on `(re, depths)`:
+
+```
+E[T | ·]   = μ_g · re_gd · S_d
+Var[T | ·] = μ_g · re_gd · S_d  +  φ · (μ_g · re_gd)² · Q_d
+```
+
+and the delta method on `ln T` gives
+
+```
+v_lnT[d,g]  ≈  1/E[T | ·]  +  φ · r_d ,          r_d = Q_d / S_d²
+```
+
+Both terms fall as `1/n_cells`: for iid depths `r_d ≈ (1 + cv_depth²)/n_c`, and with
+`depth = exp(N(0, 0.3²))` the squared coefficient of variation is `e^0.09 − 1 = 0.0942`, so
+`r_d ≈ 1.0942/n_c`.
+
+Magnitudes, because this term's importance is entirely regime-dependent. At 250 cells per donor with
+φ = 0.2, `φ r_d = 0.2 × 1.0942/250 = 8.75e-4`, negligible against `σ² = 0.1225` at σ = 0.35. At 30
+cells and a moderate gene (`T ≈ 30`), `1/T + φ r_d = 0.0333 + 0.0073 = 0.0406`; at 10 cells,
+`0.0333 + 0.0219 = 0.0552`. Both are **comparable to `σ² = 0.04` at σ = 0.2**. The correction carries
+its whole weight at the thin end, which is where real strata live: 85 of the frozen list's 502 group
+medians sit in the `[10, 30)` cells-per-donor bin and its smallest per-donor cell count is 10.
+
+#### 1.4 T2 — library-composition noise
+
+`ln C = ln T − ln L + const`. The common factor `ln S_d` enters both and **cancels exactly**: a donor's
+overall depth scale does not appear in CPM. What survives is
+
+```
+ln L_d  ≈  ln S_d + ln( Σ_g w_g e^{b_gd} ) + (NB noise of L),      w_g = μ_g / Σμ
+Var(ln L̃_d)  ≈  (e^{σ²} − 1) · Σ_g w_g²
+```
+
+Bounding it: for log-normal gene means with `mean_log_sigma = 1.2`, `Σ w² ≈ e^{1.44}/G = 4.221/G`, so
+at `G = 1500` it is `2.81e-3`; at σ = 0.5 that gives `(e^{0.25} − 1) × 2.81e-3 = 0.284 × 2.81e-3 =
+8.0e-4`, which is **0.32 % of σ²**. The NB noise of `L` itself is O(1/L) and vanishing. The covariance
+`Cov(b_gd, ln L̃_d) ≈ w_g·(…)` is bounded by the same `Σ w²` and is material only for the handful of
+top-expressed genes.
+
+**T2 is derived as a bounded small addition and is NOT corrected for**; the bound is checked by
+validation rather than assumed. In real data its analogue — donor-specific normalisation shifts — is
+*genuine* between-donor variance that the arm actually experiences. It therefore belongs inside σ and
+must not be subtracted; subtracting it would flatter the estimate in the dangerous direction.
+
+#### 1.5 T3 — the `+1` compression
+
+`Y = log2(1 + C)`, `dY/d ln C = (1/ln 2) · C/(1 + C) ≡ a/ln 2`, with `a_dg = C_dg/(1 + C_dg)`:
+
+```
+Var_within-group(Y[d,g])  ≈  (a_dg² / ln 2²) · [ σ² + v_lnT[d,g] + Var(ln L̃) − 2 Cov(b, ln L̃) ]
+```
+
+This is the term Correction 1 is about. It is a *multiplicative* attenuation of everything inside the
+logarithm — the donor effect included — which is why the estimator must **de-attenuate**, dividing by
+an attenuation factor, and not merely subtract a noise term.
+
+#### 1.6 What the arm's own `s2_g` is an expectation of, written exactly
+
+`wls_two_group` fits `~ 1 + x` with `x` a 0/1 group indicator, so the hat-matrix diagonal is `1/n_A`
+for a donor in group A and `1/n_B` in group B, and
+
+```
+E[s2_g]  =  Σ_d w_d · Var(Y[d,g]),        w_d = (1 − 1/n_{group(d)}) / (n_A + n_B − 2)
+```
+
+with `Σ_d w_d = [(n_A − 1) + (n_B − 1)]/(n_A + n_B − 2) = 1`. Substituting T3:
+
+```
+E[s2_g] · ln 2²  =  σ² · ( Σ_d w_d a_dg² )  +  ln 2² · ( Σ_d w_d v_Y[d,g] )   (+ the bounded T2 term)
+```
+
+where `v_Y[d,g]` is the technical variance **already on the Y scale**, i.e. carrying its own
+`a_dg²/ln 2²`. The estimator inverts this, per gene:
+
+```
+                     s2_g  −  Σ_d w_d · v̂_Y[d,g]
+σ̂²_g   =   ln 2² · ───────────────────────────────  ,        ā²_g  ≡  Σ_d w_d a_dg²
+                                ā²_g
+```
+
+Two details in that line are not cosmetic, and they are pinned here because getting either wrong is
+silent. **`ā²_g` is a weighted mean of squares, not the square of a weighted mean** — using `(Σ w a)²`
+inflates σ̂ by `Var_d(a_dg)`, a safe direction but a wrong number. And **the weights are the df weights
+`w_d`, not `1/n`** — at `n_A = 3` the factor `1 − 1/n_A = 2/3` is a 33 % correction, and the two
+coincide only when the groups are balanced. The frozen list holds designs as skewed as 100 versus 10
+donors (#5) and 20 versus 7 (#3), so this is a live case and not a limit.
+
+#### 1.7 T4–T6, the terms that are named and not corrected
+
+* **T4 — between-cell depth variation.** Cancels in CPM in the mean (through `S_d`, step 1.4) and
+  enters only via `r_d` in T1. Not separately corrected.
+* **T5 — second-order delta-method error.** The expansion truncates at first order in `b`, which
+  matters most at σ = 0.7 where the log-normal is visibly skewed; and `E[1/T] > 1/E[T]` (Jensen) at
+  small `T` biases a plug-in `v̂` **upward** and hence `σ̂` **downward** — the dangerous direction. It is
+  suppressed by the estimation stratum's count floor (`ESTIMATION_MIN_MEDIAN_COUNT`, Change 2) rather
+  than corrected analytically, and its residue is measured as net bias by V1 and V2.
+* **T6 — selection bias from choosing the estimation stratum.** Genes are selected on the
+  **label-agnostic median CPM pooled over all donors** — never on a minimum, never on any quantity
+  involving the condition labels, and never on observed variance, so the selection is not made against
+  the quantity being estimated. The residual direction and magnitude are measured by V1/V2, not
+  asserted.
+
+#### 1.8 What a real stratum can and cannot yield
+
+**Estimable.** `T_dg` and `L_d` directly; `a_dg` as a plug-in from the observed CPM; `r_d` **exactly**
+from the per-cell library sizes `ℓ_c`, since within a donor `ℓ_c ∝ depth_c` and the composition
+constant cancels in `Σℓ²/(Σℓ)²`; `φ` from the per-cell counts within donor by method of moments with
+`ℓ_c` as the depth covariate, pooled over genes; and `v_Y[d,g]` **directly**, by resampling the donor's
+own cells (E2, Change 2) — which is the reason E2 rather than E1 is primary.
+
+**Not estimable.** Per-gene `σ_g` separately from the library-composition term at single-gene
+resolution; it is bounded above by T2's derivation and reported, not identified. And the state of donor
+pooling: D3 is `unresolved` on 251 of 251 frozen strata, so donor pseudobulk is a lower bound on the
+correct replication unit and every `σ̂` inherits that caveat. It is written into the manifest row beside
+the estimate; it is not resolved here and cannot be.
+
+---
+
+### Change 2 — the estimator: E2-bootstrap primary, split-half as the scaling cross-check, E1 as a misspecification detector, E3 reported
+
+All three candidates share the skeleton of 1.6 and differ only in the source of `v̂_Y`. All three are
+computed in one pass; the cost is set by E2.
+
+**E2 — non-parametric within-donor resampling. PRIMARY.** Two implementations, both required, each the
+other's cross-check.
+
+* **Bootstrap — the primary source of `v̂`.** `B_BOOT = 50` times, rebuild the donor's pseudobulk profile
+  by multinomial resampling of its own cells (one sparse mat-vec per replicate), recompute the
+  universe-restricted `L*`, `C*` and `Y*`, and take `v̂_Y[d,g] = Var_B(Y*_dg)`. This estimates the
+  technical variance **at full depth with no rescaling**, and it automatically contains T1, T3, the NB
+  noise of the library, and any within-donor structure the cells themselves carry. It assumes no
+  parametric count model whatsoever.
+* **Split-half — the scaling cross-check.** `SPLITHALF_R = 20` random partitions of the donor's cells
+  into halves `n1 + n2 = n_c`. Both technical terms scale as `1/cells` **exactly in expectation** — the
+  Poisson term through `S_d`, the dispersion term through `r_d`, both by 1.3 — so the
+  half-depth-to-full-depth conversion is
+  ```
+  v̂_full  =  E_splits[ (Y_h1 − Y_h2)² ]  /  ( n_c · (1/n1 + 1/n2) )        [ = …/4 when n1 = n2 ]
+  ```
+  The unequal-halves form is **mandatory, not an optimisation**: `n_c` is odd about half the time, and
+  at the inclusion gate's floor of 10 cells the difference between `/4` and the exact divisor is not a
+  rounding error. The two-line proof of the `1/cells` scaling is carried in the function's docstring,
+  beside the code that depends on it.
+
+E2's per-donor `v̂` does not depend on the number of donors, so it does not degrade at `n = 3`; its
+residual error is O(1/n_c) *relative*. Its cost is `B_BOOT` sparse mat-vecs per donor, and per-donor
+slices and the resampling mat-vec are computed without densifying, after `io_counts._iter_value_blocks`.
+
+**E1 — `nb_plugin`, the misspecification detector.** `v̂_Y[d,g] = (a_dg²/ln 2²) · (1/max(T_dg, 1) +
+φ̂ · r_d)`, with `φ̂` estimated from the per-cell counts inside each donor by moments
+(`Var_c(x_cg) = m̄ + φ m̄² (1 + cv_ℓ²)`, solved for φ, pooled robustly over genes and donors). It is
+nearly free, and it is **not** primary for a reason stated rather than discovered: under zero inflation
+it underestimates `v` and therefore overestimates σ, which is safe; but under within-donor substructure
+that NB cannot see it also underestimates `v`, and there the direction is **not** guaranteed. Its role
+is that of a dissenting witness — `|σ̂_E1 − σ̂_E2| > 0.05` raises an `nb_misspecification` flag, always
+reported, and blocking only if V7's M4 arm fails.
+
+**E3 — `plateau`, reported and never primary.** Restrict to genes whose predicted technical share is
+negligible (`v̂_Y ≤ ε · median(s2)` and `a ≥ 0.95`) and read `s2_g · ln 2² ≈ σ²` off directly, located by
+the unbiased log-scale construction `fit_f_dist` already uses. It is the simplest of the three and it
+errs upward — residual technical noise only adds — which is the safe direction. But on thin or small
+strata no such genes exist and it is **obliged to refuse**, and that is exactly the zone of real-data
+risk. It is reported as a consistency check and gates nothing.
+
+**Constants.** These enter `gate_config` as a new `SIGMA_GATE` block in `PRE_REGISTERED` once this Part
+A is committed. `scripts/sigma_probe.py` carries its own copy and does **not** import `gate_config`,
+following the anti-circularity pattern that module's docstring sets out for
+`scripts/pb_calibration_probe.py`; a test pins the two copies equal, as `tests/test_gate_config.py`
+already does for the existing constants.
+
+| constant | value | why this value |
+|---|---|---|
+| `B_BOOT` | 50 | the relative Monte-Carlo error of a variance over 50 replicates is `sqrt(2/49)` = 20 % per gene per donor, averaged down by the df-weighted pooling over donors and by the ≥ 100-gene estimation stratum |
+| `SPLITHALF_R` | 20 | cross-check only; not the primary `v̂` |
+| `ESTIMATION_MIN_MEDIAN_CPM` | 20.0 | `a = 20/21 = 0.952 ≥ 0.95`, which bounds the de-attenuation divisor so it cannot amplify error without limit. It does **not** make the naive bound safe — at `a = 0.952` and σ = 0.35 that bound still needs `v̄ ≥ 0.1225 × (1/0.9070 − 1) = 0.0126` — which is why the estimator de-attenuates instead of assuming `a ≈ 1` |
+| `ESTIMATION_MIN_MEDIAN_COUNT` | 10 | suppresses T5's Jensen bias on `1/T`, which pushes σ̂ **down** |
+| `MIN_ESTIMATION_GENES` | 100 | below this the per-gene aggregate is not a distribution |
+| `UCB_LEVEL` | 0.90 | Change 4 |
+| `ENVELOPE_LOOKUP` | `"step_up"` | Change 4 item 3 |
+| `E1_E2_DIVERGENCE_FLAG` | 0.05 | in σ units; the flag above |
+| `MAX_TECHNICAL_SHARE` | 0.8 | Change 4 item 4 |
+
+**The pre-declared reasons for an `indeterminate` verdict.** A stratum is `indeterminate` — excluded
+from the sweep and **counted, with its reason, in the D4 excluded-strata statistic** — if and only if
+one of the following holds. The list is closed as of this commit; adding to it later is an amendment.
+
+1. Fewer than `MIN_ESTIMATION_GENES` = 100 genes pass the estimation-stratum filters.
+2. Degenerate jackknife: some leave-one-donor-out replicate fails to produce a finite functional, or
+   `SE_jack` is not finite.
+3. Median technical share `median_g( Σ_d w_d v̂_Y[d,g] / s2_g ) > MAX_TECHNICAL_SHARE = 0.8` — the
+   estimate would be mostly its own correction.
+4. A Tier-C misspecification signature that V7 converts into a blocking flag. The **set** of candidate
+   signatures is fixed now — LODO influence (M3), E1/E2 divergence (M4), the coefficient of variation
+   of cells per donor (M2), and the realised `d0` of the corrected per-gene values (M1) — and *which* of
+   them block is decided mechanically by which Tier-C arms fail V7.
+5. Median cells per donor below a floor, **if and only if V2 fails at 10 cells**, in which case the
+   floor is 30 and is written into the rule automatically rather than invented afterwards.
+
+---
+
+### Change 3 — the aggregation functional, and the mechanical rule that will select it
+
+The simulator has one σ, the envelope is indexed by a scalar, and a real stratum has `{σ_g}`. Something
+has to collapse.
+
+**The primary aggregate is a pooled moment and not a quantile, and the reason is arithmetic.** Per-gene
+`σ̂²_g` at `d = n − 2 ≤ 14` degrees of freedom is enormously noisy: `s2_g` has relative standard
+deviation `sqrt(2/d)`, which is 71 % at 3 v 3 (`d = 4`) and 38 % at 8 v 8 (`d = 14`). A quantile of
+`{σ̂²_g}` is therefore a quantile of the *convolution* of the true `σ_g` distribution with that noise,
+which is systematically wider than the truth — a per-gene q75 reads high, a per-gene q25 reads low, and
+neither estimates the corresponding quantile of `σ_g`. What **is** honestly estimable is the **mean of
+the variances**, because the noise averages out:
+
+```
+M  =  mean_{g ∈ estimation stratum} σ̂²_g      estimates      mean_g σ_g²  ,        σ_rms = sqrt(M)
+```
+
+Negative per-gene values are **not clipped before aggregation** — clipping a symmetric noise
+distribution at zero is a systematic upward bias, and it is exactly the sort of quiet safety margin
+this log exists to prevent. Clipping happens once, on the final scalar, and the fraction of negative
+per-gene mass is reported.
+
+**The four candidate gate functionals** are `rms`; `trimmed_rms_10`, a two-sided 10 % trim of the
+per-gene values; `median_log`, the `fit_f_dist` location over corrected values, i.e. approximately a
+geometric mean, which under heterogeneity is expected to read low and therefore expected to be
+rejected; and `q75`.
+
+**There is an analytic prior in favour of `rms`, and it is labelled a prior.** The arm's sensitivity
+over K random genes is `E_g[power(σ_g²)]`; in the operating region power is convex and decreasing in
+σ², so by Jensen `power(mean_g σ_g²) ≤ E_g[power(σ_g²)]` — gating on the RMS is conservative relative
+to the sensitivity actually achieved. That is an argument, not a measurement, and this amendment does
+not let it decide.
+
+**The choice is made by a mechanical rule, declared now and applied to data not yet seen.** This is
+Amendment 2 Change 1's device, used here in the honest order rather than the retrospective one:
+
+> Among the four functionals, discard any whose wrong-admission rate exceeds V5's threshold on **any**
+> heterogeneous cell of Tier C arm M1 — where a cell's ground truth is the **measured** sensitivity of
+> the `ebayes` arm on the pre-registered oracle (log2FC = 1.0, K = 200), the cell counting as `inside`
+> iff that sensitivity is ≥ 0.60. Among the survivors, choose the one **maximising pooled deep-inside
+> admission**, V6's statistic. Ties are broken toward the **simplest** functional, in the declared
+> complexity order `rms < trimmed_rms_10 < median_log < q75`.
+
+If the rule eliminates all four, that is the result: no functional is fit for the job, no
+`GATE_FUNCTIONAL` constant is written, and the failure comes back to this log. If the rule turns out
+degenerate on the realised grid, as Amendment 2's worst-case-power rule did, the degeneracy is reported
+and the non-degenerate reformulation is argued in Part B in the open, as Amendment 2 did — never
+repaired quietly.
+
+**Reported alongside, and never in place of, the scalar**: quantiles of the corrected per-gene values,
+carrying the convolution caveat above; the realised `d0` from `fit_f_dist` over corrected values as a
+heterogeneity measure; per-group `σ̂_A` and `σ̂_B`; and the tail mass `P(σ̂²_g > k·M)`.
+
+**What the scalar loses, stated rather than discovered.** It cannot represent bimodal `σ_g`. A stratum
+with a low RMS and a heavy tail is admitted at a σ for which its tail genes are not covered; the tail
+metric makes that partly visible and does not fix it. The limitation is repeated in *What this does NOT
+settle*.
+
+---
+
+### Change 4 — the operating-envelope membership rule (§1 inclusion gate)
+
+**The error being excluded, and why it is asymmetric.** Understating σ admits strata for which the arm
+is not valid, and the arm is the denominator of every inflation number (§10 risk 1; decision rule item
+1's VOID → NO-GO). Overstating σ merely excludes valid strata, which costs sample size and is reported
+honestly in the D4 excluded-strata bookkeeping. **The project is defended against understatement**, and
+every choice below breaks that way.
+
+1. **The gate reads an upper confidence bound, not the point estimate.** `σ_gate = UCB_90(σ_f)`, a
+   one-sided 90 % upper bound on the selected functional.
+
+2. **The interval is a leave-one-donor-out jackknife, clustered on the donor.** For each of the
+   `n_d = n_A + n_B` donors, drop it and recompute **everything** — `s2`, the `v̂` rows, `ā²`, and the
+   aggregate — then
+   ```
+   SE_jack  = sqrt( (n_d − 1)/n_d · Σ_i (θ_(i) − θ̄)² ) ,     θ = the functional, on the σ² scale
+   UCB(σ²)  = θ̂ + t_{0.90, n_d − 1} · SE_jack ,              σ_gate = sqrt(max(UCB, 0))
+   ```
+   with `t_{0.90, n_d−1}` = 1.476 / 1.415 / 1.341 / 1.316 at `n_d − 1` = 5 / 7 / 15 / 25, i.e. 3 v 3 /
+   4 v 4 / 8 v 8 / 13 v 13. The donor is the right cluster because between-gene correlation *within* a
+   donor is large in real data and any per-gene interval would be fictitiously narrow. The alternative
+   — a parametric donor bootstrap — is named and **not** chosen: at `n = 3` it is more degenerate than
+   the jackknife and it reintroduces a model assumption the estimator has otherwise avoided. Jackknife
+   coverage at `n = 3…4` is not assumed; it is measured by V4.
+
+3. **Between the envelope's four tabulated points: step up, do not interpolate.** `σ_gate` is rounded
+   **up** to the nearest tabulated `sigma_donor` in `gate_config.OPERATING_ENVELOPE` — {0.2, 0.35, 0.5,
+   0.7} — and that row's `min_donors_per_group` is applied. `σ_gate ≤ 0.2` uses the 0.2 row;
+   `σ_gate > 0.7` is outside the envelope and there is **no extrapolation**. Power falls monotonically
+   in σ across the grid, so stepping up is strictly conservative with respect to the envelope as
+   declared and requires no new pre-registered power model. The rule **reads**
+   `gate_config.OPERATING_ENVELOPE` and does not restate its numbers.
+
+   **The cost of the branch not taken is stated, because it is real.** Interpolating along Amendment
+   1's analytic frontier would admit strata in the wedges — a stratum estimated at σ̂ = 0.4 with 10
+   donors per group, say, which step-up rejects — but doing that honestly requires pre-registering a
+   power model *between* the tabulated points and validating it, which is a second grid of work.
+   Step-up loses those strata and requires nothing; the loss will be visible in the manifest, since
+   `envelope_max_sigma_supported` already exposes the wedge. If real strata turn out to cluster there,
+   interpolation is a future amendment with its own validation — not a decision to be taken at analysis
+   time.
+
+4. **Four verdicts, and only four.** `inside` | `outside_underpowered` (`min(n_A, n_B)` below the
+   stepped-up row's requirement) | `outside_above_envelope` (`σ_gate > 0.7`) | `indeterminate` (the
+   closed list in Change 2). `indeterminate` is an exclusion, never a pass, and is counted in D4.
+
+5. **`n` for the envelope is `min(n_A, n_B)`**, per 1.1.
+
+6. **The audit column.** `sqrt(s0²)·ln 2` is written into the manifest row beside every estimate,
+   together with the realised `ā`, the median `L` and the technical share, so a reader can see what the
+   correction did and can locate the stratum relative to Correction 1's threshold. Per Correction 1 it
+   is an **audit quantity of unknown error sign** and gates nothing in either direction.
+
+7. **The pooling caveat rides along.** Every emitted estimate carries the freeze's D3 state —
+   `pooled = unresolved`, donor pseudobulk a lower bound on the correct replication unit. A σ̂ from a
+   stratum whose donors may share a lane is a σ̂ of the wrong unit, and no verdict above repairs that.
+
+8. **Admission remains a separate act.** `fill_sigma_columns` fills `sigma_donor_estimate`,
+   `envelope_min_donors_per_group` and `envelope_membership`, and leaves `admitted_to_sweep = False`.
+   Two of the freeze's four blockers — `integer_check` and `frozen_universe_size` — are untouched by
+   this amendment and still stand on all 251 rows.
+
+---
+
+### Change 5 — the validation grid, and its PRE-DECLARED criteria V1–V9
+
+The generator for well-specified cells is `synthetic/oracles.py::simulate`, used **verbatim**:
+`oracles.py` is the frozen correctness specification of the engine and is not modified. The
+misspecification generators of Tier C live in `scripts/sigma_probe.py`, following the precedent that
+the Amendment 2 selection grid's generative arms lived in `scripts/pb_calibration_probe.py`.
+
+**Seeds.** Development runs on the disclosed range `seed ∈ [1, 999]`. The confirmatory grid runs on a
+range that cannot overlap it: replicate `r` of cell `i` uses
+
+```
+seed(i, r)  =  1000 · (20260816 + i)  +  r ,        0 ≤ i < 176 ,  0 ≤ r < 1000
+```
+
+so the smallest confirmatory seed is 20 260 816 000. Cells are indexed in the tabulated order below,
+Tier A then Tier B then Tier C, from zero.
+
+**Tier A — verdicts and coverage.** `σ ∈ {0, 0.1, 0.2, 0.275, 0.35, 0.425, 0.5, 0.6, 0.7, 0.85}` ×
+donors per group `∈ {3, 4, 6, 8, 13, 24}`; fixed at 1000 genes, 300 cells per donor, φ = 0.2, simulator
+defaults otherwise. **60 cells × 200 replicates = 12 000 simulations.** The σ grid deliberately
+includes 0, three points *between* the envelope's tabulated values (0.275, 0.425, 0.6) where step-up
+does its work, and one point above the envelope (0.85); the donor grid includes 3 and 4, where the
+jackknife is weakest.
+
+**Tier B — bias and RMSE against cells per donor, dispersion, and universe width.** 50 replicates per
+cell.
+
+* `σ ∈ {0, 0.2, 0.35, 0.5}` × `n ∈ {4, 8}` × cells `∈ {10, 30, 100, 1000, 3000}` at φ = 0.2 — **40
+  cells.** This spans and exceeds the 10 … 1000 range the inclusion gate admits and reaches the frozen
+  list's real ceiling of 6671.5 median cells per donor from below.
+* `σ ∈ {0, 0.2, 0.35, 0.5}` × `n ∈ {4, 8}` × `φ ∈ {0.05, 0.8}` × cells `∈ {30, 300}` — **32 cells.**
+* `σ ∈ {0, 0.2, 0.35, 0.5}` × `n ∈ {4, 8}` × **`n_genes = 15 000`** × cells `∈ {100, 300}` — **16
+  cells.** This is the **compression block**, and its design follows Correction 1 rather than intuition.
+  The instinctive way to probe the `+1` compression is to make the data *shallow*; Correction 1's table
+  shows that moves away from the effect, because CPM is invariant to a global scale on gene means while
+  `1/T` is not. What sets the attenuation is how many genes share the million. A 15 000-gene universe
+  is also the realistic one: `gate_config.ORACLE_SIM`'s 1500 genes is roughly an order of magnitude
+  narrower than a real frozen universe, which is the structural reason Amendment 3's claim looked safe.
+
+**88 cells × 50 replicates = 4400 simulations.**
+
+**Tier C — misspecification: regimes the simulator was not built for.** 100 replicates per cell.
+
+* **M1, gene-varying σ.** `σ_g` log-normal with median `∈ {0.2, 0.35, 0.5}` × heterogeneity
+  `∈ {0.4, 0.8}` × `n ∈ {4, 8, 13}` — 18 cells. Each replicate **additionally** measures the `ebayes`
+  arm's sensitivity on the pre-registered oracle (log2FC = 1.0, K = 200); that measurement is the ground
+  truth for Change 3's functional-selection rule and exists for no other purpose.
+* **M2, unequal cells per donor.** `n_c ~ LogUniform(18, 3000)` — 2 cells.
+* **M3, donor outlier.** One donor per group displaced by 3σ — 2 cells.
+* **M4, zero inflation.** Extra dropout `π ∈ {0.15, 0.3}` — 4 cells.
+* **M5, unbalanced groups.** 3 v 8 and 4 v 13 — 2 cells.
+
+**28 cells × 100 replicates = 2800 simulations.** Expected directions are declared in advance, so a
+surprise is recognisable as one: M4 — E1 underestimates `v` and therefore **overestimates** σ (safe),
+E2 approximately unbiased; M3 — σ̂ up (safe), with the LODO influence diagnostic lighting up; M2 — E2
+carries, E1 degrades.
+
+**Total: 176 cells, 19 200 simulations.** The budget is deliberately not stated as a promise: 160 of the
+176 cells cost about a second each, but the 16 compression cells carry fifteen times the genes of every
+other cell and will dominate the wall clock by a wide and, at the time of writing, unmeasured margin.
+That is precisely why the driver (`scripts/run_sigma_grid.py`) is **resumable and takes a time budget**,
+after `scripts/run_test_selection_grid.py`, and why the grid runs on the PC as the 146-cell grid did
+rather than in CI. The summary lands in `pilot/sigmaval/summary.{csv,json}` and is committed; per-cell
+JSON is not, following `pilot/testsel/`. A run that exhausts its budget short of the full grid is
+reported as an incomplete grid with the missing cells named — never as a grid whose scope was the cells
+that finished.
+
+**Metrics.** Bias, relative bias and RMSE of `σ̂_rms`; one-sided coverage of the UCB; and — the deciding
+metric — **the frequency of a wrong verdict in each direction, separately**. In Tiers A and B the
+verdict's ground truth is obtained by applying the *same* step-up procedure to the **true** σ, so
+correctness is measured against the envelope as declared and not against an unstated power model. In
+Tier C arm M1 the ground truth is the measured sensitivity of Change 3.
+
+#### The criteria. Every number below is fixed by this commit and none is to be moved after the run
+
+**V1 — bias, core.** Every Tier-A cell with `n ≥ 4`: `|mean σ̂_rms − σ| ≤ max(0.03, 0.10·σ)`.
+*On failure*: the estimator is not fit to gate admission; no `GATE_FUNCTIONAL` is written and the
+failing region is reported. It is **not** narrowed to the cells that happened to pass.
+
+**V2 — bias, thin end.** Tier-B cells at 10 and 30 cells per donor: `|bias| ≤ max(0.05, 0.15·σ)`.
+*On failure at 10 cells only*: the pre-declared consequence fires automatically — strata whose median
+cells per donor is below 30 receive `indeterminate` (Change 2, reason 5). The threshold is not relaxed;
+the estimator's domain is narrowed, and the narrowing is written into the gating rule rather than
+invented after the fact. *On failure at 30 cells*: as V1 — the estimator fails, because `[30, 100)` is
+the frozen list's modal cells-per-donor bin.
+
+**V3 — RMSE.** Reported for every cell; **not binding**. Its decision-relevant projection is V5/V6, and
+a second binding threshold on the same quantity would be double counting.
+
+**V4 — UCB coverage.** Every Tier-A cell with `n ≥ 4`: `P(σ_UCB ≥ σ) ≥ 0.85` against the nominal 0.90;
+pooled over the tier, `≥ 0.88`. The Monte-Carlo SE of a coverage estimate at 0.90 over 200 replicates is
+`sqrt(0.9 × 0.1/200) = 0.021`, so 0.85 sits a little over two SE below nominal — tight enough to catch a
+broken interval, loose enough not to fail on Monte-Carlo error. `n = 3` is **reported and not binding**:
+the envelope's easiest row already demands 4 donors per group, so a 3 v 3 stratum is never admitted
+whatever its interval does.
+*On failure*: the jackknife is not delivering the coverage the gate assumes, the gate is not usable as
+specified, and the alternative named in Change 4 item 2 goes on the table as a future amendment with its
+own validation.
+
+**V5 — false admission. The main criterion.** On deep-outside cells — those whose true σ is at least one
+tabulated step above what the cell's `n` supports — `P(verdict = inside) ≤ 0.05` in **every** such cell
+and `≤ 0.02` pooled.
+*On failure*: the gate admits strata the arm is invalid for, which is spec §10 risk 1. The estimator does
+not gate admission. No threshold moves.
+
+**V6 — the price of over-exclusion.** On deep-inside cells — those where `n` suffices even for the next
+tabulated σ upward — `P(inside) ≥ 0.80` in every such cell and `≥ 0.90` pooled. Borderline cells are
+**reported and not binding**: an upper-confidence-bound gate is *supposed* to cut them, and binding there
+would penalise the construction for working.
+*On failure*: the instrument is honest but unusable, excluding nearly everything. That is reported as
+such, and the sweep-feasibility question (freeze §6) is answered in the negative for reasons of
+instrument conservatism rather than of real σ. It is not repaired by loosening the UCB.
+
+**V7 — misspecification.** In each Tier-C arm, wrong-admission must be `≤ 2 ×` the corresponding
+well-specified Tier-A cell.
+*On failure*: **the threshold does not move, and the failing arm's pre-declared signature becomes a
+blocking `indeterminate` flag** (Change 2, reason 4) — LODO influence for M3, E1/E2 divergence for M4,
+cells-per-donor coefficient of variation for M2, realised `d0` of the corrected values for M1. The
+estimator's domain shrinks to the strata that do not show the signature, and the shrinkage is reported as
+a result. **This is one of the two failures whose consequence is a new blocking flag rather than a moved
+threshold.**
+
+**V8 — double use of the data.** Among Tier-A replicates whose verdict is `inside`, the `ebayes` arm's
+fresh-null false-positive rate — the fraction of replicates with at least one BH rejection — must be
+`≤ α + 2 · MC SE`, with `MC SE = sqrt(α(1 − α)/n_inside)` computed from the realised count of `inside`
+replicates. A stratum selected for having drawn a *quiet* realisation of its donors must not thereby
+become anti-conservative conditional on that selection.
+*On failure*: the selection is not benign and admission must be conditioned differently. **This is the
+second failure whose consequence is a new blocking flag rather than a moved threshold**: the estimator
+does not gate admission at all until a selection-aware rule is pre-registered in a further amendment.
+
+**V9 — the correction is not a no-op, and Amendment 3's bound is demonstrated to reverse.** Two clauses,
+both binding.
+
+* **V9a.** At the Tier-B cell (1000 genes, 30 cells per donor, φ = 0.2, σ = 0.35, `n = 8`): the bias of
+  `sqrt(s0²)·ln 2` must be at least **3 ×** the absolute bias of `σ̂`. Over 16 development seeds that
+  cell puts `sqrt(s0²)·ln 2` at 0.3886 (sd 0.0031), a bias of +0.0386, so the clause demands
+  `|bias σ̂| ≲ 0.013`. **That is roughly four times tighter than V2 permits at the same cell, and the
+  asymmetry is intentional** — it is stated here so a V9a failure cannot later be re-read as a V2 pass.
+* **V9b.** At the Tier-B compression cell (`n_genes = 15 000`, 300 cells per donor, φ = 0.2, σ = 0.35,
+  `n = 8`): the **mean over replicates** of `sqrt(s0²)·ln 2` must be `< σ`. This is the obligatory
+  demonstration that Amendment 3's "upper bound" stops being an upper bound in the regime real universes
+  occupy. The full 50-replicate distribution is reported, not merely its mean. **Its expected outcome is
+  disclosed rather than dramatised**: the development probes already put this cell at 0.3318 with a
+  replicate sd of 0.0003 and 8 of 8 seeds below σ, so V9b is expected to pass. It is pre-registered on
+  disjoint confirmatory seeds all the same, because its job is to pin a reproducible demonstration into
+  a committed artifact rather than to manufacture suspense — and because a criterion written after its
+  own run would be worth nothing regardless of which way it went.
+
+*On failure of V9a*: the correction is not earning its complexity at the thin end and the estimator's
+advantage over the mechanism is not demonstrated there — reported, with the estimator's fate decided by
+V1/V2/V5 as usual. *On failure of V9b*: Correction 1's empirical demonstration has failed at the cell
+chosen for it. Correction 1's algebra stands on the derivation and on the counterexamples in its own
+table regardless — but the failure is recorded, the cell's inadequacy is diagnosed, and the demonstration
+is **not** quietly moved to a cell where it works.
+
+**Change 3's functional-selection rule** is applied mechanically to Tier C arm M1 together with Tier A,
+and its outcome is fixed in Part B. It is not a criterion and cannot pass or fail; it selects, or it
+eliminates everything.
+
+---
+
+### What this does NOT settle
+
+* **The real anchor §8(b) asks for.** This amendment validates an estimator *in the simulator's
+  coordinates*. It does not pin `sigma_donor` to a real empirical mean–dispersion / donor-variance
+  trend, and a validated estimator of the wrong model's parameter is still wrong. Oracle (d), Mathys
+  2019 (§8(d)), remains **binding and unrun**, and is now additionally blocked on a ROSMAP data-use
+  agreement begun 2026-08-16 and on a second, unwritten loader (freeze §8).
+* **The pooling question.** `pooled = unresolved` on 251 of 251. Donor pseudobulk remains a lower bound
+  on the correct replication unit, the D3 gold-standard claim cannot be made on any stratum in the list,
+  and every σ̂ this machinery produces inherits that caveat. Nothing here improves it.
+* **Whether any real stratum lands inside the envelope.** The freeze's §6 tiers stay a scenario analysis
+  until the estimator runs on real data. At σ ≈ 0.5 the surviving set is 5 of 12 datasets, below §1's own
+  8–12 floor, and a negative answer remains a live outcome of this study rather than a failure mode to be
+  designed around.
+* **Bimodal or heavy-tailed `σ_g`.** A single scalar cannot represent it (Change 3). A stratum with a low
+  RMS and a heavy tail is admitted at a σ its tail genes are not covered by; the tail metric makes that
+  partly visible and nothing here fixes it.
+* **Interpolation inside the envelope's wedges** is not provided, and neither is any extension below
+  σ = 0.2. Both are named as possible future amendments with their own validation grids, and neither may
+  be improvised at analysis time.
+* **Which functional gates.** That is Part B's, decided by Change 3's rule and by nothing else.
+* **Whether the estimator passes at all.** Part A claims no result. If V1, V2, V4, V5, V6 or V7 fails,
+  admission stays closed and the failure is reported here.
+* **A2 stratification remains deferred** (Amendment 2 Change 6); the naive arm's floor is still
+  cell-count confounded and guarded only by a range check.
+* **The GO/NO-GO decision is not taken.** An estimator that gates admission licenses a measurement, not a
+  conclusion.
+
+*Author attests: every figure in this entry was derived while writing it. The ten probes under
+Correction 1 were run against this repository's own arm code on disclosed development seeds; the algebra
+of Correction 1 and of Change 1 was checked term by term against `synthetic/oracles.py` and
+`src/pbcheck/methods/moderated.py` rather than quoted from an earlier entry; the frozen list's
+distributional figures are taken from `docs/PREREGISTRATION_STRATUM_LIST.md` as committed. No real data
+informed this amendment. The confirmatory grid has not been run and no criterion V1–V9 has an outcome.
+Every probe row is read only as far as its seed count allows, and where a number is a single realisation
+rather than a mean it is said so. The `L ≷ 10⁶/(2σ²)` threshold that orders the probe table is labelled
+a heuristic, its two cancelling approximations are named, and it is read by no code. The correction to
+Amendment 3 is stated as the reversal of a published claim of this log, not as a clarification of it.*
