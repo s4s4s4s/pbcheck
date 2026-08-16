@@ -26,8 +26,14 @@ judgement about biology and not a filter). Every row carries ``admitted_to_sweep
   sweep now additionally requires a per-stratum ``sigma_donor`` estimate and membership in
   :data:`pbcheck.gate_config.OPERATING_ENVELOPE` at that stratum's donors-per-group. Amendment 3
   supplies a *mechanism* (the moderated arm's ``s0^2``, times ln 2) and explicitly **not** an anchor:
-  that quantity is an *upper bound* on ``donor_sigma``, the conversion is unvalidated, and "the
-  ``sigma_donor`` anchoring demanded by Amendment 1 therefore remains OPEN". So
+  the conversion is unvalidated and "the ``sigma_donor`` anchoring demanded by Amendment 1 therefore
+  remains OPEN". Amendment 3 also called that quantity an *upper bound* on ``donor_sigma``;
+  **Amendment 4 Part A, Correction 1 retracts that** and demotes it to an **audit quantity of
+  unknown error sign**. The ``+1`` of ``log2(CPM + 1)`` attenuates the donor random effect along
+  with everything else inside the logarithm, so the quantity carries a factor ``a_bar <= 1`` that
+  pulls it *below* ``donor_sigma`` while the residual technical variance pushes it above; which
+  wins is a property of the stratum, and on clean, wide-universe data the attenuation does. It is
+  reported beside every estimate as an audit column and gates nothing in either direction. So
   ``sigma_donor_estimate`` and ``envelope_min_donors_per_group`` are pending here.
   ``envelope_max_sigma_supported`` is the one envelope number this module *can* compute honestly —
   the largest ``sigma_donor`` whose donor requirement this stratum's donor count already meets, i.e.
@@ -218,7 +224,10 @@ PENDING_FIELDS = MappingProxyType({
         "analog of DESeq2's fitType is the realised prior (prior df / shrinkage)",
     "sigma_donor_estimate":
         "OPEN — Amendment 3 Change 1 supplies a mechanism (sqrt(s0^2) * ln 2 from the moderated "
-        "fit) and states it is an UPPER BOUND, not an estimate; the anchor is not delivered",
+        "fit) and called it an UPPER BOUND; Amendment 4 Part A Correction 1 RETRACTS that and "
+        "demotes it to an AUDIT QUANTITY OF UNKNOWN ERROR SIGN — the +1 of log2(CPM + 1) "
+        "attenuates the donor effect too, so it understates donor_sigma on clean, wide-universe "
+        "data — and it gates nothing in either direction; the anchor is not delivered",
     "envelope_min_donors_per_group":
         "requires sigma_donor_estimate; the envelope demand is a function of that unmeasured knob",
     "envelope_membership":

@@ -333,7 +333,18 @@ def ebayes_from_pdata(
     attached as the ``.moderation`` attribute.
     """
     if universe is not None:
-        keep = [g for g in universe if g in set(pdata.var_names)]
+        # The set is built ONCE, outside the comprehension. It used to sit inside the condition, so
+        # the pandas Index was rebuilt into a set per candidate gene and the restriction was O(G^2):
+        # profiled at G = 15 000 that single line took 113.7 s of a 115.5 s call, 98 % of the cost,
+        # against 0.02 s hoisted. Invisible at the 1500-gene ORACLE_SIM the gate has always run at,
+        # and paid on every stratum, every permutation and every jackknife replicate of a real sweep
+        # against a realistic frozen universe. The result is unchanged and the ordering is still the
+        # universe's, not the matrix's. Amendment 4 Part A, Correction 1's reproducer is what
+        # surfaced it. NOTE: the same construction survives in ``methods/pseudobulk.py`` (the
+        # superseded DESeq2 arm) and in ``scripts/pb_calibration_probe.py`` (the frozen reference
+        # instrument, deliberately not edited); neither is on this arm's path.
+        present = set(pdata.var_names)
+        keep = [g for g in universe if g in present]
         pdata = pdata[:, keep].copy()
     if pdata.n_vars == 0:
         raise ValueError("No genes to test after universe restriction.")

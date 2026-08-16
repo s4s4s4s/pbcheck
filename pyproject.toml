@@ -34,6 +34,15 @@ dependencies = [
 [project.optional-dependencies]
 # Only needed to run the real-data audit against the CELLxGENE Census.
 census = ["cellxgene-census"]
+# Only needed to re-fetch the pinned pre-registration evidence
+# (scripts/fetch_preregistration_evidence.py). TileDB-Py reads the pinned Census release's own
+# census_info/datasets array directly, which is how §8's Mathys claim is settled against the
+# release rather than against a later read of Discover. It is a separate extra from `census`
+# because cellxgene-census/tiledbsoma publish no Windows wheels and TileDB-Py does, so this path
+# works where that one does not. Nothing in src/ or tests/ imports it: it stays out of the test
+# environment and out of requirements.lock, and the committed artifacts are the evidence — this
+# extra exists so a reader can regenerate them.
+evidence = ["tiledb"]
 # Only needed for the (not-yet-built) HTML report; nothing in src/ imports these (grepped, R3).
 report = ["jinja2", "matplotlib", "tqdm"]
 dev = ["pytest", "pytest-cov", "hypothesis", "ruff>=0.15,<0.17", "pre-commit"]

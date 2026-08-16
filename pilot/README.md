@@ -151,13 +151,16 @@ truncation. The shortfall is a cost of §1 (iii)'s coverage axes, not a property
 
 The artifacts are [`preregistration/stratum_list_2026-08-16.{json,csv}`](preregistration/), regenerated
 byte-identically by `../scripts/freeze_stratum_list.py` (`--check` verifies both committed halves). They
-carry the 251 analysis-set strata **and** the 27 within-collection control strata of the two
+carry the 251 analysis-set strata **and** the 106 within-collection control strata of all five
 same-collection siblings, told apart by a `role` column; a control never enters the D2 denominator and
-promoting one to an independent dataset is an amendment. The proposal the twelve were chosen from is
+promoting one to an independent dataset is an amendment. The sibling set is computed from the pinned
+release table rather than declared by hand, because the candidate manifest carries no collection column
+and an earlier draft consequently named two of the five. The proposal the twelve were chosen from is
 committed and hash-pinned beside them as
-[`preregistration/stratum_list_proposal_2026-08-16.md`](preregistration/) — the reasoning, not part of the
-binding act. From that commit onward the list changes only through
-[`../docs/AMENDMENTS.md`](../docs/AMENDMENTS.md).
+[`preregistration/stratum_list_proposal_2026-08-16.redacted.md`](preregistration/) — the reasoning, not
+part of the binding act, redacted only of one absolute filesystem path and carrying both hashes. The two
+external indices the document relies on are pinned there too. From that commit onward the list changes
+only through [`../docs/AMENDMENTS.md`](../docs/AMENDMENTS.md).
 
 Real anchor: **Mathys 2019** AD snRNA-seq, to reproduce Murphy & Skene 2023 qualitatively (§8 d). It is
 **not** a member of the stratum list — it is the binding oracle — and it is absent from CELLxGENE

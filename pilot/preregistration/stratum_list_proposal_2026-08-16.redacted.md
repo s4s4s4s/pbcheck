@@ -1,7 +1,28 @@
+> **SUPERSEDED WORKING DOCUMENT — NOT A LIVE REQUEST FOR A DECISION, AND NOT THE PRE-REGISTRATION.**
+>
+> This is the proposal the Phase 0 stratum-list freeze was decided from, committed for auditability
+> and nothing else. The binding act is [`docs/PREREGISTRATION_STRATUM_LIST.md`](../../docs/PREREGISTRATION_STRATUM_LIST.md),
+> **which governs wherever the two disagree**, and the freeze has already happened: the decision this
+> document asks for was taken on 2026-08-16 and is recorded there.
+>
+> **It has known errors.** They are enumerated, with the correct values, in §10 of the governing
+> document under "The discrepancies established are". Do not quote a number from this file.
+>
+> **Redaction, and its exact extent.** The circulated copy carried an absolute filesystem path from
+> the author's Windows account in six places. Every occurrence of the repository root — one in the
+> backslash form and five in the forward-slash form, all of them the same path — is replaced here by
+> the literal `<REPO>`. **Nothing else is altered**: no prose, no number, no code block, no line
+> break. The sha256 of the circulated copy is recorded in §2 of the governing document beside the
+> sha256 of this redacted one, so the substitution is checkable by anyone holding the original.
+>
+> Circulated copy: sha256 `50872414b0727c129a824b0c65ed179674ac5d6c9ecaac53327568b3eae6fb48`, 92589 bytes.
+
+---
+
 # pbcheck Phase 0 — ПРОЕКТ пререгистрируемого стратум-листа
 
 **Статус: ПРЕДЛОЖЕНИЕ. Не коммит, не правка репозитория, не допуск в sweep.**
-Решение о заморозке принимает Александр. Репозиторий `C:\Users\Genn_\dev\pbcheck` при подготовке этого документа только читался.
+Решение о заморозке принимает Александр. Репозиторий `<REPO>` при подготовке этого документа только читался.
 
 | | |
 |---|---|
@@ -833,7 +854,7 @@ PY
 ### A.5 Отсутствие численных bins для cells-per-donor (§8 п.6)
 
 ```bash
-cd C:/Users/Genn_/dev/pbcheck
+cd <REPO>
 grep -n -iE "bin(s)?\b" docs/PHASE0_SPEC.md
 grep -n -iE "cells.per.donor bin|pre-register.*bin" docs/AMENDMENTS.md
 ```
@@ -864,10 +885,10 @@ PY
 ### A.7 Цитаты §1 и Amendment 3
 
 ```bash
-sed -n '56,78p'   C:/Users/Genn_/dev/pbcheck/docs/PHASE0_SPEC.md   # §1 целиком
-sed -n '201,214p' C:/Users/Genn_/dev/pbcheck/docs/PHASE0_SPEC.md   # §8 оракулы, (d) на 212–213
-sed -n '598,711p' C:/Users/Genn_/dev/pbcheck/docs/AMENDMENTS.md    # Amendment 3 Change 1 + σ_donor OPEN
-sed -n '745,771p' C:/Users/Genn_/dev/pbcheck/docs/AMENDMENTS.md    # Amendment 3 "What this does NOT settle"
+sed -n '56,78p'   <REPO>/docs/PHASE0_SPEC.md   # §1 целиком
+sed -n '201,214p' <REPO>/docs/PHASE0_SPEC.md   # §8 оракулы, (d) на 212–213
+sed -n '598,711p' <REPO>/docs/AMENDMENTS.md    # Amendment 3 Change 1 + σ_donor OPEN
+sed -n '745,771p' <REPO>/docs/AMENDMENTS.md    # Amendment 3 "What this does NOT settle"
 ```
 
 ### A.8 Флаг `pooled` на 100% кандидатов (§1.5, §8 п.5)

@@ -394,29 +394,45 @@ culminating in Amendment 2.
 - Added: **what the manifest could have supported instead, stated before the anchor exists.** Of
   the 68 candidate-bearing datasets, **62 / 33 / 21 / 12** hold a stratum at ≥ 4v4 / ≥ 8v8 /
   ≥ 13v13 / ≥ 23v23, and only **3** hold an exactly-3v3 stratum — none of which clears 13v13, so
-  §1 (iii)'s mandatory 3v3 anchor costs a dataset slot at the hard tiers. A §1 (iii)-compliant
-  twelve optimised for donor counts could therefore have retained **12 / 12 / 11 / 11**, attained
-  by Rexach plus eleven of the twelve ≥ 23v23 datasets: above §1's floor at every tier. **The
-  truncation is therefore a consequence of selecting for §1 (iii)'s coverage axes rather than for
-  donor counts, not a property of the public data at this Census pin** — worse for the study on
-  feasibility, better on integrity, and impossible to reassemble the list on donor counts later and
-  call it the original plan.
-- Added: **the two same-collection siblings are frozen, not merely named.** All 27 of their
-  candidate strata (SEA-AD MTG 18, Emphysema immune 9) are emitted under
+  §1 (iii)'s mandatory 3v3 anchor costs a dataset slot at the hard tiers. Clustered the way D2
+  requires, those 68 datasets sit in **50** collections and the tiers hold **46 / 25 / 15 / 10**;
+  the frozen list retains **11 / 7 / 5 / 3**. **The truncation is therefore a consequence of
+  selecting for §1 (iii)'s coverage axes rather than for donor counts, not a property of the public
+  data at this Census pin** — worse for the study on feasibility, better on integrity, and
+  impossible to reassemble the list on donor counts later and call it the original plan. An earlier
+  draft argued this by constructing a rival twelve; the construction double-counted two collections
+  and leaned on the one dataset that owns all 12 `excluded_confound` rows, so it was deleted in
+  favour of the counts above, which are recomputed on every freeze.
+- Added: **every same-collection sibling is frozen, and the set is computed rather than typed.** An
+  earlier draft named two; there are **five** — SEA-AD MTG (18 candidate strata), Yoshida Airway
+  (25), CAREBANK (11), KPMP scRNA v1.5 (43) and Emphysema immune (9). All **106** are emitted under
   `within_collection_control_rows` with `role = "within_collection_control"`, where the 251 carry
-  `role = "analysis_set"`; the CSV twin holds both blocks, 278 data rows, told apart by that
-  column. A result from one is reported as a within-collection control, never enters the D2
-  denominator, and promoting one to an independent dataset is an amendment. Naming them without
-  freezing them had left 27 runnable, unlisted strata selectable after the fact.
-- Added: `pilot/preregistration/stratum_list_proposal_2026-08-16.md` (sha256 `50872414…`, 92 589
-  bytes), the proposal the choice of twelve was made from — committed because §3.2, §4.2 and §8
-  cited it six times for the per-dataset rationale, the rejected datasets, **five named reserves**,
-  the third 5′ candidate and the Mathys search method, and it existed only in a scratch directory:
-  the one act of discretion in the freeze was justified by a file no reader could open. It is the
-  reasoning, **not** part of the binding act, and it is committed byte-for-byte as circulated
-  (errors included); where it disagrees with the document, the document governs. The reserves
-  matter most: §9 item 7 forbids substituting a replacement for a stratum that fails the counts
-  gate, and pinning the list makes such a substitution detectable.
+  `role = "analysis_set"`; the CSV twin holds both blocks, **357** data rows, told apart by that
+  column. Collection membership comes from the pinned release table, so the set is recomputed on
+  every freeze and an unnamed sibling aborts it — the manifest carries no collection column, which
+  is exactly why three went unnoticed. A result from a control is reported as a within-collection
+  control, never enters the D2 denominator, and promoting one to an independent dataset is an
+  amendment. Naming two of five had left **79 runnable, unlisted strata** selectable after the
+  fact, two of whose datasets clear every envelope tier.
+- Added: `pilot/preregistration/stratum_list_proposal_2026-08-16.redacted.md`, the proposal the
+  choice of twelve was made from — committed because §3.2, §4.2 and §8 cited it for the per-dataset
+  rationale, the rejected datasets, **five named reserves**, the third 5′ candidate and the Mathys
+  search method, and it existed only in a scratch directory: the one act of discretion in the freeze
+  was justified by a file no reader could open. It is the reasoning, **not** part of the binding
+  act; where it disagrees with the document, the document governs, and every established
+  discrepancy is enumerated in §10. Both hashes are recorded in §2 — the copy as circulated and the
+  redacted copy as committed — and the redaction is confined to six occurrences of one absolute
+  filesystem path, replaced by `<REPO>` and enforced by a test. The reserves matter most: §9 item 7
+  forbids substituting a replacement for a stratum that fails the counts gate, and pinning the list
+  makes such a substitution detectable.
+- Added: two external indices are **pinned and committed** rather than read live —
+  `discover_index_2026-08-16.json` (2216 records) and `census_release_datasets_2025-01-30.json`
+  (the release's own 1573-row dataset table). Collection membership and the assay / suspension /
+  tissue / DOI table are recomputed from these, so claims that were previously uncheckable — every
+  defect of the first three review rounds lived among them — now abort the freeze on disagreement.
+  Their disagreement with each other is measured and reported rather than assumed away: 1567 of
+  1573 release datasets resolve in Discover, `dataset_version_id` matches for **0**, and
+  `collection_doi` differs for 61.
 - Fixed (a circulated figure, corrected rather than absorbed): the 2026-08-16 proposal states
   Rexach's envelope ceiling as `min(A,B) = 11`. **It is 10** — the dataset's best design is A = 11
   versus B = 10 and no Rexach control group exceeds 10 donors, so the 11 was `max(n_donors_A)` read
@@ -475,3 +491,38 @@ culminating in Amendment 2.
   fixing hooks now exclude `pilot/gate/`, `pilot/testsel/` and `pilot/preregistration/` alongside
   the two frozen protocol documents, on the same principle: a mechanical pass must not be able to
   edit evidence. The modification was reverted; no artifact byte changed.
+
+### Amendment 4 Part A — the `sigma_donor` estimator is specified and its criteria pre-declared (2026-08-16)
+
+- Added: **Amendment 4, Part A** (`docs/AMENDMENTS.md`). Amendment 3 declared a per-stratum
+  `sigma_donor` estimate to be required work and did not do it; this entry specifies the estimator,
+  the operating-envelope membership rule, and — in the order this log exists to enforce — commits the
+  numeric criteria **before** the run that will be judged by them. Part B, after the confirmatory
+  grid, records the outcome and fixes the aggregation functional by the mechanical rule declared
+  here. The gate functional is the one deliberately open slot, and it is a required argument with no
+  default in code rather than a TODO.
+- Fixed (**Correction 1 to Amendment 3 Change 1**): that entry states `sqrt(s0^2) * ln 2` is an
+  **upper bound** on `donor_sigma`. It is not. The `+1` of `log2(CPM + 1)` attenuates the donor
+  random effect along with everything else inside the logarithm, so the quantity is
+  `a_bar * sqrt(sigma^2 + v)` with two distortions of opposite sign, and it **understates**
+  `donor_sigma` whenever `v < sigma^2 (1/a_bar^2 - 1)`. The failure is not at low expression, as
+  Amendment 3's wording suggests, but on clean, deep data in a wide gene universe: at the gate's own
+  `ORACLE_SIM` point the quantity falls below the truth in half of realisations, and at a
+  15 000-gene universe it reads 0.332 against a true 0.350 in **64 of 64** seeds. Understating sigma
+  admits strata the pseudobulk arm is not valid for, which is the dangerous direction. The quantity
+  is demoted to an audit column of unknown error sign and gates nothing.
+- Added: `scripts/check_upper_bound_claim.py` and `pilot/upper_bound_check/`, so Correction 1 rests
+  on a committed artifact with named seeds rather than on prose — the defect Amendment 3 charged its
+  own predecessor with.
+- Fixed: `census_select.PENDING_FIELDS["sigma_donor_estimate"]` and the module docstring, which
+  repeated the retracted claim. Live code is corrected in place; the published dated snapshot
+  (`docs/PILOT_FINDINGS.md`) is corrected by this log, and the unpublished one
+  (`docs/PREREGISTRATION_STRATUM_LIST.md`) carries the retraction at the point of the claim because
+  it ships in the same push.
+- Fixed (performance, shipped arm): `ebayes_from_pdata` rebuilt `set(pdata.var_names)` **inside** the
+  universe comprehension, making the restriction O(G²). Measured at G = 15 000: **127.3 s → 0.008 s**,
+  a 16 400× speedup with a bit-identical result. It is called once per permutation, so at spec §4's
+  200 paired permutations over 251 strata it would have cost roughly 74 days of the real sweep. It
+  was invisible because the gate has only ever run at the simulator's 1500 genes. The same
+  construction survives in the superseded DESeq2 arm and in the frozen calibration probe, both
+  deliberately untouched and both off this arm's path.

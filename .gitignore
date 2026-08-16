@@ -47,3 +47,8 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Amendment 4 Part A's upper-bound reproducer keeps a resume ledger beside its artifact. The
+# committed record is the dated JSON/CSV, which already carries every per-seed replicate; the
+# ledger is a cache, following pilot/testsel/ committing only its summary.
+pilot/upper_bound_check/replicates.jsonl

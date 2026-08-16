@@ -653,6 +653,34 @@ def test_every_pending_column_says_pending_and_names_its_owner():
     assert "OPEN" in cs.PENDING_FIELDS["sigma_donor_estimate"]
 
 
+def test_the_sigma_donor_mechanism_is_not_described_as_an_upper_bound():
+    """Amendment 4 Part A, Correction 1 retracts Amendment 3's "upper bound" claim.
+
+    ``sqrt(s0^2) * ln 2`` is not a ceiling on ``donor_sigma``: the ``+1`` of ``log2(CPM + 1)``
+    attenuates the donor random effect along with everything else inside the logarithm, so the
+    quantity understates ``donor_sigma`` whenever the technical variance is smaller than
+    ``sigma^2 (1/a_bar^2 - 1)`` — which is the ordinary case on clean, wide-universe data. A string
+    that still calls it an upper bound tells a reader the number errs in the safe direction when it
+    does not, and that is the failure mode the correction exists to close. Both the module docstring
+    and the manifest's pending-field text are pinned here, because both carried the claim.
+    """
+    note = cs.PENDING_FIELDS["sigma_donor_estimate"]
+    assert "AUDIT QUANTITY OF UNKNOWN ERROR SIGN" in note
+    assert "RETRACTS" in note and "Correction 1" in note
+    assert "gates nothing" in note
+    # The retraction must be visible wherever the claim was made, not only in the amendment log.
+    doc = cs.__doc__
+    assert "audit quantity of\n  unknown error sign" in doc
+    assert "Correction 1 retracts that" in doc
+    # No surviving sentence may assert the bound. The only permitted occurrences of the phrase are
+    # the ones that name it as retracted.
+    for text in (note, doc):
+        for line in text.splitlines():
+            low = line.lower()
+            if "upper bound" in low:
+                assert ("retract" in low or "called" in low or "also called" in low), line
+
+
 def test_median_counts_per_cell_is_computed_from_obs_when_available_and_pending_otherwise():
     donors = healthy_donors(n_per_group=4)
     for d in donors:
