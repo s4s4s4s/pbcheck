@@ -597,3 +597,42 @@ culminating in Amendment 2.
   every machine explored a different set and a green local run meant nothing about CI. Now a CI
   failure reproduces here by test name. Stated plainly because it is the real lesson: this defect
   was invisible locally through 7200 configurations and CI found it on the first attempt.
+
+### Amendment 5 Part A — the §6 reportability split (2026-08-16)
+
+- Added: **Amendment 5, Part A** (`docs/AMENDMENTS.md`), written before the `sigma_donor` anchor
+  exists. It **NARROWS Amendment 3 Change 1's blanket prohibition** on reporting anything from a
+  stratum outside the operating envelope, and says in those words that narrowing a prohibition is a
+  relaxation. `lambda_naive` and the naive arm's permutation false-positive floor become reportable
+  at `min(n_A, n_B) >= 8` on **measured per-stratum calibration**; `real_label_ratio`, `concordance`
+  and any claim that a published finding is false stay inside the envelope, unchanged. The ground is
+  that the envelope gates on donor count to guarantee the pseudobulk arm is *powered*, while the two
+  map quantities are naive-arm properties against the donor-permutation null: injecting NaNs into
+  the pseudobulk arm leaves `lambda_naive` at 26.160, and over a 5.75× range of donor counts it
+  moves −4.7 % against +620 % for cells-per-donor and +2683 % for σ. No threshold moves: α, the λ
+  band, POWER_TARGET, the oracle's effect size, the envelope table and decision rule item 1 are
+  untouched. The rule is **stricter** than the envelope at σ ≈ 0.2 (150 strata / 7 datasets against
+  227 / 11) and looser at 0.5–0.7.
+- Added, in the same entry: A2 cell-count stratification is **un-deferred at ≥ 8v8 as a blocking
+  condition** — the map is made of floors and the floor scales with cell count, and the measured
+  confound is large (within-group cells-per-donor max/min median 18.0, max 524.5; 40 % of candidate
+  ≥ 8v8 strata above 3 on the between-group total-cell ratio). Amendment 2 Change 6's infeasibility
+  argument was about 3v3 and inverts above 8v8, where the smallest tier holds 12 870 assignments.
+- Added: eight pre-declared abandonment triggers with numbers, including the one that stops
+  publication outright if the A2-stratified floor departs from the unstratified floor by more than
+  2 Monte-Carlo SE on more than 20 % of strata, and the one that withdraws the rule entirely if the
+  anchor lands at σ ≤ 0.2, where it is pure narrowing.
+- Disclosed (and it is uncomfortable): **Change 3's own admission criterion voids calibrated strata
+  at roughly an order of magnitude above its declared rate.** The declared 0.582 % assumed the
+  permutations of one stratum are independent, which is measurably false. Two independent probes at
+  σ = 0.2, 8v8, `n_perm` = 200 read 15/100 and 3/40 — 25.8× and 12.9× the nominal, consistent under
+  sampling but not settled to better than a factor of two — and 5/100 at σ = 0.5, where the *fresh*
+  null reads nominal, so nothing transfers between the two nulls. Trigger 8 is set at 10 %, which
+  the present evidence straddles from both sides rather than clears.
+- Disclosed: the arm's fresh-null rejection rate at σ = 0.2 sits above nominal across three
+  independent seed blocks (56/1000, 27/300, 70/1000; pooled 153/2300 = 0.0665, exact p = 2.9e-04),
+  homogeneous across blocks (χ² = 4.64, p = 0.098) and separating across σ (χ² = 9.90, p = 0.0071).
+  A draft of the entry called this a failure to reproduce; that was a category error — a p of 0.21
+  is not evidence of absence — and the sentence is withdrawn on the record. σ = 0.2 is the one
+  envelope row with no grid support at all, so an arm-side excess sitting exactly there earns more
+  disclosure, not less.

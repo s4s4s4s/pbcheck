@@ -2421,3 +2421,801 @@ approximations are named, and it is read by no code. The correction to Amendment
 reversal of a published claim of this log, not as a clarification of it. Where this entry differs from
 the draft that an adversarial read broke, the differences are listed at the top rather than folded in
 silently, and no threshold among them was loosened to make anything pass.*
+
+---
+
+## Amendment 5, Part A (2026-08-16) — the §6 reportability split: naive-arm null quantities become reportable at min(n_A, n_B) ≥ 8 on measured per-stratum calibration; Amendment 3 Change 1's blanket reporting prohibition is NARROWED; the powered claim stays inside the envelope
+
+Amendment 3 Change 1 declared an operating envelope and closed it with a blanket prohibition:
+
+> It is **not** declared valid outside it, and no result from a stratum outside it may be reported
+> as a pbcheck measurement.
+
+That sentence is one day old and it is wider than the argument that produced it. The envelope is a
+**power** statement about the *pseudobulk* arm, derived from a power frontier in
+(`sigma_donor`, donors-per-group). Two of §6's quantities — `lambda_naive` and the naive arm's
+permutation false-positive floor — are properties of the *naive* arm under the donor-permutation
+null and have no pseudobulk hit in their numerator or denominator. They are gated today by a
+sentence whose reasoning does not reach them.
+
+**This entry narrows that prohibition. Narrowing a prohibition is a relaxation, and it is called
+one here rather than described as a clarification** — the substitution that made Amendment 1
+necessary. What is relaxed is exactly one sentence of one amendment. No threshold moves.
+
+Spec sections touched: **§6** — the inflation metrics acquire a declared reportability partition,
+and the cross-dataset matching target that B2 has always demanded is supplied as a number.
+**§4 / A2** —
+cell-count stratification, deferred by Amendment 2 Change 6, is **un-deferred at ≥ 8 v 8** and
+becomes a blocking condition of the reporting this entry permits. **§1 (inclusion gate)** — a second
+admission rule, for the map only, sitting beside (not replacing) Amendment 4 Change 4's envelope
+membership. **Decision rule items 3 and 4** — item 3's floor becomes reportable outside the
+envelope under the conditions below; item 4's `signal_above_floor` is demoted out of
+decision-relevant use outside the envelope.
+
+**Unchanged, and not weakened by anything below:** α = 0.05; the λ band [0.9, 1.1]; `POWER_TARGET`
+= 0.60; the oracle's log2FC = 1.0 and K = 200; Amendment 3's envelope table; §1's floor of 8
+independent datasets; and **decision rule item 1 in its entirety**, including its
+VOID → NO-GO on a broken denominator.
+
+### Why this entry is written BEFORE the sigma anchor, and what binds when
+
+Amendment 4 Part A stated the principle this entry inherits:
+
+> A validation whose PASS criteria are written after its numbers are read is not a validation; it
+> is a description.
+
+The same holds one level up, for scope of publication rather than for criteria. A rule about *what
+may be reported*, written after the anchor lands, is not a pre-registration — it is a description
+of the set that survived. `sigma_donor` is measured nowhere: `sigma_donor_estimate` is `pending` on
+all 251 frozen rows and on all 2190 rows of the source manifest, `admitted_to_sweep` is `False` on
+every frozen row, and `pilot/results/` is empty. So the rule can still be written in the only order
+that makes it binding.
+
+**Three specific things make the order load-bearing, not ceremonial.**
+
+1. **The numbers a later rule would be chosen from are already public.** The freeze's §6 tier table
+   — 227 / 150 / 94 / 30 strata and 11 / 7 / 5 / 3 datasets at the envelope's four rows — was
+   committed earlier today and is disclosed below as visible. After the anchor, *any* donor-count
+   rule is a selection from a table whose answer is known, and the freeze forbids exactly that:
+   "Nothing above may be selected from", and shrinkage is "a reported outcome, never a
+   re-selection" (freeze §6, §9 item 7).
+2. **It is not yet too late in the mechanical sense.** Nothing has been admitted, no stratum has
+   been loaded, and no metric has been computed on any real row. A rule fixed now costs nothing to
+   fix and cannot be fitted to a result that does not exist.
+3. **Amendment 1 exists because a gate was quietly made easier.** An entry that widens what may be
+   published is the exact shape of the failure this log was started to catch. It is therefore
+   obliged to be loud: to name the relaxation as a relaxation, to enumerate what it does *not*
+   move, and to pre-commit the observables that would make it the wrong decision (below), so that
+   abandoning it later is a rule being applied rather than a judgement being made.
+
+**What Part B is.** Part B is a dated addendum written after the anchor: which strata actually
+cleared the rules below, what the σ estimator returned, what landed in Tier 3, and — if any
+abandonment trigger fired — the withdrawal. Part B decides nothing that is left open here.
+
+### Data visible at the time of this amendment (full disclosure)
+
+1. **Everything visible for Amendments 1, 2, 3 and 4**, unchanged.
+2. **The committed synthetic gate**, `pilot/gate/synthetic_gate_2026-08-15.json`, read in full while
+   writing: `lambda_naive` 54.5718, `lambda_pseudobulk` 1.00656, pseudobulk perm-null FP rate 0.035
+   (200 paired permutations), naive permutation floor median 1161.5 of G = 1500 (77.43 %, IQR
+   22.25, Monte-Carlo SE 1.106), pseudobulk floor median 0 (max 1, MC SE 0.013), real-label #DEG
+   naive 1130 against pseudobulk 1, `power_sensitivity` 0.86 at empirical FDR 0.0444, verdict
+   `INSTRUMENT VALID WITHIN THE STATED OPERATING ENVELOPE`.
+3. **The 146-cell test-selection grid**, `pilot/testsel/summary.json` at `72dec7b`. Re-read for this
+   entry, and one property of it is load-bearing below: **the only `sigma_donor` values in the grid
+   are 0.35, 0.5 and 0.7. There is no σ = 0.2 cell at all.**
+4. **The frozen stratum list**, `docs/PREREGISTRATION_STRATUM_LIST.md` and
+   `pilot/preregistration/stratum_list_2026-08-16.json`: 251 strata over 12 datasets, all four
+   admission blockers standing on every row. **Its §6 tier table was read before the rule below was
+   chosen, and is reproduced here so that the disclosure cannot be softened later** — re-derived
+   from the JSON rather than copied: `min(n_A, n_B)` ≥ 4 / 8 / 13 / 23 gives **227 / 150 / 94 / 30**
+   strata over **11 / 7 / 5 / 3** datasets, matching the freeze element for element. Also read:
+   the D1 bins, the balance of the list (42 of 251 strata have `n_A = n_B`; 21 of the 150 at
+   ≥ 8 v 8 do), the per-tier depth (median of the group medians 103.5 / 118.0 / 206.75 / 200.0 /
+   310.0 at ≥ 3 v 3 / 4 v 4 / 8 v 8 / 13 v 13 / 23 v 23) and the A2 confound figures tabulated in
+   Change 6.
+5. **The pinned candidate manifest**,
+   `pilot/preregistration/census_candidates_run31910799023_2026-08-15.json`: 1197 candidate rows
+   over 68 datasets in 50 collections, with the donor-count ladder re-derived here —
+   ≥ 4 v 4: **1017 strata / 62 datasets / 46 collections**; ≥ 7 v 7: **630 / 38 / 30**;
+   ≥ 8 v 8: **554 / 33 / 25**; ≥ 13 v 13: **311 / 21 / 15**; ≥ 23 v 23: **134 / 12 / 10**. The
+   dataset and collection columns agree with the freeze's own `MANIFEST_TIER_CENSUS` and
+   `MANIFEST_TIER_COLLECTIONS` at every tier it declares.
+6. **`sigma_donor` is measured nowhere**, `pooled` is `unresolved` on 251 of 251 and 1197 of 1197,
+   and the manifest header's `pool_columns_detected` is `[]`. `integer_check` and
+   `frozen_universe_size` are `pending` on all 251. **Every stratum count in this entry is therefore
+   an upper bound that a real run can only reduce.**
+7. **What was measured for this entry, and is new here.** (a) The leak coefficients of Change 4,
+   computed exactly from the hypergeometric law over the permutation set
+   `pbcheck.permutation.build_perms` actually produces. (b) The exact-binomial thresholds and
+   false-exclusion arithmetic of Change 3. (c) The A2 confound distributions of Change 6, over the
+   frozen 150 and the manifest's 554. (d) A fresh-null probe of the moderated arm at
+   `sigma_donor` = 0.2 on the gate's own geometry, on the declared seed range 1000–1999, reported
+   under "What this does NOT settle" — it is a check that **failed to confirm** a claim that was in
+   circulation while this entry was drafted, and the failure is recorded rather than the claim.
+8. **No real data.** Oracle (d), Mathys 2019 (§8(d)), remains binding and unrun. No CELLxGENE
+   stratum has been loaded. Every synthetic number here comes from our own generative model.
+
+### What an adversarial read of this entry changed before it was committed
+
+A draft of this entry rested on four supports that did not survive being attacked. They are listed
+rather than folded in, on the precedent of Amendment 4: a pre-registration that quietly improved
+between drafts is indistinguishable from one written to fit.
+
+1. **The claim that 8 v 8 is where the permutation null becomes resolvable is FALSE, and is
+   deleted.** The draft argued that the admission threshold coincides with the point at which the
+   permutation set reaches spec §4's `n_perm` = 1000. It does not: C(12, 6) = 924 < 1000 but
+   **C(14, 7) = 3432 > 1000**, so resolution closes at **7 v 7**, one tier below. The manifest
+   confirms it — 630 candidate strata over 38 datasets have `min(n_A, n_B)` ≥ 7, and the smallest
+   `permutation_count` among them is exactly 3432. Two independent-sounding reasons for the same
+   threshold were in fact one reason and one coincidence-that-isn't. **8 v 8 rests on correction A1
+   alone**, and Change 2 says so.
+2. **All three external-precedent citations are deleted, and none is cited anywhere in this
+   entry.** (a) A two-arm *paired* figure from the published commentary was being read as a
+   single-arm permutation demonstration; it is a paired construction in which the second panel is
+   pseudobulk under the *same* permuted labels, not the naive arm standing alone. (b) The eLife
+   review record was being read as endorsement of that permutation demonstration; the reviewers
+   **constrained** it — explicitly declining to conclude that all of the re-analysed DEGs were
+   wrong — and used the pseudobulk panel *against* pseudobulk at small cell counts. (c) A
+   "size-then-power" principle was cited under a name that does not exist in the methodological
+   literature, and the supporting quotation was truncated at the clause that reverses it: its next
+   item re-couples test size to power, and its antecedent is the *conservative* test, which in this
+   comparison is pseudobulk. **The case below rests on nothing external.** Where a reader wants
+   precedent, the honest statement is that we have none and are not claiming any.
+3. **The argument that "the grid shows calibration failing at n = 4, so our rule is stricter than
+   the envelope where it matters" is deleted, on three independent grounds.** (i) **Wrong null** —
+   the grid driver measures *fresh* nulls, independently simulated data with real labels; the map
+   stands on the donor-permutation null, which is a different object. (ii) **Wrong σ** — every cell
+   the argument cited sits at `sigma_donor` = 0.5, where the envelope demands 13 donors per group
+   and not 4, and the grid has **no σ = 0.2 cell whatsoever** (verified: its σ values are 0.35,
+   0.5, 0.7). (iii) **It bites only where there is no crisis** — the argument needs the anchor to
+   land near 0.2, and at 0.2 the envelope keeps 11 of 12 datasets and 227 of 251 strata and the
+   present entry is unnecessary. The rule below therefore does **not** claim to be stricter than
+   the envelope at the likeliest destination; the four-tier table in the next section is where that
+   comparison is made, and it shows the rule stricter at σ ≈ 0.2 and looser at 0.5 and 0.7.
+4. **`signal_above_floor` is demoted out of decision-relevant use outside the envelope.** The draft
+   had it in the reportable tier without qualification. Its numerator is a count of *real-label*
+   naive hits, and a real-label hit count is the one place where the naive arm's map touches a
+   quantity the pseudobulk arm is the control for. It stays printable — with its leak coefficient
+   beside it — and it enters no GO/NO-GO logic outside the envelope. Measuring and deciding are
+   different acts, and only the first is being permitted here.
+
+### Correction to Amendment 3 Change 1 — the prohibition is NARROWED, and that is a relaxation
+
+**The sentence being corrected**, quoted rather than paraphrased:
+
+> It is **not** declared valid outside it, and no result from a stratum outside it may be reported
+> as a pbcheck measurement.
+
+**Henceforth:** the clause "no result … may be reported" is replaced by the partition of Change 1.
+The declaration of *validity* is untouched — the pseudobulk arm remains declared valid only inside
+the envelope, and nothing outside it is called valid.
+
+**This is a relaxation of a prohibition.** After this entry, some results from strata outside the
+envelope may be reported that could not be reported before. Describing that as a clarification, or
+as "making explicit what was always intended", would be precisely the move that Amendment 1 exists
+to punish, and it is refused here in the same words.
+
+**What the relaxation costs and what it buys, per envelope tier** (re-derived from the frozen JSON;
+"envelope gives" is the freeze's §6 table, "map rule gives" is `min(n_A, n_B)` ≥ 8 on the same 251):
+
+| anchor lands at σ ≈ | envelope demands | envelope gives | map rule gives | direction |
+|---|---|---|---|---|
+| 0.2 | ≥ 4 v 4 | 227 strata / 11 datasets | 150 / 7 | **−77 strata, −4 datasets — STRICTER** |
+| 0.35 | ≥ 8 v 8 | 150 / 7 | 150 / 7 | identical |
+| 0.5 | ≥ 13 v 13 | 94 / 5 | 150 / 7 | +56 / +2 — looser |
+| 0.7 | ≥ 23 v 23 | 30 / 3 | 150 / 7 | +120 / +4 — looser |
+
+The rule is inert or stricter under the optimistic anchor and permissive under the pessimistic one.
+That is the signature of a conditional pre-commitment rather than of a reaction to a result — but
+it is a signature, not a proof, and the reader who distrusts it should read the abandonment
+triggers below, which are the part that can be checked.
+
+**And the rule does not repair coverage.** 7 datasets is below spec §1's own floor of 8, and no
+arrangement of the frozen twelve fixes that. Where the map runs on the twelve alone it runs below
+the spec's dataset floor, and that must be reported as a limitation on every occasion, exactly as
+the freeze reports it.
+
+### Change 1 — the §6 partition
+
+§6's metrics are partitioned into three tiers. The partition is by **what a quantity's numerator
+and denominator are made of**, not by convenience.
+
+**Tier 1 — reportable at `min(n_A, n_B)` ≥ 8 outside the envelope**, subject to every condition in
+Changes 2–8:
+
+* `lambda_naive`, the genomic-inflation factor of the naive arm's own p-values under the
+  donor-permutation null.
+* The **naive-arm permutation false-positive floor**: median count, fraction of G, IQR, and
+  Monte-Carlo SE, at that stratum's own cells-per-donor.
+* The **floor-versus-cells-per-donor curve** (B2, D1), which is the map's only legitimate
+  cross-dataset axis.
+* Four per-cell controls, printed on every cell and never summarised away: `lambda_pseudobulk`,
+  the pseudobulk permutation FP rate with its exact-binomial p-value, the pseudobulk permutation
+  floor, and the B5 exchangeability diagnostic (which must sit near 1 and whose departure
+  invalidates every other number from the same null).
+
+Tier 1 is admissible because none of these quantities has a pseudobulk rejection anywhere in it.
+`metrics.genomic_inflation` and `metrics.perm_floor` take no argument derived from the pseudobulk
+arm's power, and the naive arm's per-permutation p-value vector is read from its own raw table
+before any BH runs. The pseudobulk arm appears in Tier 1 **only as the negative control** that
+establishes the null construction is sound.
+
+**Tier 2 — reportable, never decision-relevant outside the envelope**: `signal_above_floor`, with
+the leak coefficient of Change 4 printed on the same line. It is read from the naive arm's own
+solo-BH floor (Change 3's plumbing requirement), and it enters no GO/NO-GO logic outside the
+envelope.
+
+**Tier 3 — inside the envelope only, with no change of any kind**: `real_label_ratio`,
+`concordance`, and **any sentence asserting that a published finding is false**. These have a
+pseudobulk hit count in the denominator or a claim about biology in the predicate, and decision
+rule item 1 governs them exactly as Amendment 3 left it.
+
+**Why Tier 3 is where it is, measured rather than argued.** In the committed gate artifact — a
+synthetic null with donor structure and **truth = 0 DE**, real labels, `sigma_donor` = 0.5, 8 v 8,
+G = 1500 — the naive arm calls **1130** genes and the moderated arm calls **1**
+(`pilot/gate/synthetic_gate_2026-08-15.json`, `real_label_ndeg`). The real-label ratio there is
+1130 on data containing no signal at all. A number that large, produced by the denominator's
+behaviour on a stratum where the truth is known to be zero, cannot be reported as a count of false
+discoveries in anyone's published analysis. That is decision rule item 1's point, and it is why
+nothing in Tier 3 moves.
+
+**The reportability contract.** These two sentences are printed under every map panel, verbatim,
+with the angle-bracketed slots filled from that cell. They are the contract: a panel that cannot
+fill every slot is not published.
+
+> In \<dataset_id\> × \<cell_type\> (\<n_A\> v \<n_B\> donors, median \<M_A\>/\<M_B\> cells per
+> donor, G = \<G\> frozen-universe genes), the naive per-cell Wilcoxon test is miscalibrated
+> against the donor-permutation null by a genomic-inflation factor of λ_naive = \<L\>, and under
+> that null — every cell keeping its real donor and its real counts, only the donor→condition map
+> reshuffled at fixed group sizes, so the correct answer is no association — it calls a median of
+> \<F\> genes (\<P\> % of G; IQR \<I\>; Monte-Carlo SE \<S\>) at BH-FDR < 0.05, against the ≈ 0
+> rejections a calibrated test gives under the complete null, while the donor-level moderated arm
+> run on the identical universe and the identical permutations rejects a median of 0 there
+> (λ_pb = \<l\> ∈ [0.9, 1.1]; permutation false-positive rate \<r\>, one-sided exact-binomial
+> p = \<p\> against α = 0.05).
+
+> This is a sharp-null upper bound on the pseudoreplication false-positive floor at this stratum's
+> own cells-per-donor (permutation-to-truth leak E|corr| = \<c\> at \<n_A\> v \<n_B\>; cell-count
+> stratification per spec A2 applied with tolerance \<t\>), not a count of false discoveries in any
+> published analysis; the donor-level arm appears here solely as the negative control establishing
+> that the null construction is sound and is NOT declared powered at this stratum, so no
+> naive-to-pseudobulk ratio, no concordance figure, and no statement that any specific published
+> finding is false may be read from this panel; and because the pinned Census exposes no
+> library/pool identifier, donor pseudobulk is a lower bound on the correct replication unit, which
+> makes this floor a lower bound on the true pseudoreplication floor.
+
+**The plumbing this requires, and the live defect it exposes.** The map reads the naive arm's
+**solo-BH** floor explicitly, with a per-stratum assertion that the pseudobulk arm NA'd nothing
+(`n_na_pseudobulk == 0`) wherever a paired count is also present. No spec change is needed for
+that: §5 item 3 requires BH "over that same G-length set", and `mtc`'s own note records that the
+single-arm path "remains correct for genuinely within-arm quantities (e.g. the naive arm's own
+floor over permutations with no pseudobulk counterpart)".
+
+**But a real defect must be fixed first, and it is invisible today.** At `2d9092b`,
+`permutation.run_null` fills its `naive_ndeg` array from the **paired** BH while a paired pseudobulk
+fit exists and from the naive arm's **own** BH above that index, and `scripts/synthetic_gate.py`
+computes its headline floor over that whole hybrid array while `monte_carlo.naive_floor_median` is
+computed over the paired prefix only. The two agree today for one reason and one only:
+`gate_config.N_PERM == N_PERM_PB == 200`, so the array has no second half. **At spec §4's
+pre-registered counts for the real sweep — `n_perm` = 1000, `n_perm_pb` ≥ 200 — four fifths of that
+array come from the other BH convention and the headline floor becomes a median over two different
+conventions at once.** No map cell may be computed until a #DEG series carries the convention it was
+produced under. This is a latent defect, not a wrong published number, and it is named here rather
+than filed.
+
+### Change 2 — the map's admission rule: `min(n_A, n_B)` ≥ 8, on A1 alone
+
+**The rule.** A stratum may carry Tier 1 quantities outside the envelope only if
+`min(n_donors_A, n_donors_B)` ≥ 8.
+
+**Its sole justification is correction A1**, frozen 2026-07-19, a month before `sigma_donor` became
+a question at all:
+
+> High-donor strata (≥ 8 vs 8, where balanced permutations are ~orthogonal to the true grouping)
+> are weighted for the headline floor and are the ONLY strata where the signal-above-floor
+> "kill-switch" ratio (metric 4) is treated as decision-relevant.
+
+**The permutation-resolution argument is explicitly NOT part of this justification**, for the
+reason given above: C(14, 7) = 3432 already exceeds spec §4's `n_perm` = 1000, so resolution closes
+at 7 v 7 and cannot be what picks 8.
+
+**What A1's threshold looks like when the leak is computed rather than asserted.** Define, for a
+balanced donor-label permutation drawing `n_A` donors from `D = n_A + n_B`, the Pearson correlation
+between the true and permuted condition indicators:
+
+```
+corr(k) = (k·D − n_A²) / (n_A · n_B),      k = |true test set ∩ permuted test set| ~ Hypergeometric
+```
+
+and take `E|corr|` over the permutation set `build_perms` actually returns — the identity always
+removed, its exact complement removed as well when `n_A = n_B`. On balanced designs:
+
+| donors per group | 3 v 3 | 4 v 4 | 5 v 5 | 6 v 6 | 7 v 7 | **8 v 8** | 9 v 9 | 10 v 10 |
+|---|---|---|---|---|---|---|---|---|
+| E\|corr\| | 0.3333 | 0.2353 | 0.2800 | 0.2148 | 0.2327 | **0.1902** | 0.2015 | 0.1719 |
+| P(corr = 0) | 0 | 0.5294 | 0 | 0.4338 | 0 | **0.3808** | 0 | 0.3437 |
+
+**The leak is a sawtooth, not a curve**, and 8 v 8 is a **strict local minimum** — below 7 v 7
+(0.2327) and below 9 v 9 (0.2015), and the smallest value anywhere at or below 9 donors per group.
+A1's threshold, chosen for a verbal reason, lands on the best point in its neighbourhood. That is
+corroboration, not the argument.
+
+8 is also strictly stricter than every donor-count floor the study already carries: the inclusion
+gate's 3 per group, and the envelope's most permissive row, which demands 4.
+
+### Change 3 — measured per-stratum calibration replaces extrapolated calibration
+
+**No cell may be published on the strength of the synthetic gate's calibration.** Today the only
+evidence that the moderated arm is calibrated is one synthetic point at
+(`sigma_donor` = 0.5, 8 v 8, G = 1500). Extending publication outside the envelope on an
+extrapolation from one simulated cell would be the same error the envelope was invented to stop.
+Each cell of the map earns its own calibration, on its own data, under its own permutations.
+
+**Both criteria, always both. The word "calibrated" may never appear on a cell that has not passed
+both.**
+
+1. `lambda_pseudobulk` ∈ [0.9, 1.1] — the pre-registered band, unchanged.
+2. The pseudobulk permutation false-positive rate is **not significantly above α**, by an exact
+   one-sided binomial test at a **per-cell level of 0.01** — not by a raw comparison against 0.05.
+
+**Why the raw comparison is refused, with the arithmetic.** Let a stratum be *perfectly* calibrated,
+so its true FP rate is exactly α = 0.05. The rule "exclude if the observed rate exceeds 0.05"
+excludes it with probability
+
+```
+n_perm = 200   :  P(X > 10)  = P(X ≥ 11) = 0.4169
+n_perm = 1000  :  P(X > 50)  = P(X ≥ 51) = 0.4625
+n_perm = 10000 :  P(X > 500) = P(X ≥ 501) = 0.4881          (X ~ Binomial(n_perm, 0.05))
+```
+
+**The false-exclusion rate rises with computation and tends to 1/2**, because the estimate
+concentrates on α and the rule discards every cell that lands on the wrong side of it. A criterion
+that gets worse the harder you work is not a criterion.
+
+**The thresholds, and why they are the smallest that hold the level.** At a per-cell level of 0.01,
+the cell fails when
+
+```
+n_perm = 200   :  k ≥ 19   (19/200 = 0.0950)     P(X ≥ 19 | 200) = 0.00582 ;  P(X ≥ 18 | 200) = 0.01209
+n_perm = 1000  :  k ≥ 68   (68/1000 = 0.0680)    P(X ≥ 68 | 1000) = 0.00741 ;  P(X ≥ 67 | 1000) = 0.01059
+```
+
+One step lower breaches 0.01 in both cases, so these are the strictest thresholds the declared level
+admits; neither is rounded and neither is chosen.
+
+**Multiplicity is declared, not corrected.** At the nominal per-cell level of 0.01 over the 150
+strata of the ≥ 8 v 8 map, P(at least one false exclusion) = 1 − 0.99¹⁵⁰ = **0.7785** and the
+expected count is **1.5**. At the *realised* discrete thresholds the same arithmetic gives
+**0.5836** and **0.874** at `n_perm` = 200, and **0.6722** and **1.111** at `n_perm` = 1000. Both
+are stated because the first is the level we declared and the second is what the integer threshold
+actually delivers. **No correction is applied**, in Amendment 4's own words: *a multiplicity
+correction here would be a loosening dressed as rigour.* The direction of the error is exclusion,
+which costs sample size and is reported in D4's bookkeeping — the direction Amendment 4 Change 4
+already fixed the project's asymmetry on: **"The project is defended against understatement."**
+
+**A weakness in the test itself, and it is an order of magnitude larger than a disclosure of its
+direction would suggest.** The exact binomial treats the `n_perm` permutations of a stratum as
+independent Bernoulli trials. They are not: every permutation reuses the same donors and the same
+counts, so the rejection indicators are positively dependent, the count's variance exceeds the
+binomial variance, and the true tail is heavier than tabulated. That much follows from the
+construction. **The magnitude does not, so it was measured rather than left as a direction.**
+
+On 100 simulated strata at the gate's own geometry (G = 1500, 8 v 8, 250 cells per donor,
+dispersion 0.2), each run under 200 balanced donor-label permutations of its own pre-aggregated
+donor profiles — **the exact object this criterion tests, on the permutation null and not on a
+fresh one** — the realised per-cell false-exclusion rate of `k ≥ 19 of 200` on **perfectly
+calibrated** strata is:
+
+| `donor_sigma` | strata failing `k ≥ 19` | realised rate | declared rate | ratio | P(that many or more at the declared rate) |
+|---|---|---|---|---|---|
+| 0.2 | **15 of 100** | 0.150 | 0.00582 | **25.8×** | 4.7 × 10⁻¹⁷ |
+| 0.5 | **5 of 100** | 0.050 | 0.00582 | **8.6×** | 3.2 × 10⁻⁴ |
+
+Mean per-stratum permutation-null FP rate 0.0647 at σ = 0.2 and 0.0476 at σ = 0.5, over 20 000
+permutations per σ; seeds 20 261 003 000–099 and 20 261 004 000–099. The permutation construction
+was **transcribed from `build_perms` at `2d9092b` rather than imported** — balanced sets of size
+`n_A`, identity and exact complement excluded, rejection-sampled because C(16, 8) = 12 870 > 200 —
+because that module is under concurrent edit in this tree. A future reader who diffs the two
+constructions should find this note rather than an unexplained second implementation; if the two
+ever disagreed, the measurement would be of something else. Paired and solo BH coincide at this
+geometry (neither arm NaNs), so the choice of path does not enter.
+
+**So the 0.01 is nominal and the realised level is one to two orders of magnitude above it.** On a
+150-cell map that projects to roughly **22 VOID cells at σ = 0.2 and 8 at σ = 0.5 caused by the
+criterion's own dependence structure rather than by any stratum's miscalibration.** Three
+consequences, pre-declared here so that none of them can be decided after a run:
+
+1. **No threshold moves.** `k ≥ 19 of 200` and `k ≥ 68 of 1000` stand exactly as derived above. The
+   arithmetic that produced them is correct arithmetic under a stated assumption; the assumption is
+   what fails. The response is to measure it and publish the cost, not to re-tune the level until
+   the exclusion count looks comfortable — that would be the loosening this log exists to catch.
+2. **The direction is exclusion, which is the safe side — but safe is not free.** Losing a
+   calibrated stratum costs sample size and is counted in D4; admitting an invalid one breaks the
+   denominator, and Amendment 4 Change 4 already fixed the project's asymmetry that way. At 15 %,
+   however, the criterion discards about one cell in seven for the instrument's reason, and that
+   loss is an instrument property and must be reported as one, never as a property of the strata.
+3. **The grid must measure this before Change 3 runs on real data**, at every envelope σ including
+   0.2, and the measured rate — not the binomial nominal — is what the abandonment triggers below
+   are evaluated against. Until that measurement exists, the criterion may not be applied.
+
+**A second weakness, about the arm rather than the test.** Change 3 admits a cell on a measurement
+of the *arm's* calibration at that cell. Where the shipped arm is itself mildly anticonservative, a
+cell fails for a reason belonging to the instrument and not to the stratum. That is not
+hypothetical: the arm's fresh-null rejection rate at σ = 0.2 sits above nominal (tabulated under
+"What this does NOT settle"), so part of the 15 % above belongs to the arm and part to the
+dependence, and **this measurement does not separate them.** Separating them is the grid's job, and
+it is named as such rather than assumed away.
+
+**No number crosses between the two nulls.** Everything in this section is the **donor-permutation**
+null — donor pseudobulk profiles held fixed, only the labels moving. The figures under "What this
+does NOT settle" are **fresh** nulls, independently simulated data with real labels. The two have
+different dependence structures, they need not agree, and here they do not: at σ = 0.5 the fresh
+null reads nominal while the permutation null still excludes at 8.6× the declared rate. A reader
+must not carry a value from one to the other, and this entry never does.
+
+### Change 4 — the per-cell leak coefficient, keyed by `(n_A, n_B)` and never by `min`
+
+Every cell prints `E|corr|` computed at its **own** `(n_A, n_B)`, by the formula of Change 2, over
+the permutation set that cell actually used.
+
+**Keying it by `min(n_A, n_B)` would mis-order the map, and by how much is measurable.** Within the
+frozen list, the label "min = 8" covers four realised shapes — 8 v 9, 8 v 10, 8 v 24, 8 v 27 — whose
+leak coefficients run **0.1344 (8 v 24) to 0.2015 (8 v 9 and 8 v 10)**, a spread of 50 % inside one
+label. Over the pinned manifest's 27 distinct min-8 shapes the same label spans **0.0730 (8 v 138)
+to 0.2015**, a factor of 2.8. Across the whole frozen ≥ 8 v 8 set — 76 distinct shapes over 150
+strata — it runs 0.0737 to 0.2015. And the map is overwhelmingly unbalanced: only **21 of the 150**
+frozen ≥ 8 v 8 strata have `n_A = n_B` (42 of all 251), so on **129 of the 150** a `min` key would
+hand the reader a leak figure that is not the cell's own.
+
+**Exact orthogonality has an exact condition, and it is not "n is even".** `corr = 0` requires
+`k = n_A²/D`, i.e. **`D | n_A²`**. Two consequences that a `min` key hides:
+
+* 8 v 24 satisfies it — D = 32 divides 64 — and **P(corr = 0) = 0.3583**: better than a third of
+  its permutations are exactly orthogonal to the truth.
+* 9 v 9 does not — D = 18 does not divide 81 — and **P(corr = 0) = 0 exactly**: no permutation of a
+  9 v 9 design is orthogonal to the true grouping, despite 9 being larger than 8.
+
+Only **20 of the frozen 150** ≥ 8 v 8 strata admit an exactly orthogonal assignment at all. The
+coefficient is a per-cell property and is printed as one.
+
+### Change 5 — the per-cell void rule
+
+Decision rule item 1's VOID is a *study-level* verdict and there is no per-stratum analogue anywhere
+in the spec or in Amendments 1–4. The quantities exist — `run_null` already emits `pb_fp_rate`, the
+pseudobulk floor, both λs and the Monte-Carlo errors — and no rule consumes them. That gap is closed
+here, before any cell is computed.
+
+**A cell is VOID when its own `lambda_pseudobulk` falls outside [0.9, 1.1], or its own pseudobulk
+permutation FP rate fails Change 3's binomial test, or its A2 stratification cannot be constructed
+under Change 6.** A VOID cell publishes exactly four things and nothing else: its identifiers, its
+`lambda_pseudobulk`, its FP count `k` out of `n_perm` with the exact-binomial p-value, and the word
+VOID. It contributes to **no** curve, **no** aggregate, **no** per-dataset summary and **no**
+figure, and it is counted in D4's excluded-strata bookkeeping with its reason.
+
+A void cell is a result. The count of void cells is reported beside the map, and if that count is
+large the abandonment trigger below fires rather than the map being trimmed to its survivors.
+
+### Change 6 — A2 is UN-deferred at ≥ 8 v 8
+
+**This is the price of the relaxation and it is a blocking condition, not an aspiration. If A2
+stratification is not implemented and passing at ≥ 8 v 8, the map is not published — inside the
+envelope or outside it.**
+
+**Amendment 2 Change 6 deferred A2 on two arguments. One was about 3 v 3 and inverts here; the other
+is correct and is exactly why A2 now binds.**
+
+The infeasibility argument, quoted:
+
+> It is infeasible at the donor counts the spec's own inclusion gate admits. At the 3v3 minimum
+> there are C(6,3) − 2 = 18 permutations in total; filtering them on cell-count proximity leaves
+> single digits, and the floor's Monte-Carlo error would swamp the confound it is meant to remove.
+
+That is a true statement about 3 v 3 and it does not survive the move to 8 v 8. **The smallest
+member of the ≥ 8 v 8 tier holds C(16, 8) = 12 870 label assignments** — verified as the minimum
+`permutation_count` over the manifest's 554 candidates at that tier — and 13 v 13 holds
+C(26, 13) = 10 400 600. There is room to restrict on cell-count proximity and still sample
+`n_perm` = 1000.
+
+The asymmetry argument, quoted:
+
+> The confound is asymmetric between the arms, and the pseudobulk arm is the one that matters here.
+> … It is the naive per-cell arm whose statistic scales with cell count. Since the binding validity
+> gate this amendment exists to repair is about the *pseudobulk* arm, A2 does not gate it.
+
+Correct, and it is the reason A2 binds now. **The map is made of the naive arm's floor — precisely
+the quantity A2 protects.** Amendment 2 said so in the same breath: "It does bear on the naive
+arm's floor, which is a Phase 1 headline quantity."
+
+**The range check that stands in for A2 today has never fired where it could.** On the synthetic
+oracle every donor has the same number of cells by construction, so the check is degenerate and its
+passing carries no information about real strata.
+
+**On real strata the confound is large, and here it is measured** (re-derived from the committed
+JSONs; within-group figures are over the two group-arms of each stratum):
+
+| population | within-group cells/donor max÷min | between-group total-cell ratio |
+|---|---|---|
+| frozen 150 at ≥ 8 v 8 (300 group-arms) | median **18.0**, **70.7 %** above 10, max **524.5** | median **1.43**, **21.3 %** above 3, max **40.4** |
+| manifest 554 at ≥ 8 v 8 (1108 group-arms) | median **30.4**, **81.8 %** above 10, max **3279.6** | median **2.32**, **40.1 %** above 3, max **130.6** |
+
+Two in five of the strata the mechanical extension would admit have one group carrying more than
+three times the other's cells. A floor compared against permutations of a systematically different
+size is a size measurement, not a replication-unit measurement.
+
+**What must be delivered before any cell is published**, and it is statistical work rather than
+wiring: the matching tolerance, stated as a number before the run; the behaviour when the restricted
+permutation set is thin, stated as a rule and not decided per stratum; a statement of whether the
+restricted null remains exact or becomes approximate; and the declared consequence — a stratum whose
+restricted set cannot be built under the tolerance is VOID by Change 5, never silently unstratified.
+
+### Change 7 — the common cells-per-donor target T, pre-registered as a number
+
+B2 makes cross-dataset floor comparison legal only "after bootstrapping cells to a common per-donor
+target", and B3 restricts λ to a binary/ordinal flag. So the map's cross-dataset object is the
+**floor-versus-cells-per-donor curve**, never a single floor, and the matched comparison needs a
+target. **No amendment and no section of the spec has ever supplied one**, which leaves T a free
+knob of the analyst that moves both the size of the map and every floor in it.
+
+**T = 30 cells per donor.**
+
+Two reasons, in order. First, 30 is the **smallest pre-registered D1 bin edge strictly above the
+inclusion gate's own floor of 10**, and a *lower* target is the stricter direction against this
+study's own thesis: the floor and `lambda_naive` grow with cells per donor (spec §10 risk 2), so
+subsampling deeper makes decision rule item 2's persistence requirement harder, not easier. This is
+the same reasoning the freeze used to put the bin floor at 10 rather than higher. Second, 10 itself
+is unusable as a matching target: a donor sitting exactly at the inclusion gate's floor cannot be
+subsampled at all without being dropped.
+
+**Its reachability is disclosed as a consequence, not used as the reason.** Of the frozen 150 at
+≥ 8 v 8, **94.3 %** of the 300 group-arms have a per-group median at or above 30 (against 64.0 % at
+100); of the manifest's 554, **88.9 %** of 1108 do. The extension of Change 8 therefore does not
+move T, and T is fixed once.
+
+**One honest qualification.** Reaching T requires *per-donor* counts at or above T, and the frozen
+artifact carries only per-group medians: only **45.0 %** of the frozen ≥ 8 v 8 group-arms have a
+*minimum* per-donor count at or above 30. How many donors a cell loses at matching is a load-time
+fact, and it is reported per cell rather than assumed away.
+
+### Change 8 — the selection rule if the map goes past the frozen twelve
+
+Declared now, as a number, because after the anchor it could not be.
+
+**If the map is extended beyond the frozen twelve, it is extended by exactly one mechanical rule:
+every candidate stratum in the pinned manifest with `min(n_A, n_B)` ≥ 8. That is 554 strata over 33
+datasets in 25 collections.** Never a list of datasets, never a subset chosen for coverage, never a
+substitution for a stratum that failed a gate. The freeze's prohibition binds this extension exactly
+as it binds the twelve: shrinkage is a reported outcome, never a re-selection.
+
+Collections, not datasets, are the honest unit — two datasets of one collection are not two
+independent choices under D2 — which is why the collection count is declared beside the dataset
+count and must be reported beside it.
+
+**Whether and when to extend is a separate decision and is NOT taken here.** Both admission maps are
+pre-declared so that the choice between them cannot be made after the anchor is read: the frozen
+twelve's map is 150 strata over 7 datasets, and the mechanical extension is 554 over 33 datasets in
+25 collections. Declaring both costs nothing now and removes a degree of freedom later. Execution
+order — twelve first, manifest later, or one pass — is an engineering decision that Part B or a
+later entry records with its reasons.
+
+### Pre-declared counts, so the surviving set cannot be chosen later
+
+Every count below is re-derived in this entry from the committed JSON artifacts, and every one is
+an **upper bound**: `integer_check` and `frozen_universe_size` are `pending` on all 251 rows and can
+only remove strata.
+
+| declared object | strata | datasets | collections |
+|---|---|---|---|
+| the map on the frozen twelve, `min(n_A, n_B)` ≥ 8 | **150** | **7** (below §1's floor of 8) | — |
+| the mechanical extension, pinned manifest, `min(n_A, n_B)` ≥ 8 | **554** | **33** | **25** |
+| envelope tiers on the frozen twelve, ≥ 4 / 8 / 13 / 23 v same | 227 / 150 / 94 / 30 | 11 / 7 / 5 / 3 | — |
+| manifest ladder, ≥ 4 / 7 / 8 / 13 / 23 v same | 1017 / 630 / 554 / 311 / 134 | 62 / 38 / 33 / 21 / 12 | 46 / 30 / 25 / 15 / 10 |
+
+### Pre-declared abandonment triggers
+
+Each is an observable with a number attached and a declared action. They are here, before the
+anchor, because a trigger invented after a disappointing measurement is not a trigger.
+
+1. **The anchor lands at σ ≤ 0.2 with a tight interval.** The envelope then holds 227 strata over 11
+   datasets, spec §1's floor of 8 is met, and this entry's rule is pure narrowing — it would cost 77
+   strata and 4 datasets for nothing. **Action: the rule is WITHDRAWN and everything is published
+   under the envelope.** This is the cleanest of the triggers and it is directly observable.
+2. **The A2-stratified floor disagrees with the unstratified floor.** If, on **more than 20 %** of
+   the ≥ 8 v 8 strata, the stratified median floor differs from the unstratified median floor by
+   **more than 2 × the Monte-Carlo SE**, the floor is an artifact of cell counts rather than of
+   pseudoreplication, and a map of it is not a map of pseudoreplication. **Action: nothing is
+   published, inside the envelope or outside it.** This trigger kills the map outright and it is the
+   one the whole relaxation is bought against.
+3. **Calibration does not survive contact with real data.** If the number of ≥ 8 v 8 strata failing
+   Change 3's binomial leg exceeds **5 × the expected count** on a perfectly calibrated set,
+   "calibrated" is not a property that transfers to real data and the map has no reference arm.
+
+   **The baseline for that expectation is NOT the binomial nominal, and the reason is measured.**
+   A draft of this trigger set E from the exact-binomial tail — E = 0.874 of 150 at `n_perm` = 200,
+   E = 1.111 at `n_perm` = 1000 — which would have fired at 5 and 6 respectively. Change 3's
+   measurement shows that baseline is wrong by 8.6× to 25.8× on *calibrated synthetic* strata,
+   because the permutations of one stratum are dependent. Against it, a perfectly calibrated map
+   would fire this trigger immediately and for the instrument's reason rather than the data's.
+   **E is therefore the grid's measured per-cell false-exclusion rate at the σ of the map's own
+   tier, and the trigger cannot be evaluated until that measurement exists.** Provisionally, from
+   this entry's 100-stratum probe, E would be ≈ 22 of 150 at σ = 0.2 and ≈ 8 at σ = 0.5 — quoted as
+   the order of magnitude to expect, never as the baseline itself.
+
+   **Two independent probes of that rate disagree by a factor of two, which is itself the argument
+   for waiting on the grid.** At σ = 0.2, 8 v 8, `n_perm` = 200: this entry's 100-stratum probe
+   reads 15 of 100 (0.150, 25.8 × the nominal), and a separate 40-stratum probe on a disjoint seed
+   block (777000–777039) reads 3 of 40 (0.075, 12.9 × the nominal, exact-binomial p = 1.7 × 10⁻³
+   against the nominal), with mean per-stratum permutation FP 0.0601 against the first probe's
+   0.0647. The two are consistent under sampling — 3/40 against 15/100 does not separate — and the
+   qualitative finding is the same in both: the declared 0.582 % is wrong by an order of magnitude
+   and the criterion voids calibrated strata at a rate between roughly 8 % and 15 %. But the
+   *number* is not settled to better than a factor of two by either, and Trigger 8's 10 % threshold
+   sits between them. That is deliberate: a threshold the present evidence straddles is one the
+   grid can genuinely fail, which is the only kind worth pre-registering.
+
+   **The direction of this correction is stated because it is the uncomfortable one.** Raising E
+   makes the trigger *harder* to fire, which is the loosening direction, and it is done only
+   because the number being replaced is measured-wrong rather than merely inconvenient. The
+   compensating control is that it is now **blocking**: with no measured E the criterion may not be
+   applied to real data at all, so the trigger cannot be quietly skipped by leaving E unmeasured.
+   **Action: the map stops, and the reference arm becomes the subject of a new amendment.**
+4. **`lambda_naive` at matched cells-per-donor does not exceed `LAMBDA_NAIVE_GO` = 2.0 in a majority
+   of independent datasets.** Decision rule item 2 has then failed and there is nothing to publish
+   at any scope. **Action: no map, narrow or wide; the finding is the failure.**
+5. **The frozen universe comes in below `MIN_UNIVERSE_SIZE` = 200 on a large share of ≥ 8 v 8
+   strata.** G then varies so much that even fraction-of-G stops being comparable between cells.
+   No arithmetic on this gate exists yet — `frozen_universe_size` is `pending` on all 251 rows and
+   only loading X decides it. The nearest thing on the record is about a **different** gate and is
+   cited as such: Amendment 4's scenario for the σ-estimation stratum's own 100-gene minimum puts
+   **1 / 3 / 6 / 8** of the 251 strata below it at G = 5000 / 10 000 / 15 000 / 20 000, with the
+   failures concentrated in datasets #7 and #3. It bounds nothing here; it names where to look.
+   **Action: cells below `MIN_UNIVERSE_SIZE` are SKIPs with their measured size reported, never
+   rounded up; if more than a quarter of the ≥ 8 v 8 cells SKIP on it, the cross-cell comparison is
+   withdrawn and only within-stratum numbers stand.**
+6. **§8(d) runs and the permutation floor does NOT account for most naive calls at ≥ 8 v 8.** The
+   binding real anchor then contradicts the thesis, and what is in question is the whole study, not
+   the scope of publication. **Action: back to this log, with the GO/NO-GO rule, not the map, as the
+   subject.**
+7. **Engineering.** If the property tests of any accelerated permutation engine do not show exact
+   agreement with the shipped `scanpy` statistic, the cost model behind Change 8 is void. **Action:
+   the mechanical extension is deferred and only the frozen twelve's 150 are attempted.** No
+   core-hour figure is quoted here: the speed-up claim in circulation while this entry was drafted
+   has not been checked adversarially, and an unverified number has no place in a pre-registration.
+8. **Change 3's criterion voids cells for the instrument's reason rather than the stratum's.** If
+   the grid's measured per-cell false-exclusion rate of `k ≥ 19 of 200` — on **calibrated
+   synthetic** strata, at the σ of the map's own tier, on the **permutation** null — exceeds
+   **10 %**, then more than one map cell in ten is discarded by the instrument, the admission rule
+   is not a calibration test of the stratum, and the map's coverage figure means nothing.
+   **This trigger is live rather than hypothetical**: this entry's own 100-stratum probe already
+   reads **15 % at σ = 0.2** and **5 % at σ = 0.5**, so the grid may well fire it, and it is
+   written at a threshold the current evidence straddles rather than at one chosen to clear.
+   Scope: the trigger is on the **criterion and the arm**, not on the σ = 0.2 row — the σ = 0.2
+   confinement holds on the fresh null (χ² = 9.90, p = 0.0071) but *not* on the permutation null,
+   where σ = 0.5 still runs at 8.6 × the declared rate. **Action: the map is not published; the
+   arm's null behaviour becomes the subject of its own amendment; and no threshold in Change 3 is
+   adjusted to bring the rate down.**
+
+### What this NARROWS and what it RELAXES
+
+**RELAXED — one thing, named without euphemism.** Amendment 3 Change 1's sentence "no result from a
+stratum outside it may be reported as a pbcheck measurement" no longer holds for Tier 1 quantities
+at `min(n_A, n_B)` ≥ 8. Some results from outside the envelope become reportable that were not.
+
+**NARROWED — five things that did not exist before this entry.**
+
+1. A donor-count floor of 8 for the map, against the inclusion gate's 3 and the envelope's most
+   permissive row's 4.
+2. Measured per-stratum calibration on both criteria, replacing an extrapolation from one synthetic
+   cell — and a per-cell VOID rule that discards a failing cell entirely.
+3. A leak coefficient printed per cell and keyed by `(n_A, n_B)`, where nothing was printed before.
+4. A2 stratification, deferred since Amendment 2, made a blocking condition of publication at
+   ≥ 8 v 8.
+5. A pre-registered matching target T and a pre-registered extension rule, both of which were free
+   analyst knobs until this entry.
+
+**MOVED — nothing.** α, the λ band, `POWER_TARGET`, the oracle's log2FC and K, the envelope table,
+§1's 8-dataset floor and decision rule item 1 all stand exactly as they stood at `2d9092b`.
+
+### What this does NOT settle
+
+* **The powered claim is untouched and stays inside the envelope.** `real_label_ratio`,
+  `concordance` and any sentence asserting that a published finding is false remain Tier 3 under
+  decision rule item 1 as Amendment 3 left it. This entry licenses a *measurement* of the naive
+  arm's own null behaviour; it licenses no conclusion about anyone's published result.
+* **The shipped arm's fresh-null rejection rate at `sigma_donor` = 0.2 sits ABOVE nominal, in three
+  independent seed blocks, and this entry does not resolve it.** A draft reported the excess; a
+  first check here failed to reject it and was written up as a failure to *reproduce* it. **That
+  was a category error and the sentence is withdrawn** — a p of 0.21 is not evidence of absence.
+  The quantity is P(≥ 1 BH rejection at FDR 0.05) on **fresh** nulls with real labels, at the
+  gate's own geometry (G = 1500, 8 v 8, 250 cells per donor, dispersion 0.2):
+
+  | seed block | n | P(≥ 1 rejection) | one-sided exact binomial vs α |
+  |---|---|---|---|
+  | 1000–1999 | 1000 | 0.0560 | 0.210 |
+  | 5000–5299 | 300 | 0.0900 | 0.0026 |
+  | 20 261 000 000–20 261 000 999 | 1000 | 0.0700 | 0.0035 |
+  | **pooled** | **2300** | **0.0665** | **0.00029** |
+
+  **Homogeneity first: the three blocks do not separate** — χ² = 4.64, df = 2, **p = 0.098**. The
+  apparent conflict between the first two (Fisher p = 0.043) does not survive the third block, so
+  the correct description is one rate near 0.066, not three rates in disagreement. Pooled, the
+  excess is real (p = 0.00029) and mild — about 1.3 × nominal.
+
+  **Across σ, again homogeneity before interpretation.** At n = 1000 per σ on disjoint blocks:
+  σ = 0.2 → 0.0700 (p = 0.0035); σ = 0.35 → 0.0420 (p = 0.89); σ = 0.5 → 0.0440 (p = 0.83).
+  **χ² = 9.90, df = 2, p = 0.0071**, and σ = 0.2 against the other two pooled gives Fisher
+  p = 0.0022. The blocks **do** separate: on the fresh null the excess is confined to the low-σ end
+  and is not uniform across the envelope.
+
+  **That is the convenient reading, and it is the one to handle most carefully.** σ = 0.2 is the
+  envelope row with **no grid support at all** — `OPERATING_ENVELOPE` records its own `grid_support`
+  as "not in the grid", Amendment 4 calls it "the largest unvalidated dependency the membership rule
+  has", and freeze §6 puts 11 of 12 datasets and 227 of 251 strata in that tier. An arm-side excess
+  sitting exactly on the unmeasured row that nearly every real stratum will land on earns **more**
+  disclosure, not less, however reassuring σ = 0.35 and 0.5 look.
+
+  **And on the null that actually gates, it is not confined to σ = 0.2.** Change 3's measurement of
+  the permutation-null counterpart excludes calibrated strata at 8.6 × the declared rate even at
+  σ = 0.5, where the fresh null reads nominal. Fresh-null and permutation-null figures are different
+  objects with different dependence structure; neither may be read as the other.
+
+  **Three things this is not.** Not a broken arm: under the complete null BH's P(any rejection) is
+  exactly the quantity FDR control bounds, so 0.066 against 0.05 is mild anticonservatism,
+  plausibly a dependence effect of the shared donor random effect and the library-size
+  normalisation. Not a licence to touch anything: no threshold moves for it, the resulting
+  exclusions run in the safe direction, and it returns to this log as a result. And not settled —
+  the row must be measured by the grid, on both nulls, before Change 3's criterion is applied to
+  real data, and trigger 8 puts a number on it.
+
+  **A note on the seed base, so the constraint is visible rather than asserted.** The third block
+  uses 20 261 000 000 + i and not the natural 20 260 816 000 + i, because the latter is exactly
+  `seed(0, r)` of Amendment 4 Change 5's declared confirmatory grid
+  (`1000·(20260816 + i) + r`, i.e. 20 260 816 000–20 260 995 999). Spending it here would have made
+  the first cell of an unrun pre-registered grid seen for a different estimand. The base was forced
+  by that collision, not preferred; all blocks used here are disjoint from it and from each other.
+
+  The map does not depend on the σ = 0.2 row, which is its one genuine advantage over the envelope
+  path — and the advantage does not extend to Tier 3, which still needs the envelope and therefore
+  still needs the row.
+* **`pooled` is `unresolved` on 251 of 251 and 1197 of 1197**, and `pool_columns_detected` is empty
+  in the manifest header. Donor pseudobulk is a lower bound on the correct replication unit, so
+  every floor in the map is a lower bound on the true pseudoreplication floor. The disclaimer above
+  carries that on every cell rather than once in the verdict, because a caveat stated once and
+  attached nowhere is not a caveat. No choice of datasets fixes it; it is a property of the pin.
+* **§8(d), Mathys 2019, remains binding and unrun**, additionally blocked on a ROSMAP data-use
+  agreement begun 2026-08-16 and on a second, unwritten loader. Nothing here reduces its standing as
+  the binding real check.
+* **`integer_check` and `frozen_universe_size` are `pending` on all 251 rows and all 1197
+  candidates.** Every stratum count in this entry is an upper bound that a real run can only reduce.
+* **D5 is not harmonised, and harmonising it would re-cut the frozen strata.** The freeze records
+  that collapsing 124 cell-type labels to a common ontology depth merges strata and therefore
+  changes what the 251 are. A cross-dataset map is hard to read without it and this entry does not
+  supply it.
+* **`lambda_naive` is not a hidden σ coordinate, and the reason it is not is measured rather than
+  assumed.** At fixed geometry it rises monotonically with `sigma_donor`, which is why the worry
+  arises; but at fixed σ it moves by orders of magnitude with cells per donor, so it does not
+  identify σ and cannot be read as a back door into the envelope's coordinate. Change 7's matched
+  target and the per-cell σ̂, once it exists, are how the confusion is kept out of the map.
+* **A2's tolerance is not chosen here.** Change 6 makes A2 blocking and states what must be
+  delivered; it does not pick the number, and the number must be pre-registered before the run in
+  its own entry or in Part B.
+* **The GO/NO-GO decision is not taken, and nothing here moves it.** Widening what may be measured
+  licenses a measurement, not a conclusion.
+
+*Author attests: every figure in this entry was re-derived while writing it, from the committed
+artifacts at `2d9092b`, using this repository's own virtual environment — the tier tables and
+donor-count ladders from `pilot/preregistration/stratum_list_2026-08-16.json` and
+`census_candidates_run31910799023_2026-08-15.json`, the gate readings from
+`pilot/gate/synthetic_gate_2026-08-15.json`, the grid's σ coverage from `pilot/testsel/summary.json`
+— or computed from first principles and shown here with its arithmetic. The leak coefficients are
+exact hypergeometric expectations over the permutation set `build_perms` constructs, not
+simulations. The binomial thresholds and the false-exclusion rates were computed here and the one
+step below each threshold is shown so the choice can be checked. Where this entry differs from the
+draft an adversarial read broke, the differences are listed at the top rather than folded in
+silently: a false resolution argument, three external precedents, one grid argument and one
+demotion — and no threshold among them was loosened to make anything pass. Where a figure in
+circulation could not be reproduced, the failure to reproduce is reported in place of the figure
+and the probe that failed to find it is described with its seeds; where a claim rests on unverified
+work, no number from it is quoted. The relaxation this entry performs is stated as a relaxation of
+a prohibition, not as a clarification of one. No real data informed this amendment, no stratum has
+been admitted, and `sigma_donor` remains unmeasured on every row.*
