@@ -656,3 +656,32 @@ culminating in Amendment 2.
   reports the 511.8 s runtime it was committed with, which predates the engine work of the following
   day. Its correctness numbers reproduce exactly; only the timing is historical, and regenerating
   cited evidence to refresh a stopwatch would be the wrong trade.
+
+### Evidence for the cell-count stratification's tolerance (2026-08-16)
+
+- Added: `scripts/a2_feasibility.py` and `pilot/preregistration/a2_feasibility_2026-08-16.{json,csv}`,
+  the evidence a forthcoming amendment will cite when it fixes the matching tolerance for cell-count
+  stratification of the permutation null. Both source artifacts are sha256-pinned before parsing, the
+  output carries no timestamp or environment, and `--check` verifies byte-identical regeneration.
+- **The committed data cannot answer the question exactly, and the artifact says so rather than
+  papering over it.** A stratum row records only `n_donors`, `n_cells`, `min`, `median` and `max`
+  cells per donor per group, never the per-donor vector, so the exact distribution of permuted
+  cell totals is not computable from what is committed. The artifact therefore brackets it between
+  two extreme per-donor vectors consistent with those five statistics, documents both constructions
+  in its header, and records the median drift each construction incurs when clamped to the recorded
+  total — for donor-rich strata that drift reaches thousands of cells and is reported per stratum
+  rather than hidden. The binding count remains a load-time fact.
+- Below the enumeration cap the assignment totals are computed by exact dynamic programming over all
+  designs, not sampled; above it by seeded Monte Carlo whose seed is derived from the stratum's own
+  identifiers so it does not depend on iteration order, with the standard error carried in every
+  cell. Means, variances and the real split's z are computed by the exact finite-population formula
+  in both branches. The dynamic program and the moment formulas were checked against brute-force
+  enumeration on a real and a synthetic stratum.
+- **A re-derivation disagreed with the planning document that motivated it, and the disagreement is
+  recorded rather than reconciled.** At a tolerance of 5 % of total cells the pessimistic edge
+  projects 11 of the frozen 150 strata unusable, not 5, and the loss is not confined to one dataset;
+  the optimistic edge agrees at 3, all in the same dataset. The consequence is substantive: the
+  planning document argued for 5 % from a knee — 2.5 % → 5 % saving five strata and 5 % → 7.5 %
+  saving one — and on the re-derived ladder the pessimistic edge runs 21 → 11 → 5 and keeps
+  improving past 5 %. The tolerance argument has to be rebuilt on these numbers, and no tolerance is
+  fixed by this commit.
