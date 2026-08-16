@@ -526,3 +526,46 @@ culminating in Amendment 2.
   was invisible because the gate has only ever run at the simulator's 1500 genes. The same
   construction survives in the superseded DESeq2 arm and in the frozen calibration probe, both
   deliberately untouched and both off this arm's path.
+
+### The permutation null becomes affordable, and the floor stops mixing conventions (2026-08-16)
+
+- Fixed (latent, would have corrupted the real sweep's headline): `run_null` returned one
+  `naive_ndeg` array whose meaning changed at index `n_paired` — paired-BH below it, the naive
+  arm's own solo BH above. The two agreed only because `N_PERM == N_PERM_PB == 200`; at spec §4's
+  pre-registered counts for the real sweep (`n_perm` 1000, `n_perm_pb` >= 200) four fifths of the
+  array would have come from the other convention and the headline floor would have been a median
+  over both at once. The mixed array no longer exists: `naive_ndeg_paired` and `naive_ndeg_solo`
+  are separate, the key `naive_ndeg` is **removed rather than deprecated** so a stale caller gets a
+  `KeyError` instead of a number, and `metrics.NDegSeries` carries the BH convention with the
+  counts (read-only, so the other convention cannot be appended). `perm_floor` propagates the label
+  into the artifact and refuses a contradicting one.
+- Added: `src/pbcheck/methods/naive_engine.py` — the naive arm's donor-permutation null computed
+  from **per-donor sufficient statistics** instead of re-running scanpy per permutation. Under
+  donor relabeling the pooled cell set is unchanged, so per-cell normalisation, the per-gene ranks
+  and the tie correction are all invariant, and the Wilcoxon rank sum of the test group is the sum
+  of its donors' rank sums; `t-test_overestim_var` (spec §2's robustness variant) collapses the
+  same way onto `n`, `Σx`, `Σx²`. One ranking pass per stratum, then each permutation is an
+  addition over at most `n_donors` rows.
+- **This is an optimisation of a pre-registered statistic, not a new statistic, and it is held to
+  that standard.** Agreement with scanpy 1.12.2 is bit-exact — max ulp 0 on p-values, log2fc and
+  the expressed fractions, across donor counts, group sizes, tie structures, unequal cells per
+  donor, single-donor-dominated strata, and sparse against dense. The scanpy kernels are vendored
+  in numpy rather than imported privately, with a test pinning the two bit-for-bit so a change
+  upstream turns the suite red instead of moving our numbers. The slow path stays callable
+  (`naive_engine="scanpy"`) and is the reference the tests compare against.
+- Measured: the synthetic gate runs in **7.1 s against 511.8 s**, and its artifact is unchanged —
+  all 187 committed leaf values reproduce exactly, nothing removed, the 16 additions being the new
+  engine's provenance, the BH-convention labels and the solo floor. Per-permutation speedups of
+  **765×** (60 000 cells × 1500 genes) and **1117×** (150 000 × 2000) were measured directly;
+  extrapolating the setup constant to the frozen list's largest stratum (547 665 × 15 000) gives
+  1151×. The naive arm's share of the real sweep at `n_perm` = 1000 falls from thousands of
+  core-hours to hours.
+- Fixed: the same O(G²) universe restriction repaired in the moderated arm earlier today
+  (`set(pdata.var_names)` rebuilt inside a comprehension) also stood in
+  `methods/pseudobulk.py`, the superseded DESeq2 arm. Hoisted, provably output-identical. The copy
+  in `scripts/pb_calibration_probe.py` is deliberately untouched: it is the frozen reference
+  instrument the Amendment 2 selection grid was measured with.
+- Known limitation, recorded rather than worked around: the engine's setup pass converts CSR to
+  CSC and peaks at two copies of the sparse matrix, which for the largest stratum is on the order
+  of 20 GB. Blockwise assembly would fix it; it has not been done, because doing it without a
+  profile of a real stratum would be guesswork.

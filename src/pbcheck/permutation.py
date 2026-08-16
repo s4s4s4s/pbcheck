@@ -9,7 +9,13 @@ and each arm's p-values reveal its calibration.
 
 For speed, donor pseudobulk profiles are aggregated **once**: they are invariant under relabeling, so
 each permutation only re-runs the pseudobulk test on a relabeled metadata vector. The naive per-cell
-test does depend on labels and is re-run each permutation.
+arm collapses the same way, though it took longer to see: the pooled cells, their normalisation and
+their per-gene ranks are all invariant under a donor relabeling, so one ranking pass per stratum
+leaves every permutation an addition over ``n_donors`` rows. :mod:`pbcheck.methods.naive_engine`
+does that and is the default; ``naive_engine="scanpy"`` re-runs ``rank_genes_groups`` per
+permutation as this module used to, and the two are held to bit-for-bit agreement by
+``tests/test_naive_engine.py``. Re-ranking every permutation costs ~2870 core-hours over the 251
+frozen strata at spec §4's ``n_perm`` = 1000, which is why the slow path cannot be the default.
 
 Two things changed with Amendment 2 (2026-08-15):
 
@@ -20,6 +26,15 @@ Two things changed with Amendment 2 (2026-08-15):
   had each arm corrected over its own non-NaN subset. The pseudobulk arm, which is the only one
   that produces NaN p-values, was thereby made systematically more liberal than the arm it is the
   control for. The paired bookkeeping now rides in the output instead of being discarded.
+
+Change 2 left a trap that this module no longer sets. The naive arm's #DEG came back as one array
+whose BH convention changed at index ``n_paired``: paired below it, the arm's own BH above. The
+two agreed only while ``gate_config.N_PERM == N_PERM_PB``, and ``scripts/synthetic_gate.py`` read
+the whole array as the headline floor. At spec §4's pre-registered counts for the real sweep
+(``n_perm`` 1000, ``n_perm_pb`` >= 200) four fifths of it would have come from the other
+convention. Each #DEG series now carries exactly one convention and says which
+(:class:`pbcheck.metrics.NDegSeries`); the mixed ``naive_ndeg`` key is gone rather than deprecated,
+so a caller that still reads it fails loudly instead of silently averaging two statistics.
 """
 
 from __future__ import annotations
@@ -31,8 +46,10 @@ import pandas as pd
 
 from pbcheck.methods.moderated import ebayes_from_pdata
 from pbcheck.methods.naive import naive_de
+from pbcheck.methods.naive_engine import NaiveRelabelEngine
 from pbcheck.methods.pseudobulk import build_pseudobulk
 from pbcheck import mtc
+from pbcheck.metrics import BH_PAIRED, BH_SOLO, NDegSeries
 
 
 def _true_map(adata, donor_col, condition_col):
@@ -110,20 +127,43 @@ def run_null(
     fdr=0.05,
     seed=0,
     trend=False,
+    naive_engine="fast",
 ):
     """Run both arms under the donor-permutation null.
 
     Both arms are run on the same permutation for the first ``min(n_perm, n_perm_pb)`` labelings
     and BH-corrected together over one common tested set (:func:`pbcheck.mtc.bh_both_arms`, spec §5
-    / Amendment 2 Change 2) — those are the numbers that may be compared **across** arms. Any
-    further naive-only permutations are corrected with the per-arm path and reported separately as
-    ``naive_ndeg_solo``; they refine the naive arm's own floor but are not cross-arm comparable, and
-    are labelled as such rather than quietly pooled.
+    / Amendment 2 Change 2) — those are the numbers that may be compared **across** arms.
 
-    Returns a dict with per-permutation p-value matrices (aligned to ``universe``), post-BH #DEG
-    arrays, the real-label p-values (the reference the B5 empirical-p construction needs), the
-    paired-BH bookkeeping, per-permutation per-group cell totals, and the donor/perm bookkeeping.
+    The naive arm's #DEG comes back as **two** :class:`pbcheck.metrics.NDegSeries`, one per BH
+    convention, never as one array holding both:
+
+    * ``naive_ndeg_paired`` — ``n_paired`` entries under the paired BH. The cross-arm-comparable
+      floor, and the one the floor gap and every naive-vs-pseudobulk statement is taken over.
+    * ``naive_ndeg_solo`` — ``n_perm`` entries under the naive arm's own BH over its own tested
+      set. The naive arm's own false-positive floor at the full permutation resolution, which is
+      what a per-gene false-discovery map reads. Not cross-arm comparable.
+
+    ``pb_ndeg`` is paired by construction: the pseudobulk arm only runs on the paired permutations.
+
+    Parameters
+    ----------
+    naive_engine
+        ``"fast"`` (default) ranks the stratum once with
+        :class:`pbcheck.methods.naive_engine.NaiveRelabelEngine` and answers each labeling from the
+        per-donor rank sums; ``"scanpy"`` re-runs :func:`pbcheck.methods.naive.naive_de` per
+        permutation. The two are the same statistic — the p-values agree bit for bit, which is what
+        ``tests/test_naive_engine.py`` asserts rather than assumes — so this switches the cost, not
+        the result. The slow path is kept because a reference an optimisation can be checked
+        against is worth more than the lines it costs.
+
+    Returns a dict with per-permutation p-value matrices (aligned to ``universe``), the labelled
+    post-BH #DEG series, the real-label p-values (the reference the B5 empirical-p construction
+    needs), the paired-BH bookkeeping, per-permutation per-group cell totals, and the donor/perm
+    bookkeeping.
     """
+    if naive_engine not in ("fast", "scanpy"):
+        raise ValueError(f"naive_engine must be 'fast' or 'scanpy', got {naive_engine!r}")
     tmap = _true_map(adata, donor_col, condition_col)
     donors = list(tmap.index)
     true_test = set(tmap.index[tmap == test_level])
@@ -143,9 +183,24 @@ def run_null(
                    else pdata.obs_names)
     total_cells = int(cells_per_donor.sum())
 
+    # The naive arm's one-off setup. Under "fast" the ranking pass replaces every per-permutation
+    # AnnData copy, so the working copy the slow path needs is not made at all.
+    engine = (NaiveRelabelEngine.from_adata(adata, donor_col=donor_col, genes=universe)
+              if naive_engine == "fast" else None)
+    a = None if engine is not None else adata.copy()
+
     def _naive(a, label_col):
         return naive_de(a, condition_col=label_col, test_level=test_level, ref_level=ref_level,
                         genes=universe)
+
+    def _naive_for(test_donors):
+        """The naive arm for one donor labeling, from whichever engine is in use."""
+        if engine is not None:
+            return engine.test(test_donors, condition_col=condition_col,
+                               test_level=test_level, ref_level=ref_level)
+        a.obs["_perm"] = labels_for(a.obs[donor_col].astype(str), test_donors,
+                                    test_level, ref_level)
+        return _naive(a, "_perm")
 
     def _pb(cond_vals):
         return ebayes_from_pdata(pdata, condition_col=condition_col, test_level=test_level,
@@ -154,34 +209,42 @@ def run_null(
 
     # ---- real labels: the reference the B5 empirical-p construction is taken against (spec §4
     # "empirical permutation p-values per gene for lambda"). Computed once, and paired for the same
-    # reason the permutations are.
-    a = adata.copy()
-    real_pair = mtc.bh_both_arms(_naive(a, condition_col), _pb(None), universe, alpha=fdr)
+    # reason the permutations are. The slow path reads the real condition column directly rather
+    # than reconstructing it from the donor set, so this call is byte-for-byte the one it always was.
+    naive_real = (engine.test(true_test, condition_col=condition_col, test_level=test_level,
+                              ref_level=ref_level) if engine is not None
+                  else _naive(a, condition_col))
+    real_pair = mtc.bh_both_arms(naive_real, _pb(None), universe, alpha=fdr)
     naive_pvals_real = real_pair.naive.table["pval"].reindex(uni_index).to_numpy()
     pb_pvals_real = real_pair.pseudobulk.table["pval"].reindex(uni_index).to_numpy()
     pb_moderation = getattr(_pb(None), "moderation", None)
 
     # ---- both arms, one permutation at a time so they can be corrected together ----
     naive_pvals = np.full((len(perms_naive), G), np.nan)
-    naive_ndeg = np.zeros(len(perms_naive), dtype=int)          # paired where available
-    naive_ndeg_solo = np.zeros(len(perms_naive), dtype=int)     # per-arm BH, naive's own floor
+    # ONE BH convention per array, over its whole length. The paired array is sized to the paired
+    # permutations rather than padded out to n_perm with values from the other convention: an array
+    # whose meaning depends on the index is what produced the mixed-floor defect this shape removes.
+    naive_ndeg_paired = np.zeros(n_paired, dtype=np.int64)
+    naive_ndeg_solo = np.zeros(len(perms_naive), dtype=np.int64)
     pb_pvals = np.full((n_paired, G), np.nan)
-    pb_ndeg = np.zeros(n_paired, dtype=int)
+    pb_ndeg = np.zeros(n_paired, dtype=np.int64)
     cell_totals, pb_cell_totals, paired_bookkeeping = [], [], []
 
     for i, tset in enumerate(perms_naive):
-        a.obs["_perm"] = labels_for(a.obs[donor_col].astype(str), tset, test_level, ref_level)
-        nv_raw = _naive(a, "_perm")
+        nv_raw = _naive_for(tset)
         naive_pvals[i] = nv_raw.table["pval"].reindex(uni_index).to_numpy()
         naive_ndeg_solo[i] = mtc.bh_over_universe(nv_raw, universe, alpha=fdr).n_significant(fdr=fdr)
 
         n_test_cells = int(cells_per_donor[list(tset)].sum())
         cell_totals.append((n_test_cells, total_cells - n_test_cells))
 
+        # Permutations past n_paired have no pseudobulk counterpart, so there is no common tested
+        # set to correct over and no paired entry exists for them at all. Their naive #DEG lives
+        # only in naive_ndeg_solo, where the label says what it is.
         if i < n_paired:
             pb_raw = _pb(labels_for(donor_names, tset, test_level, ref_level))
             paired = mtc.bh_both_arms(nv_raw, pb_raw, universe, alpha=fdr)
-            naive_ndeg[i] = paired.naive.n_significant(fdr=fdr)
+            naive_ndeg_paired[i] = paired.naive.n_significant(fdr=fdr)
             pb_ndeg[i] = paired.pseudobulk.n_significant(fdr=fdr)
             pb_pvals[i] = paired.pseudobulk.table["pval"].reindex(uni_index).to_numpy()
             pb_cell_totals.append((n_test_cells, total_cells - n_test_cells))
@@ -191,11 +254,6 @@ def run_null(
                 "n_na_pseudobulk": paired.n_na_pseudobulk,
                 "n_dropped_for_fairness": len(paired.dropped_for_fairness),
             })
-        else:
-            # No pseudobulk counterpart for this labeling, so there is no common tested set to
-            # correct over. Fall back to the naive arm's own BH and DO NOT present the result as
-            # cross-arm comparable.
-            naive_ndeg[i] = naive_ndeg_solo[i]
 
     # ---- A2 PARTIALLY ADDRESSED (range check only); full stratification deferred ----
     #
@@ -236,11 +294,10 @@ def run_null(
     # Pooling the naive-only extras into it would reintroduce exactly the mismatched-denominator
     # comparison that erratum removes.
     n_n, n_p = len(perms_naive), n_paired
-    naive_paired = naive_ndeg[:n_paired]
     pb_fp_rate = float(np.mean(pb_ndeg >= 1)) if n_p else float("nan")
     mc = {
-        "naive_floor_median": float(np.median(naive_paired)) if n_p else float("nan"),
-        "naive_floor_mc_se": (float(np.std(naive_paired, ddof=1) / np.sqrt(n_p)) if n_p > 1
+        "naive_floor_median": float(np.median(naive_ndeg_paired)) if n_p else float("nan"),
+        "naive_floor_mc_se": (float(np.std(naive_ndeg_paired, ddof=1) / np.sqrt(n_p)) if n_p > 1
                               else float("nan")),
         "naive_floor_median_solo": float(np.median(naive_ndeg_solo)) if n_n else float("nan"),
         "pb_floor_median": float(np.median(pb_ndeg)) if n_p else float("nan"),
@@ -249,6 +306,9 @@ def run_null(
         "pb_fp_rate_mc_se": (float(np.sqrt(pb_fp_rate * (1 - pb_fp_rate) / n_p)) if n_p
                              else float("nan")),
         "bh_mode": "paired (mtc.bh_both_arms) over one common tested set — spec section 5",
+        # ...which describes every quantity in this dict EXCEPT naive_floor_median_solo, the one
+        # taken over the naive arm's own BH. Named so it cannot be read as a cross-arm number.
+        "naive_floor_median_solo_bh_mode": f"{BH_SOLO} (mtc.bh_over_universe) — naive arm only",
     }
     # The calibration claim is only as strong as the gap between the arms relative to this error.
     gap = mc["naive_floor_median"] - mc["pb_floor_median"]
@@ -265,9 +325,12 @@ def run_null(
         # for what that quantity does and does not measure.
         "naive_pvals_real": naive_pvals_real,
         "pb_pvals_real": pb_pvals_real,
-        "naive_ndeg": naive_ndeg,
-        "naive_ndeg_solo": naive_ndeg_solo,
-        "pb_ndeg": pb_ndeg,
+        # One BH convention per series, and the series says which. There is deliberately no
+        # combined "naive_ndeg": a caller that still reads that name gets a KeyError instead of a
+        # median over two conventions. See metrics.NDegSeries.
+        "naive_ndeg_paired": NDegSeries(naive_ndeg_paired, BH_PAIRED),
+        "naive_ndeg_solo": NDegSeries(naive_ndeg_solo, BH_SOLO),
+        "pb_ndeg": NDegSeries(pb_ndeg, BH_PAIRED),
         "paired_bh": paired_bookkeeping,
         "paired_bh_real": {
             "n_tested_common": real_pair.n_tested_common,
@@ -287,4 +350,9 @@ def run_null(
         "n_perm_paired": n_paired,
         "n_donors": len(donors),
         "G": G,
+        # Which naive engine produced these numbers. Recorded rather than assumed: the two are held
+        # to bitwise agreement by test, and an artifact that says which one ran is what makes that
+        # claim auditable after the fact instead of on trust.
+        "naive_engine": naive_engine,
+        "naive_engine_setup": dict(engine.setup) if engine is not None else None,
     }

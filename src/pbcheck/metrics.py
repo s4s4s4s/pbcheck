@@ -18,10 +18,61 @@ permutation null (a sharp-null upper bound on the pseudoreplication false positi
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 from scipy.stats import chi2
 
 _CHI2_MEDIAN_1DF = float(chi2.ppf(0.5, df=1))  # 0.4549364...
+
+#: The two Benjamini-Hochberg conventions a per-permutation #DEG count can be produced under.
+#: They answer different questions and **must never be pooled into one statistic**:
+#:
+#: * ``BH_PAIRED`` — both arms corrected together over one common tested set
+#:   (:func:`pbcheck.mtc.bh_both_arms`, spec §5 / Amendment 2 Change 2). This is the only #DEG that
+#:   may be compared **across** arms, because it is the only one whose BH denominator is shared
+#:   with the other arm's.
+#: * ``BH_SOLO`` — the naive arm corrected over its own non-NaN subset
+#:   (:func:`pbcheck.mtc.bh_over_universe`). This is the naive arm's own false-positive floor, the
+#:   quantity a per-gene false-discovery map must read, and it is available on every permutation
+#:   rather than only on the paired ones. It is **not** cross-arm comparable.
+BH_PAIRED = "paired"
+BH_SOLO = "solo"
+_BH_MODES = (BH_PAIRED, BH_SOLO)
+
+
+@dataclass(frozen=True)
+class NDegSeries:
+    """Post-BH #DEG per permutation under **one** BH convention, with the convention attached.
+
+    This type exists because a bare integer array does not carry which BH ran, and the two
+    conventions above were once concatenated into a single array whose meaning changed at index
+    ``n_paired``: ``permutation.run_null`` filled ``naive_ndeg[i]`` from the paired BH while a
+    paired pseudobulk fit existed and from the naive arm's own BH above that. The two agreed only
+    because ``gate_config.N_PERM == N_PERM_PB``; at spec §4's pre-registered counts for the real
+    sweep (``n_perm`` 1000, ``n_perm_pb`` >= 200) four fifths of that array would have come from
+    the other convention and the headline floor would have been a median over both at once.
+
+    A series therefore holds exactly one convention for all of its elements, and the label travels
+    with the numbers into :func:`perm_floor` and from there into the run artifact. ``counts`` is
+    made read-only so a caller cannot append the other convention onto an existing series.
+    """
+
+    counts: np.ndarray
+    bh_mode: str
+
+    def __post_init__(self) -> None:
+        if self.bh_mode not in _BH_MODES:
+            raise ValueError(f"bh_mode must be one of {_BH_MODES}, got {self.bh_mode!r}")
+        counts = np.asarray(self.counts)
+        if counts.ndim != 1:
+            raise ValueError(f"counts must be 1-D (one entry per permutation), got {counts.shape}")
+        counts = counts.astype(np.int64, copy=True)
+        counts.flags.writeable = False
+        object.__setattr__(self, "counts", counts)
+
+    def __len__(self) -> int:
+        return int(self.counts.size)
 
 
 def genomic_inflation(pvals: np.ndarray) -> float:
@@ -112,18 +163,38 @@ def empirical_perm_pvalues(real_pvals: np.ndarray, null_pval_matrix: np.ndarray)
     return np.where(np.isnan(real), np.nan, p)
 
 
-def perm_floor(ndeg_per_perm: np.ndarray, n_genes: int) -> dict:
+def perm_floor(ndeg_per_perm: NDegSeries | np.ndarray, n_genes: int, *,
+               bh_mode: str | None = None) -> dict:
     """Permutation false-positive floor = #DEG under the null (sharp-null upper bound, spec §6).
 
-    Returned as an absolute count and as a fraction of the frozen universe, with spread.
+    Returned as an absolute count and as a fraction of the frozen universe, with spread, plus the
+    BH convention the counts were produced under.
+
+    Pass an :class:`NDegSeries` and the convention comes with the numbers; pass a bare array and
+    state it in ``bh_mode``. ``bh_mode=None`` on a bare array is accepted and recorded as ``None``
+    — an unlabelled floor — because ``scripts/pb_calibration_probe.py`` is the frozen reference
+    instrument and is deliberately left untouched. Anything whose output is compared across arms
+    must pass a labelled series; see :data:`BH_PAIRED` / :data:`BH_SOLO` for why.
     """
-    x = np.asarray(ndeg_per_perm, dtype=float)
+    if isinstance(ndeg_per_perm, NDegSeries):
+        if bh_mode is not None and bh_mode != ndeg_per_perm.bh_mode:
+            raise ValueError(
+                f"bh_mode={bh_mode!r} contradicts the series' own label "
+                f"{ndeg_per_perm.bh_mode!r}; the two BH conventions are not interchangeable"
+            )
+        bh_mode = ndeg_per_perm.bh_mode
+        x = ndeg_per_perm.counts.astype(float)
+    else:
+        if bh_mode is not None and bh_mode not in _BH_MODES:
+            raise ValueError(f"bh_mode must be one of {_BH_MODES} or None, got {bh_mode!r}")
+        x = np.asarray(ndeg_per_perm, dtype=float)
     return {
         "median_count": float(np.median(x)),
         "iqr_count": float(np.subtract(*np.percentile(x, [75, 25]))),
         "median_frac": float(np.median(x) / n_genes) if n_genes else float("nan"),
         "max_count": float(np.max(x)),
         "n_perm": int(x.size),
+        "bh_mode": bh_mode,
     }
 
 

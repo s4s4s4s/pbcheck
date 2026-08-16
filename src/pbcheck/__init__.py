@@ -16,6 +16,9 @@ from pbcheck.design import DesignReport, audit_design
 from pbcheck.gene_universe import UniverseTooSmall, frozen_universe
 from pbcheck.methods import ebayes_from_pdata, naive_de, pseudobulk_de
 from pbcheck.metrics import (
+    BH_PAIRED,
+    BH_SOLO,
+    NDegSeries,
     empirical_perm_pvalues,
     genomic_inflation,
     jaccard,
@@ -47,6 +50,10 @@ __all__ = [
     "perm_floor",
     "signal_above_floor",
     "jaccard",
+    # ...and the labelled #DEG series, so the two BH conventions cannot be pooled by accident
+    "NDegSeries",
+    "BH_PAIRED",
+    "BH_SOLO",
     # mtc.py — the shared BH correction (spec section 5)
     "bh_both_arms",
     "PairedBH",

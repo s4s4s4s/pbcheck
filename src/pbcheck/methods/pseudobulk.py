@@ -154,7 +154,13 @@ def deseq_from_pdata(
     it must align with ``pdata.obs_names``.
     """
     if universe is not None:
-        keep = [g for g in universe if g in set(pdata.var_names)]
+        # The set is built ONCE, not once per gene. Rebuilding it inside the comprehension makes
+        # the restriction O(G^2): 127 s at G = 15000 against 0.008 s here, measured when the same
+        # construction was found and fixed in methods.moderated.ebayes_from_pdata. Hoisting it is a
+        # pure no-op on the output (``pdata`` is not mutated in the loop and ``keep`` still comes
+        # out in universe order), which is why it is applied even on this superseded path.
+        available = set(pdata.var_names)
+        keep = [g for g in universe if g in available]
         pdata = pdata[:, keep].copy()
     if pdata.n_vars == 0:
         raise ValueError("No genes to test after universe restriction.")

@@ -1,6 +1,7 @@
 """Unit tests for the inflation metrics — fast, no DE runs."""
 
 import numpy as np
+import pytest
 
 from pbcheck import metrics
 
@@ -88,6 +89,50 @@ def test_perm_floor_fraction():
     f = metrics.perm_floor(np.array([100, 120, 110, 90]), n_genes=1000)
     assert f["median_count"] == 105
     assert abs(f["median_frac"] - 0.105) < 1e-9
+    # A bare array carries no convention, and the floor says so rather than guessing one.
+    assert f["bh_mode"] is None
+
+
+def test_ndeg_series_holds_one_bh_convention_and_cannot_be_extended():
+    s = metrics.NDegSeries(np.array([3, 1, 2]), metrics.BH_PAIRED)
+    assert len(s) == 3 and s.bh_mode == metrics.BH_PAIRED
+    assert s.counts.dtype == np.int64
+    # Read-only: the defect being prevented is exactly "append the other convention to this array".
+    with pytest.raises(ValueError):
+        s.counts[0] = 99
+    with pytest.raises(ValueError):
+        metrics.NDegSeries(np.array([1, 2]), "whatever")
+    with pytest.raises(ValueError):
+        metrics.NDegSeries(np.array([[1, 2], [3, 4]]), metrics.BH_SOLO)
+
+
+def test_perm_floor_carries_the_bh_convention_and_refuses_a_contradiction():
+    """The floor must say which BH produced it, and must not be relabelled at the call site.
+
+    ``scripts/synthetic_gate.py`` used to take the headline naive floor over an array that was
+    paired-BH below ``n_paired`` and solo-BH above it. Both halves are legitimate statistics; their
+    median together is not one. Carrying the label into the floor dict is what makes the mistake
+    visible in the run artifact instead of invisible in an intermediate array.
+    """
+    paired = metrics.NDegSeries(np.array([10, 12, 14]), metrics.BH_PAIRED)
+    solo = metrics.NDegSeries(np.array([10, 12, 14, 100, 100]), metrics.BH_SOLO)
+
+    f_paired = metrics.perm_floor(paired, n_genes=1000)
+    f_solo = metrics.perm_floor(solo, n_genes=1000)
+    assert f_paired["bh_mode"] == metrics.BH_PAIRED and f_paired["n_perm"] == 3
+    assert f_solo["bh_mode"] == metrics.BH_SOLO and f_solo["n_perm"] == 5
+    assert f_paired["median_count"] == 12 and f_solo["median_count"] == 14
+
+    # Pooling the two would give yet a third number, which is the bug.
+    pooled = metrics.perm_floor(np.concatenate([paired.counts, solo.counts[3:]]), n_genes=1000)
+    assert pooled["median_count"] != f_paired["median_count"]
+
+    with pytest.raises(ValueError, match="contradicts the series"):
+        metrics.perm_floor(paired, n_genes=1000, bh_mode=metrics.BH_SOLO)
+    with pytest.raises(ValueError, match="bh_mode must be one of"):
+        metrics.perm_floor(np.array([1, 2]), n_genes=10, bh_mode="pared")
+    # Restating the series' own label is allowed -- it is an assertion, not a contradiction.
+    assert metrics.perm_floor(paired, 1000, bh_mode=metrics.BH_PAIRED)["bh_mode"] == "paired"
 
 
 def test_signal_above_floor_near_one():

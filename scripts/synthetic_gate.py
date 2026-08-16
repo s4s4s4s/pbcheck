@@ -95,6 +95,32 @@ def null_pvalue_uniformity(pval_matrix):
             "n_perm": len(ds)}
 
 
+def naive_floors(null_res, n_genes):
+    """The naive arm's two permutation floors, each over exactly ONE BH convention.
+
+    ``run_null`` returns the naive #DEG as two labelled series (spec §5 / Amendment 2 Change 2 for
+    the paired one, the arm's own BH for the other). They are different statistics and this
+    function is the only place the gate turns either into a floor, so that the choice is made once
+    and visibly:
+
+    * ``paired`` is the **headline**. Two of the gate's criteria read it, and one of them compares
+      it against the pseudobulk floor — a cross-arm comparison, which only the common-tested-set
+      BH supports. The other ("most of the genome") is a naive-arm statement that the solo series
+      would estimate at higher resolution, but it is left on the paired series so the gate has one
+      headline floor rather than two that differ by which permutations they saw.
+    * ``solo`` is reported alongside, never mixed in. It is the naive arm's own floor over all
+      ``n_perm`` permutations and is what the Phase 1 false-discovery map reads.
+
+    They coincide exactly while ``gate_config.N_PERM == N_PERM_PB``, which is why the defect this
+    replaces — reading a floor off an array that was paired below ``n_paired`` and solo above it —
+    was invisible in the committed run and would not have been at the pre-registered sweep counts.
+    """
+    return {
+        "paired": metrics.perm_floor(null_res["naive_ndeg_paired"], n_genes),
+        "solo": metrics.perm_floor(null_res["naive_ndeg_solo"], n_genes),
+    }
+
+
 def envelope_lines():
     """The declared operating envelope, as console lines (Amendment 3 Change 1(c)).
 
@@ -164,7 +190,8 @@ def main(argv=None) -> int:
 
     lam_naive = metrics.lambda_over_permutations(null_res["naive_pvals"])
     lam_pb = metrics.lambda_over_permutations(null_res["pb_pvals"])
-    floor = metrics.perm_floor(null_res["naive_ndeg"], G)
+    naive_floor = naive_floors(null_res, G)
+    floor, floor_solo = naive_floor["paired"], naive_floor["solo"]
     pb_floor = metrics.perm_floor(null_res["pb_ndeg"], G)
     pb_fp_rate = null_res["monte_carlo"]["pb_fp_rate"]
     pb_uniformity = null_pvalue_uniformity(null_res["pb_pvals"])
@@ -204,7 +231,7 @@ def main(argv=None) -> int:
     # control. That was WRONG and is retracted: under the COMPLETE null every rejection is false, so
     # V = R, FDP = 1{R>=1}, and FDR = E[FDP] = P(R>=1). FWER and FDR coincide there, so BH does bound
     # it and the spec's original criterion stands. See docs/AMENDMENTS.md, Amendment 1.
-    pb_mean_ndeg = float(np.mean(null_res["pb_ndeg"]))
+    pb_mean_ndeg = float(np.mean(null_res["pb_ndeg"].counts))
     lo, hi = gc.LAMBDA_BAND
 
     def band(x):
@@ -221,6 +248,8 @@ def main(argv=None) -> int:
     print(f"  pseudobulk perm-null FP rate        = {pb_fp_rate:6.2f}  (target <= {FDR}, "
           f"MC SE {null_res['monte_carlo']['pb_fp_rate_mc_se']:.3f})")
     print(f"  naive perm-floor  (median #DEG)     = {floor['median_count']:6.0f}  ({100*floor['median_frac']:.1f}% of {G} genes)")
+    print(f"    BH convention = {floor['bh_mode']} over {floor['n_perm']} perms (cross-arm comparable); "
+          f"naive-only BH = {floor_solo['median_count']:.0f} over {floor_solo['n_perm']} perms")
     print(f"  pseudobulk perm-floor (median #DEG) = {pb_floor['median_count']:6.0f}  (mean {pb_mean_ndeg:.2f})")
     print(f"  pseudobulk power (positive oracle)  = {sensitivity:6.2f}  (target >= {gc.POWER_TARGET}"
           f", at donor_sigma {power_sigma})")
@@ -318,6 +347,12 @@ def main(argv=None) -> int:
                 "Power 0.60 at donor_sigma=0.5 with 8 donors/group remains UNMET (measured 0.35 on "
                 "2026-08-15) and is NOT claimed.",
             "arm": {"pseudobulk": pb.method, "naive": nv.method},
+            # Which naive engine produced the permutation numbers. The fast engine is a
+            # bitwise-identical reformulation of the same statistic (one ranking pass per stratum
+            # instead of one scanpy re-run per permutation), but an artifact that does not record
+            # which code path ran cannot be audited against a later one that changed it.
+            "naive_engine": null_res["naive_engine"],
+            "naive_engine_setup": null_res["naive_engine_setup"],
             "universe_size": G,
             "thin_donor_filter": thin,
             "real_label_ndeg": {"naive": nv.n_significant(fdr=FDR),
@@ -326,7 +361,10 @@ def main(argv=None) -> int:
             "lambda_pseudobulk": lam_pb["lambda"],
             "lambda_empirical_perm_b5": lam_emp,
             "pb_perm_null_fp_rate": pb_fp_rate,
+            # Two floors, each tagged with the BH convention it was taken over; never one array
+            # holding both (see permutation.run_null / metrics.NDegSeries).
             "naive_perm_floor": floor,
+            "naive_perm_floor_solo": floor_solo,
             "pb_perm_floor": pb_floor,
             "pb_mean_ndeg": pb_mean_ndeg,
             "pb_null_pvalue_uniformity": pb_uniformity,
