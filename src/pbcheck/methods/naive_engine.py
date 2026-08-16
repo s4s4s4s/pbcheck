@@ -35,10 +35,33 @@ approximation of a pre-registered statistic:
   here, and per-donor-then-per-group gives the identical bits to scanpy's single group-wise sum.
 * **Tie coefficient — same expression, same operand order**, including the strictly sequential
   reduction (scanpy runs ``_tiecorrect`` under numba, whose ``.sum()`` accumulates left to right).
-* **Means and variances — the same algebra, a different summation order.** These feed
-  ``log2fc`` (both methods) and the t-test statistic. Reassociating a float sum is not bit-exact,
-  so agreement is at floating-point level rather than bitwise; ``tests/test_naive_engine.py``
-  measures it against scanpy instead of assuming it.
+* **Means and variances — the same algebra, and NOT reliably the same bits.** These feed ``log2fc``
+  (both methods) and the whole ``t-test_overestim_var`` statistic, and the operation that loses the
+  bits is named precisely: :func:`fast_array_utils.stats.mean_var` computes the variance as
+  ``E[x**2] - E[x]**2``, forming the squares in the array's **stored dtype** — float32 for a
+  normalised count matrix — before accumulating them in float64.
+
+  Write ``kappa = E[x**2] / var``. The relative error of that variance is then about
+  ``(eps32/2 + n*eps64) * kappa``, in which ``eps32/2 = 5.96e-08`` dominates by eight orders of
+  magnitude. On log1p-normalised data ``kappa`` is large by construction — the values are logs of a
+  normalised count, so they sit tightly around a mean of order 9 while the within-group variance
+  can be 1e-13 — and it does **not** shrink as cells are added (measured: 1.9e14 at 2 cells per
+  group, still 9.9e13 at 120). At ``kappa`` = 1.9e14 the formula returns a variance seven orders of
+  magnitude too large, and the p-value built on it is arithmetic noise.
+
+  That is a property of the pre-registered statistic, not of this module — it was measured with
+  scanpy on both sides of the comparison. The consequence to plan around: **an
+  ``t-test_overestim_var`` p-value is not reproducible across machines** on genes whose group
+  values collapse onto neighbouring float32 values, whichever engine computes it. Observed as
+  exactly that: engine and scanpy agree bitwise on 7200 configurations here, while CI's scanpy
+  returned the value exact rational arithmetic gives. What this module guarantees, and what
+  ``tests/test_naive_engine.py`` asserts tightly, is one level down — the per-donor ``n``,
+  ``sum x`` and ``sum x**2`` are correctly rounded, and the formula applied to them is scanpy's,
+  bit for bit. A better-conditioned two-pass variance here would be more accurate and would be a
+  **different number** from the pre-registered one, so it is not used.
+
+  The Wilcoxon arm — the pre-registered primary (spec §2) — is untouched by any of this. It never
+  subtracts two nearly equal large numbers, which is why it is bitwise on every platform.
 
 Nothing here is a new statistic. The slow path stays callable and the tests run the two against
 each other on the same inputs, which is the only form of the claim a reviewer can check.
@@ -382,10 +405,13 @@ class NaiveRelabelEngine:
 
         The variances come from the per-donor ``sum x`` and ``sum x^2`` through the same
         ``E[x^2] - E[x]^2`` that :func:`fast_array_utils.stats.mean_var` uses, with the same
-        ``correction=1`` rescaling. That formula loses precision by cancellation when the mean
-        dominates the spread; inheriting scanpy's formula inherits its conditioning exactly, where
-        computing a better-conditioned two-pass variance here would produce a *different* number
-        from the pre-registered one.
+        ``correction=1`` rescaling. **Read the module docstring's fourth bullet before relying on
+        a p-value from this path**: that subtraction has condition number ``E[x^2]/var``, which on
+        log1p data reaches 1e14 and does not improve with more cells, so on saturated genes the
+        pre-registered formula has no significant digits left and its p-value is not reproducible
+        across machines — for scanpy as much as for this engine. Inheriting scanpy's formula
+        inherits its conditioning exactly, which is the point; a better-conditioned two-pass
+        variance would be a *different* number from the pre-registered one.
         """
         var_group = self._group_variance(mask, mean_group, n_a)
         var_ref = self._group_variance(~mask, mean_ref, n_b)

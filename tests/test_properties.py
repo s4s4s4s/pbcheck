@@ -4,8 +4,8 @@ Both are pinned by example-based regression tests elsewhere (``test_permutation_
 generalize across a range of inputs rather than a handful of hand-picked ones, which is exactly
 where the historical bugs in this code lived (``build_perms`` used to hang on a *specific* 5v5
 input; a monotonicity break in BH would show up on *some* p-value array, not necessarily the ones
-anyone thought to write down). ``max_examples`` is kept modest (50) so this stays fast enough to
-run on every commit rather than being relegated to ``slow``.
+anyone thought to write down). ``max_examples`` is kept modest so this stays fast enough to run on
+every commit rather than being relegated to ``slow``.
 """
 
 from __future__ import annotations
@@ -18,7 +18,15 @@ from hypothesis import given, settings, strategies as st
 from pbcheck.permutation import build_perms
 from pbcheck import mtc
 
-_SETTINGS = settings(max_examples=50, deadline=None)
+#: ``derandomize=True`` for the same reason ``tests/test_naive_engine.py`` sets it: without it
+#: hypothesis reseeds from entropy every run, so this machine and each CI runner explore different
+#: examples and a green local run says nothing about CI. That is not hypothetical here — it is how
+#: a numerical disagreement in the naive engine passed locally across 7200 configurations and failed
+#: on CI's first attempt. Derandomised, every machine walks the identical sequence, so local green
+#: and CI green mean the same thing. The cost is that repeated runs no longer turn up new inputs
+#: over time; the example budget is doubled to buy some of that back in a single pass, which both
+#: of these cheap properties can afford.
+_SETTINGS = settings(max_examples=100, deadline=None, derandomize=True)
 
 
 # ---------------------------------------------------------------------------

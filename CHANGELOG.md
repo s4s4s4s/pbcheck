@@ -569,3 +569,31 @@ culminating in Amendment 2.
   CSC and peaks at two copies of the sparse matrix, which for the largest stratum is on the order
   of 20 GB. Blockwise assembly would fix it; it has not been done, because doing it without a
   profile of a real stratum would be guesswork.
+- Fixed (found by CI, not locally): the engine's cross-check against scanpy failed on every CI leg
+  for `t-test_overestim_var` while passing here. The engine was not at fault — it reproduces scanpy
+  bit-for-bit on a given machine, and 7200 local configurations differ by exactly 0.0. **scanpy's
+  own value moves between machines.** `fast_array_utils.stats.mean_var` forms the variance as
+  `E[x²] − E[x]²` with `power(x, 2)` called without a `dtype`, so the squares are taken in float32
+  storage precision; the relative error of the variance goes as `(eps32/2 + n·eps64)·E[x²]/var`. On
+  log1p-normalised data that condition number is enormous by construction — measured 1.9e14 on an
+  adversarial gene, where the formula returns 4.79e-06 against a true variance of 4.55e-13, i.e.
+  **zero significant digits** — and it does not improve with more cells (1.9e14 at 2 cells per
+  group, 9.9e13 at 120). So `t-test_overestim_var`, spec §2's robustness variant, is not
+  reproducible across machines **for any implementation**, ours included. This does not touch a
+  single number the project reports: neither `run_null` nor the gate ever passes `method`, so both
+  run the pre-registered Wilcoxon, whose agreement stays bitwise on every leg. It is escalated to
+  the amendment log rather than absorbed here.
+- Changed (the fix, which is not a wider tolerance): the `rtol=1e-12` on p-values is **removed and
+  not replaced by a larger constant**. The assertions move to layers where the arithmetic is
+  well conditioned — the per-group sufficient statistics against `math.fsum` at `n·eps64`, and a
+  bitwise comparison against a line-by-line transcription of scanpy's `t_test` given identical
+  statistics, on deliberately unbalanced groups so the `nobs2 = ns_group` substitution is
+  observable. The end-to-end comparison keeps a per-gene rounding envelope **derived** from the
+  dtype analysis rather than a constant. A six-mutation table in the report shows each layer
+  catches a defect the others miss (shifted statistics, dropped ddof, removed overestim
+  substitution, Student for Welch, double-counted donor row, removed tie correction).
+- Changed: `derandomize=True` on the property suites, with example budgets raised 30 → 120 and
+  50 → 100. Hypothesis reseeds from entropy per run and `.hypothesis/examples` is gitignored, so
+  every machine explored a different set and a green local run meant nothing about CI. Now a CI
+  failure reproduces here by test name. Stated plainly because it is the real lesson: this defect
+  was invisible locally through 7200 configurations and CI found it on the first attempt.
