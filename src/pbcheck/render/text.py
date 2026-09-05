@@ -130,3 +130,91 @@ def caveat_text(caveat_id: str, **values: object) -> str:
     present in ``values`` (the default behaviour of ``str.format_map`` on a plain ``dict``).
     """
     return CAVEATS[caveat_id].format_map(values)
+
+
+#: Plain-language glossary, section 3 of the report ("What these words mean"), one sentence per
+#: term, in the order the plan lists them. ``pbcheck.render.sections`` renders one paragraph per
+#: entry; nothing here is interpolated, so the wording is fixed at import time.
+GLOSSARY: tuple[tuple[str, str], ...] = (
+    (
+        "lambda",
+        "the genomic inflation factor: the ratio of observed test statistics to the null "
+        "expectation, with 1.0 meaning no inflation.",
+    ),
+    (
+        "permutation floor",
+        "the number of genes a test calls under donor permutation, when condition labels carry "
+        "no real signal; it is the test's own false-positive baseline on this data.",
+    ),
+    (
+        "donor-permutation null",
+        "the null distribution built by reassigning condition labels between donors, keeping "
+        "every donor's cells together, and rerunning the test on each reassignment.",
+    ),
+    (
+        "gene universe",
+        "the fixed set of genes both arms are tested and corrected over, frozen before either "
+        "arm sees the real labels.",
+    ),
+    (
+        "replication unit",
+        "the unit whose independent draws the statistics assume; for donor data that unit is "
+        "the donor, not the cell.",
+    ),
+    (
+        "thin-donor filter",
+        "the rule that drops a donor's pseudobulk profile when it is built from too few cells "
+        "or too few counts, rather than keeping a noisy profile.",
+    ),
+    (
+        "operating envelope",
+        "the region of donor count and donor-to-donor variability where the pseudobulk arm's "
+        "calibration and power were established on synthetic data.",
+    ),
+    (
+        "sigma_donor",
+        "a knob of pbcheck's synthetic simulator for how much donors differ from each other; it "
+        "cannot be measured on your data, which is why the envelope question is left open.",
+    ),
+    (
+        "Monte-Carlo SE",
+        "the standard error of a quantity estimated from a finite number of permutations; it "
+        "shrinks as more permutations are drawn.",
+    ),
+    (
+        "BH convention (solo vs paired)",
+        "solo BH corrects an arm's p-values over the whole gene universe on its own; paired BH "
+        "corrects both arms together over the genes common to both, so their real-label counts "
+        "are directly comparable.",
+    ),
+)
+
+#: The read-out sentence templates (plan section, "Read-out templates (SENTENCES), fixed here"),
+#: formatted with ``str.format_map`` by :mod:`pbcheck.render.sections` from the payload's
+#: ``readout`` block and neighbouring fields. Fixed verbatim; not improvised at render time.
+SENTENCES: dict[str, str] = {
+    "floor_solo": (
+        "Under donor permutation, with no true signal to find, the naive per-cell test calls a "
+        "median of {median_count} genes ({median_frac_pct}% of the {G}-gene universe; "
+        "Monte-Carlo SE {mc_se}) over {n_perm_achieved} permutations{coarse_note}; on the real "
+        "labels it calls {real_solo}."
+    ),
+    "lambda_naive": (
+        "The naive arm's inflation factor lambda is {lambda} (IQR {iqr}): {class_word} against "
+        "the band {band_lo}-{band_hi}."
+    ),
+    "pseudobulk": (
+        "The donor-pseudobulk arm's lambda is {lambda} ({class_word}); its permutation "
+        "false-positive rate is {fp_rate} (MC SE {se}) and its floor a median of {median_count} "
+        "genes; on the real labels it calls {real_paired} genes."
+    ),
+    "pseudobulk_not_run": "The donor-pseudobulk arm was not run: {reason_text}.",
+    "donors": (
+        "{n_test} donors in {test_level}, {n_ref} in {ref_level}; {n_distinct_splits} distinct "
+        "donor splits exist."
+    ),
+    "profiles": (
+        "After the thin-donor filter (fewer than {min_cells} cells or {min_counts} counts), "
+        "{p_test} and {p_ref} pseudobulk profiles remain."
+    ),
+}
