@@ -1,8 +1,13 @@
 # Security
 
-No supported releases exist yet — pbcheck is pre-release research software (Phase 0, unreleased,
-untagged). There is no versioned support policy to state.
+## Supported versions
 
-If you find a security issue, please open a
-[GitHub issue](https://github.com/s4s4s4s/pbcheck/issues), or report it privately to the author
-by email (see the `authors` field in `pyproject.toml`).
+| Version | Supported |
+|---|---|
+| 0.1.x | :white_check_mark: |
+
+## Reporting a vulnerability
+
+Please use GitHub's private vulnerability reporting on this repository
+([Security tab](https://github.com/s4s4s4s/pbcheck/security/advisories/new)), or report it
+privately to the author by email (see the owner's e-mail in `CITATION.cff`).
