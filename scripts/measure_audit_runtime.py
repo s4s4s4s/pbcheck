@@ -129,7 +129,7 @@ def _run_worker(spec_path: str, result_path: str) -> None:
     sys.path.insert(0, str(REPO_ROOT / "synthetic"))
     from oracles import null_oracle  # noqa: PLC0415 (path set up just above)
 
-    from pbcheck.audit import AuditSettings, run_audit  # noqa: PLC0415
+    from pbcheck.audit import AuditSettings, run_audit  # noqa: PLC0415 (same deferred path setup)
 
     spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
     oracle = null_oracle(seed=spec["oracle_seed"], **spec["shape_kwargs"])
