@@ -14,6 +14,7 @@ here is about wiring, and the product defaults would only buy resolution no asse
 from __future__ import annotations
 
 import copy
+import inspect
 from pathlib import Path
 
 import anndata as ad
@@ -22,7 +23,7 @@ import pandas as pd
 import pytest
 from conftest import AUDIT_ORACLE_SHAPE
 
-from pbcheck import audit, audit_schema, gate_config, gene_universe
+from pbcheck import audit, audit_schema, gate_config, gene_universe, io_counts
 from pbcheck.audit import AuditSettings, run_audit
 from pbcheck.methods.pseudobulk import build_pseudobulk
 from pbcheck.render.text import LAMBDA_CLASS_WORDS
@@ -57,6 +58,28 @@ def _settings(**overrides) -> AuditSettings:
 
 def _caveat_ids(payload: dict) -> list[str]:
     return [c["id"] for c in payload["caveats"]]
+
+
+#: What may legitimately sit outside every stage: the payload's own bookkeeping (the provenance
+#: block reads installed package versions, the caveat texts are rendered, the schema is walked).
+#: It is a fixed cost that does not grow with the data, hence an absolute allowance; the fraction
+#: on top only absorbs scheduling noise. The defect these bounds exist to catch charged about a
+#: quarter of a product-sized run to no stage at all.
+STAGE_TABLE_OVERHEAD_SECONDS = 0.2
+STAGE_TABLE_OVERHEAD_FRACTION = 0.05
+
+
+def _assert_stage_table_accounts_for_the_run(payload: dict) -> None:
+    """The per-stage table must account for the run's wall clock bar the payload's bookkeeping.
+
+    The table is what the report publishes as where the time went, so a piece of work performed
+    outside every ``audit._stage`` block would understate it without changing any shape.
+    """
+    runtime = payload["runtime_seconds"]
+    accounted = sum(v for v in payload["runtime_by_stage_seconds"].values() if v is not None)
+    assert accounted <= runtime
+    assert runtime - accounted <= (STAGE_TABLE_OVERHEAD_SECONDS
+                                   + STAGE_TABLE_OVERHEAD_FRACTION * runtime)
 
 
 @pytest.fixture(scope="module")
@@ -261,6 +284,10 @@ def test_non_integer_x_drops_pseudobulk_and_runs_naive(audit_shape_oracle):
     assert "A1" not in ids
     c6 = next(c["text"] for c in payload["caveats"] if c["id"] == "C6")
     assert payload["counts_check"]["reason"] in c6
+
+    # The naive-only path summarises its own null after the engine call; that work is charged to
+    # the permutation stage rather than falling outside the table.
+    _assert_stage_table_accounts_for_the_run(payload)
 
 
 def test_naive_null_matches_run_null_bitwise(audit_shape_oracle):
@@ -641,6 +668,15 @@ def test_celltype_subset_and_constant_column(audit_shape_oracle):
     assert explicit["input"]["celltype_value"] == CELLTYPE_VALUE
     assert "C8" not in _caveat_ids(explicit)
 
+    # The mirror of the "column without a value" error: a value with no column to read it from
+    # would otherwise be copied into the payload as a subset that was never taken.
+    with pytest.raises(audit.AuditInputError, match="without a cell-type column"):
+        run_audit(audit_shape_oracle.adata.copy(),
+                  _settings(celltype_col=None, celltype_value=CELLTYPE_VALUE))
+    with pytest.raises(audit.AuditInputError, match="without a cell-type value"):
+        run_audit(audit_shape_oracle.adata.copy(),
+                  _settings(celltype_col=CELLTYPE_COL, celltype_value=None))
+
 
 def test_universe_too_small_becomes_design_only(small_null_adata):
     """80 genes cannot make a universe of 200, and no arm is run on the ones that are left."""
@@ -777,6 +813,58 @@ def test_achieved_perm_counts_and_coarse_caveat(audit_shape_oracle):
 
     caveat = next(c["text"] for c in payload["caveats"] if c["id"] == "C9")
     assert "18" in caveat and "1000" in caveat
+
+
+def test_same_test_and_ref_level_is_refused_as_input(audit_shape_oracle):
+    """One level named as both sides of the contrast is refused before anything is computed.
+
+    Every per-level presence check passes for such settings (the level does exist), and the donor
+    gate reads the same group twice, so it sees a healthy donor count for a stratum that has one
+    group. Without this check the settings reached the DE arms and failed inside scanpy after the
+    whole run had been paid for.
+    """
+    for extra in ({}, {"design_only": True}):
+        with pytest.raises(audit.AuditInputError, match="both the test and the reference level"):
+            run_audit(audit_shape_oracle.adata.copy(),
+                      _settings(test_level=REF_LEVEL, ref_level=REF_LEVEL, **extra))
+
+    settings = _settings(test_level=TEST_LEVEL, ref_level=TEST_LEVEL)
+    with pytest.raises(audit.AuditInputError) as caught:
+        audit.prepare_stratum(audit_shape_oracle.adata.copy(), settings)
+    message = str(caught.value)
+    assert CONDITION_COL in message
+    assert TEST_LEVEL in message and REF_LEVEL in message  # the available values are listed
+
+
+def test_universe_filter_parameters_are_the_engine_defaults():
+    """The product's universe filter is the engine's own rule, bound to it rather than re-typed.
+
+    ``audit`` passes both parameters explicitly so the payload cannot report a filter the call did
+    not use, which makes a silent drift from the engine's default possible; this pins the two
+    equal at both ends, against the engine constant and against the signature default the audit
+    would inherit if it stopped passing them.
+    """
+    assert audit.PRODUCT_UNIVERSE_MIN_TOTAL_COUNT == io_counts.UNIVERSE_MIN_TOTAL_COUNT
+    assert audit.PRODUCT_UNIVERSE_MIN_PROP == io_counts.UNIVERSE_MIN_PROP
+
+    defaults = inspect.signature(gene_universe.frozen_universe).parameters
+    assert defaults["min_total_count"].default == audit.PRODUCT_UNIVERSE_MIN_TOTAL_COUNT
+    assert defaults["min_prop"].default == audit.PRODUCT_UNIVERSE_MIN_PROP
+
+
+def test_runtime_by_stage_accounts_for_the_whole_run(complete_run):
+    """The published per-stage table is not allowed to lose a piece of the run.
+
+    The summarisation of the permutation null (the empirical permutation p-values behind every
+    lambda, computed over the whole permutation matrix) runs after the engine call returns, and
+    charging it to no stage understated the table by about a quarter of the run at product
+    permutation counts.
+    """
+    payload = complete_run["payload"]
+    stages = payload["runtime_by_stage_seconds"]
+    assert stages["permutation_null"] is not None
+    assert stages["real_label"] is not None
+    _assert_stage_table_accounts_for_the_run(payload)
 
 
 @pytest.mark.slow

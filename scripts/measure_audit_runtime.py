@@ -158,7 +158,7 @@ def _run_worker(spec_path: str, result_path: str) -> None:
         "platform": platform.platform(),
         "cpu_count": os.cpu_count(),
     }
-    Path(result_path).write_text(json.dumps(result), encoding="utf-8")
+    Path(result_path).write_text(json.dumps(result), encoding="utf-8", newline="\n")
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +180,7 @@ def _measure_one(shape_kwargs: dict, oracle_seed: int, n_perm: int, n_perm_pb: i
             "n_perm_pb": n_perm_pb,
         }),
         encoding="utf-8",
+        newline="\n",
     )
 
     cmd = [sys.executable, str(Path(__file__).resolve()), "--worker",

@@ -88,11 +88,12 @@ FALLBACK_UNIVERSE_MIN_SIZE = 200
 
 #: Total counts a gene needs across donor pseudobulk profiles to enter the frozen universe.
 #: PRODUCT VALUE, passed explicitly to :func:`pbcheck.gene_universe.frozen_universe` so the payload
-#: never reports a filter parameter the call did not actually use.
-PRODUCT_UNIVERSE_MIN_TOTAL_COUNT = 15
+#: never reports a filter parameter the call did not actually use. Bound to the engine's own name
+#: rather than re-typed, so the product and the engine cannot drift apart unnoticed.
+PRODUCT_UNIVERSE_MIN_TOTAL_COUNT = io_counts.UNIVERSE_MIN_TOTAL_COUNT
 
 #: Fraction of donor pseudobulk profiles a gene must be detected in. PRODUCT VALUE, same reason.
-PRODUCT_UNIVERSE_MIN_PROP = 0.5
+PRODUCT_UNIVERSE_MIN_PROP = io_counts.UNIVERSE_MIN_PROP
 
 #: Largest fraction of the file's cells that may be dropped for missing donor/condition/cell-type
 #: values before the input is refused outright. PRODUCT VALUE: past this point the audited stratum
@@ -187,12 +188,17 @@ class AuditSettings:
 
 @contextmanager
 def _stage(timings: dict, name: str):
-    """Time one stage into ``timings[name]``; the timing is recorded even when the stage raises."""
+    """Add one stage's seconds to ``timings[name]``; recorded even when the stage raises.
+
+    Additive rather than assigning: a stage that runs in two pieces (the permutation null and the
+    summarisation of its output, the two universe builders) reports the work it actually did, so
+    the per-stage table sums to the run's wall clock instead of losing whichever piece came last.
+    """
     started = time.perf_counter()
     try:
         yield
     finally:
-        timings[name] = float(time.perf_counter() - started)
+        timings[name] = float(timings.get(name, 0.0) + (time.perf_counter() - started))
 
 
 def _available(values) -> str:
@@ -373,6 +379,14 @@ def prepare_stratum(adata, settings: AuditSettings) -> tuple[ad.AnnData, dict]:
         )
 
     condition = obs[settings.condition_col].astype(str).to_numpy()
+    if settings.test_level == settings.ref_level:
+        # Refused here rather than deep inside the DE arms: both levels exist, the donor gate reads
+        # the one group twice and passes, and the run would only fail after paying for itself.
+        raise AuditInputError(
+            f"condition column {settings.condition_col!r} was given the same value "
+            f"{settings.test_level!r} as both the test and the reference level, so there is one "
+            f"group, not a contrast; available values: {_available(obs[settings.condition_col])}"
+        )
     levels = {settings.test_level, settings.ref_level}
     for level in (settings.test_level, settings.ref_level):
         if not bool((condition[~missing_condition] == level).any()):
@@ -397,6 +411,16 @@ def prepare_stratum(adata, settings: AuditSettings) -> tuple[ad.AnnData, dict]:
             )
         in_celltype = (celltype == settings.celltype_value) & ~missing_celltype
     else:
+        if settings.celltype_value is not None:
+            # Symmetric to the check above: a cell-type value with no column to read it from would
+            # be recorded in the payload as a subset that was never taken.
+            raise AuditInputError(
+                f"a cell-type value {settings.celltype_value!r} was given without a cell-type "
+                f"column; name the column with celltype_col, or drop the value to pool every cell "
+                f"type; columns that look like cell-type columns in this file: "
+                + (", ".join(str(c) for c in adata.obs.columns
+                             if CELLTYPE_LIKE_PATTERN.search(str(c))) or "(none)")
+            )
         in_celltype = np.ones(n_cells_loaded, dtype=bool)
 
     kept = ~any_missing & in_levels & in_celltype
@@ -777,6 +801,17 @@ def run_audit(adata, settings: AuditSettings) -> dict:
     if min_donors_per_group < report.min_donors:
         return _finish("design_only", "too_few_donors")
 
+    groups = payload["design"]["groups"]
+    if len(groups) != 2:
+        # Belt and braces for the arms: ``prepare_stratum`` keeps exactly the two levels, so this
+        # can only fire if a future selection path lets a single-group stratum through. Refused
+        # with the same error the input checks use rather than handed to the DE engines.
+        raise AuditInputError(
+            f"the audited stratum has {len(groups)} group(s) in {settings.condition_col!r} "
+            f"({sorted(groups)!r}); a contrast needs exactly the two levels "
+            f"{settings.test_level!r} and {settings.ref_level!r}"
+        )
+
     with _stage(timings, "counts"):
         counts_work, counts_source, counts_check = resolve_counts(work, settings)
     payload["counts_check"] = counts_check.as_dict()
@@ -917,24 +952,27 @@ def _run_naive_only(payload: dict, work, universe: list[str], settings: AuditSet
             "consistent_with_permutation_path": None,
         }
 
-    payload["permutation_null"] = {
-        "naive": {
-            **_lambda_block(null["naive_pvals"], null["naive_pvals_real"]),
-            "floor_solo": _floor_block(null["naive_ndeg_solo"], len(universe)),
-            "floor_paired": None,
-        },
-        "pseudobulk": None,
-        "monte_carlo": None,
-        "real_split_inside_perm_range": null["real_split_inside_perm_range"],
-        "real_split_percentile_in_perms": null["real_split_percentile_in_perms"],
-        "n_donors": int(null["n_donors"]),
-        "n_distinct_splits": _n_distinct_splits(null["n_donors"], null["n_test_donors"]),
-        "n_perm_naive_achieved": int(null["n_perm_naive"]),
-        "n_perm_pb_achieved": None,
-        "n_perm_paired": None,
-        "engine_path": "naive_null",
-    }
-    _readout_from(payload, universe)
+    # Same reason as in :func:`_run_both_arms`: the lambda block runs the empirical permutation
+    # p-values over the whole matrix, which is the null's work and belongs to the null's stage.
+    with _stage(timings, "permutation_null"):
+        payload["permutation_null"] = {
+            "naive": {
+                **_lambda_block(null["naive_pvals"], null["naive_pvals_real"]),
+                "floor_solo": _floor_block(null["naive_ndeg_solo"], len(universe)),
+                "floor_paired": None,
+            },
+            "pseudobulk": None,
+            "monte_carlo": None,
+            "real_split_inside_perm_range": null["real_split_inside_perm_range"],
+            "real_split_percentile_in_perms": null["real_split_percentile_in_perms"],
+            "n_donors": int(null["n_donors"]),
+            "n_distinct_splits": _n_distinct_splits(null["n_donors"], null["n_test_donors"]),
+            "n_perm_naive_achieved": int(null["n_perm_naive"]),
+            "n_perm_pb_achieved": None,
+            "n_perm_paired": None,
+            "engine_path": "naive_null",
+        }
+        _readout_from(payload, universe)
 
 
 def _run_both_arms(payload: dict, work, pdata, universe: list[str], settings: AuditSettings,
@@ -986,43 +1024,47 @@ def _run_both_arms(payload: dict, work, pdata, universe: list[str], settings: Au
             seed=settings.seed, naive_engine="fast",
         )
 
-    payload["real_label"]["consistent_with_permutation_path"] = bool(
-        paired.n_tested_common == result["paired_bh_real"]["n_tested_common"]
-    )
+    # Summarising the null is part of the null's cost: the empirical permutation p-values behind
+    # every lambda are computed over the whole permutation matrix here, so the stage is reopened
+    # instead of leaving that work outside the per-stage table.
+    with _stage(timings, "permutation_null"):
+        payload["real_label"]["consistent_with_permutation_path"] = bool(
+            paired.n_tested_common == result["paired_bh_real"]["n_tested_common"]
+        )
 
-    monte_carlo = result["monte_carlo"]
-    floor_paired = _floor_block(result["naive_ndeg_paired"], len(universe))
-    floor_paired["mc_se"] = float(monte_carlo["naive_floor_mc_se"])
-    pb_floor = _floor_block(result["pb_ndeg"], len(universe))
-    pb_floor["mc_se"] = float(monte_carlo["pb_floor_mc_se"])
+        monte_carlo = result["monte_carlo"]
+        floor_paired = _floor_block(result["naive_ndeg_paired"], len(universe))
+        floor_paired["mc_se"] = float(monte_carlo["naive_floor_mc_se"])
+        pb_floor = _floor_block(result["pb_ndeg"], len(universe))
+        pb_floor["mc_se"] = float(monte_carlo["pb_floor_mc_se"])
 
-    tmap = _donor_condition_map(work.obs, settings.donor_col, settings.condition_col)
-    n_test_donors = int((tmap == settings.test_level).sum())
+        tmap = _donor_condition_map(work.obs, settings.donor_col, settings.condition_col)
+        n_test_donors = int((tmap == settings.test_level).sum())
 
-    payload["permutation_null"] = {
-        "naive": {
-            **_lambda_block(result["naive_pvals"], result["naive_pvals_real"]),
-            "floor_solo": _floor_block(result["naive_ndeg_solo"], len(universe)),
-            "floor_paired": floor_paired,
-        },
-        "pseudobulk": {
-            **_lambda_block(result["pb_pvals"], result["pb_pvals_real"]),
-            "floor": pb_floor,
-            "fp_rate": float(monte_carlo["pb_fp_rate"]),
-            "fp_rate_mc_se": float(monte_carlo["pb_fp_rate_mc_se"]),
-        },
-        "monte_carlo": {k: (float(v) if isinstance(v, (int, float)) else v)
-                        for k, v in monte_carlo.items()},
-        "real_split_inside_perm_range": bool(result["real_split_inside_perm_range"]),
-        "real_split_percentile_in_perms": float(result["real_split_percentile_in_perms"]),
-        "n_donors": int(result["n_donors"]),
-        "n_distinct_splits": _n_distinct_splits(int(result["n_donors"]), n_test_donors),
-        "n_perm_naive_achieved": int(result["n_perm_naive"]),
-        "n_perm_pb_achieved": int(result["n_perm_pb"]),
-        "n_perm_paired": int(result["n_perm_paired"]),
-        "engine_path": "run_null",
-    }
-    _readout_from(payload, universe)
+        payload["permutation_null"] = {
+            "naive": {
+                **_lambda_block(result["naive_pvals"], result["naive_pvals_real"]),
+                "floor_solo": _floor_block(result["naive_ndeg_solo"], len(universe)),
+                "floor_paired": floor_paired,
+            },
+            "pseudobulk": {
+                **_lambda_block(result["pb_pvals"], result["pb_pvals_real"]),
+                "floor": pb_floor,
+                "fp_rate": float(monte_carlo["pb_fp_rate"]),
+                "fp_rate_mc_se": float(monte_carlo["pb_fp_rate_mc_se"]),
+            },
+            "monte_carlo": {k: (float(v) if isinstance(v, (int, float)) else v)
+                            for k, v in monte_carlo.items()},
+            "real_split_inside_perm_range": bool(result["real_split_inside_perm_range"]),
+            "real_split_percentile_in_perms": float(result["real_split_percentile_in_perms"]),
+            "n_donors": int(result["n_donors"]),
+            "n_distinct_splits": _n_distinct_splits(int(result["n_donors"]), n_test_donors),
+            "n_perm_naive_achieved": int(result["n_perm_naive"]),
+            "n_perm_pb_achieved": int(result["n_perm_pb"]),
+            "n_perm_paired": int(result["n_perm_paired"]),
+            "engine_path": "run_null",
+        }
+        _readout_from(payload, universe)
 
 
 def audit_h5ad(path: str | Path, settings: AuditSettings) -> dict:
