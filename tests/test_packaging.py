@@ -159,4 +159,7 @@ def test_zenodo_json_fields_are_copied_from_citation_cff(field: str) -> None:
         cff_keywords = [line.strip("- ").strip() for line in keywords_block.group(1).splitlines()]
         assert zenodo["keywords"] == cff_keywords
     else:
-        assert zenodo["description"].startswith("pbcheck estimates how much")
+        abstract_block = re.search(r"^abstract:\s*>-\n((?:[ \t]+.+\n)+)", cff_text, flags=re.MULTILINE)
+        assert abstract_block is not None
+        cff_abstract = " ".join(line.strip() for line in abstract_block.group(1).splitlines())
+        assert zenodo["description"] == cff_abstract

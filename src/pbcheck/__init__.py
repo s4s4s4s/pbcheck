@@ -1,11 +1,13 @@
 """pbcheck - an auditor of pseudoreplication in single-cell RNA-seq differential expression.
 
-v0.1.0 ships the single-stratum audit (``pbcheck.audit``), its Markdown/HTML report
-(``pbcheck.render``) and the ``pbcheck`` CLI, all outside the Phase 0 protocol. The Phase 0
-real-data harness (``controls``, ``decision``, the spec section 9 ``report``) is specified but
-not built; no ``risk_score`` exists and none is promised (see README's "What exists, and what
-does not"). No ``py.typed`` marker: annotation coverage across the package is uneven and a
-deliberate call, not an oversight.
+Phase 0 (pilot): v0.1.0 ships the single-stratum audit (``pbcheck.audit``), its Markdown/HTML
+report (``pbcheck.render``) and the ``pbcheck`` CLI, all outside the Phase 0 protocol. The
+Phase 0 real-data harness (``controls``, ``decision``, the spec section 9 ``report``) is
+specified but not built; no ``risk_score`` exists and none is promised (see README's "What
+exists, and what does not"). ``pbcheck.census_select`` and ``pbcheck.io_counts`` are built but
+not re-exported here: their output is CANDIDATES ONLY, not an admission, and not the section 1
+pre-registration of the stratum list. No ``py.typed`` marker: annotation coverage across the
+package is uneven and a deliberate call, not an oversight.
 """
 
 from pbcheck.design import DesignReport, audit_design
