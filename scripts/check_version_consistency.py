@@ -20,6 +20,18 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
+_CFF_VERSION_RE = re.compile(r"^version:\s*(\S+)\s*$", flags=re.MULTILINE)
+
+
+def extract_cff_version(cff_text: str) -> str | None:
+    """Return the ``version:`` value from a CITATION.cff document, or ``None`` if absent.
+
+    The single parser used both by this script's own drift check and by
+    ``tests/test_packaging.py``, so the two cannot silently diverge.
+    """
+    match = _CFF_VERSION_RE.search(cff_text)
+    return match.group(1) if match else None
+
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -49,11 +61,10 @@ def main(argv: list[str] | None = None) -> int:
     pkg_version = metadata.version("pbcheck")
 
     cff_text = (REPO / "CITATION.cff").read_text(encoding="utf-8")
-    m = re.search(r"^version:\s*(\S+)\s*$", cff_text, flags=re.MULTILINE)
-    if not m:
+    cff_version = extract_cff_version(cff_text)
+    if cff_version is None:
         print("check_version_consistency: no 'version:' line found in CITATION.cff", file=sys.stderr)
         return 2
-    cff_version = m.group(1)
 
     if pkg_version != cff_version:
         print(
