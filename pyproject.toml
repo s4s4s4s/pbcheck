@@ -12,9 +12,10 @@ requires-python = ">=3.12"
 authors = [{ name = "Alexander Poliakov", email = "s4s4spol@gmail.com" }]
 keywords = ["single-cell", "scRNA-seq", "differential-expression", "pseudoreplication", "pseudobulk", "statistics", "reproducibility"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -43,7 +44,8 @@ census = ["cellxgene-census"]
 # environment and out of requirements.lock, and the committed artifacts are the evidence — this
 # extra exists so a reader can regenerate them.
 evidence = ["tiledb"]
-# Only needed for the (not-yet-built) HTML report; nothing in src/ imports these (grepped, R3).
+# Reserved for the Phase 0 spec section 9 report; not needed for `pbcheck audit`, whose
+# renderer (`pbcheck.render`) uses the standard library only.
 report = ["jinja2", "matplotlib", "tqdm"]
 dev = ["pytest", "pytest-cov", "hypothesis", "ruff>=0.15,<0.17", "pre-commit"]
 
@@ -51,6 +53,7 @@ dev = ["pytest", "pytest-cov", "hypothesis", "ruff>=0.15,<0.17", "pre-commit"]
 Homepage = "https://github.com/s4s4s4s/pbcheck"
 Repository = "https://github.com/s4s4s4s/pbcheck"
 Issues = "https://github.com/s4s4s4s/pbcheck/issues"
+Documentation = "https://github.com/s4s4s4s/pbcheck/blob/main/docs/USAGE.md"
 
 [tool.hatch.version]
 path = "src/pbcheck/__init__.py"

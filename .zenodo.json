@@ -1,0 +1,27 @@
+{
+  "title": "pbcheck: an auditor of pseudoreplication in single-cell RNA-seq differential expression",
+  "upload_type": "software",
+  "creators": [
+    {
+      "name": "Poliakov, Alexander"
+    }
+  ],
+  "description": "pbcheck estimates how much an existing single-cell RNA-seq differential-expression analysis is inflated by pseudoreplication, treating individual cells as independent replicates when the true unit of replication is the donor. v0.1.0 is the single-stratum audit tool; Phase 0, a pre-registered measurement study, continues alongside it; its frozen protocol is in docs/PHASE0_SPEC.md and every deviation is recorded in docs/AMENDMENTS.md.",
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "single-cell",
+    "scRNA-seq",
+    "differential-expression",
+    "pseudoreplication",
+    "pseudobulk",
+    "reproducibility"
+  ],
+  "access_right": "open",
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/s4s4s4s/pbcheck",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    }
+  ]
+}

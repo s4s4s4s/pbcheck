@@ -160,3 +160,4 @@ jobs:
           wheel-venv/bin/pip install --upgrade pip
           wheel-venv/bin/pip install dist/*.whl
           wheel-venv/bin/python -c "import pbcheck; print(pbcheck.__version__)"
+          wheel-venv/bin/pbcheck --version
