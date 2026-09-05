@@ -1,0 +1,227 @@
+{
+  "schema_version": "pbcheck-audit/1",
+  "pbcheck_version": "0.1.0",
+  "generated_utc": "2026-09-01T12:00:00Z",
+  "runtime_seconds": 42.7,
+  "runtime_by_stage_seconds": {
+    "load": 3.1,
+    "prepare": 0.4,
+    "design": 0.2,
+    "counts": 0.6,
+    "pseudobulk_build": 1.8,
+    "universe": 0.3,
+    "real_label": 5.2,
+    "permutation_null": 30.9,
+    "render": 0.2
+  },
+  "status": "design_only",
+  "status_reason": "too_few_donors",
+  "input": {
+    "path": "C:/data/panel/small_pilot_cohort.h5ad",
+    "n_cells_loaded": 15230,
+    "n_genes_loaded": 21847,
+    "n_cells_audited": 12980,
+    "n_cells_dropped_other_condition": 1500,
+    "n_cells_dropped_other_celltype": 600,
+    "n_cells_dropped_missing_donor": 90,
+    "n_cells_dropped_missing_condition": 40,
+    "n_cells_dropped_missing_celltype": 20,
+    "donor_col": "donor_id",
+    "condition_col": "disease_state",
+    "test_level": "lupus_nephritis",
+    "ref_level": "healthy",
+    "celltype_col": null,
+    "celltype_value": null,
+    "celltype_like_columns_found": [
+      "cell_type"
+    ],
+    "batch_cols": [],
+    "counts_source": null
+  },
+  "counts_check": null,
+  "design": {
+    "condition_col": "disease_state",
+    "donor_col": "donor_id",
+    "n_cells": 1600,
+    "groups": {
+      "lupus_nephritis": 600,
+      "healthy": 1000
+    },
+    "donors_per_group": {
+      "lupus_nephritis": 2,
+      "healthy": 4
+    },
+    "cells_per_donor": {
+      "donor_00": 300,
+      "donor_01": 280,
+      "donor_02": 260,
+      "donor_03": 240,
+      "donor_04": 220,
+      "donor_05": 200
+    },
+    "donor_nests_in_condition": true,
+    "min_donors_per_group": 3,
+    "imbalance_ratio": 1.07,
+    "batch_confounded": {},
+    "batch_separates_condition": {},
+    "flags": [
+      "too_few_donors"
+    ],
+    "min_donors": 3,
+    "usable_for_pseudobulk": false
+  },
+  "settings": {
+    "tool": {
+      "n_perm_requested": 1000,
+      "n_perm_pb_requested": 200,
+      "seed": 0,
+      "top_n": 20,
+      "design_only": false,
+      "naive_method": "wilcoxon",
+      "naive_engine": "fast",
+      "pseudobulk_method": "moderated_ebayes",
+      "trend": false,
+      "universe_min_total_count": 15,
+      "universe_min_prop": 0.5,
+      "fallback_universe_min_prop": 0.5,
+      "fallback_universe_min_size": 200,
+      "min_profiles_per_group_after_thin_filter": 3
+    },
+    "protocol_constants": {
+      "alpha": 0.05,
+      "lambda_band": [
+        0.9,
+        1.1
+      ],
+      "min_universe_size": 200,
+      "min_cells": 10,
+      "min_counts": 1000
+    }
+  },
+  "universe": {
+    "size": 0,
+    "min_size": 200,
+    "builder": null,
+    "builder_rule": "",
+    "thin_donor_filter": null,
+    "profiles_per_group_after_thin_filter": null
+  },
+  "real_label": null,
+  "permutation_null": null,
+  "readout": {
+    "lambda_naive_class": null,
+    "lambda_pseudobulk_class": null,
+    "naive_floor_solo": null,
+    "naive_real_solo": null,
+    "naive_real_over_floor_solo": null,
+    "pseudobulk_real_over_floor": null,
+    "paired_floor_shown": false,
+    "min_donors_per_group": 2,
+    "min_profiles_per_group_after_thin_filter": null,
+    "n_perm_naive_requested": 1000,
+    "n_perm_naive_achieved": null,
+    "n_perm_pb_requested": 200,
+    "n_perm_pb_achieved": null,
+    "n_distinct_splits": null,
+    "sentences": []
+  },
+  "caveats": [
+    {
+      "id": "C1",
+      "text": "This is a pbcheck v0.1.0 audit of one stratum of one file. It measures how a naive per-cell test and a donor-pseudobulk test behave on this data under a donor-permutation null. It is run outside pbcheck's pre-registered Phase 0 protocol, is not a Phase 0 measurement, and makes no claim about any publication or about whether any reported result is true."
+    },
+    {
+      "id": "C2",
+      "text": "The pseudobulk arm's calibration and power were established on synthetic oracles only inside the operating envelope declared in Amendment 3 (minimum donors per group 4 / 8 / 13 / 23 at sigma_donor 0.2 / 0.35 / 0.5 / 0.7). pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here."
+    },
+    {
+      "id": "C3",
+      "text": "Everything in this report is a diagnostic of this file: the naive arm's inflation factor and permutation floor, the pseudobulk arm's inflation factor, floor and false-positive rate as its negative control, and the bookkeeping of the shared gene universe. None of it is a Phase 0 result, and pbcheck does not rate this file against the Phase 0 decision rule."
+    },
+    {
+      "id": "C4",
+      "text": "Fewer than 8 donors in at least one group: the permutation null has few distinct donor splits, floors are coarse, and pbcheck's own protocol treats floor-based comparisons below 8 donors per group as contaminated by the per-cell leak. Do not compare these numbers with a run on another file."
+    },
+    {
+      "id": "C7",
+      "text": "This instrument was calibrated on synthetic oracles (pilot/gate/synthetic_gate_2026-08-15.json). Of the settings below, only those listed under 'protocol constants' are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values."
+    }
+  ],
+  "provenance": {
+    "pre_registered": {
+      "alpha": 0.05,
+      "lambda_band": [
+        0.9,
+        1.1
+      ],
+      "power_target": 0.6,
+      "oracle_log2fc": 1.0,
+      "oracle_k": 200,
+      "calibration_eval_sigma": 0.5,
+      "power_eval_sigma": 0.35,
+      "operating_envelope": [
+        {
+          "sigma_donor": 0.2,
+          "min_donors_per_group": 4,
+          "grid_support": "not in the grid; Amendment 1 frontier only"
+        },
+        {
+          "sigma_donor": 0.35,
+          "min_donors_per_group": 8,
+          "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8"
+        },
+        {
+          "sigma_donor": 0.5,
+          "min_donors_per_group": 13,
+          "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12"
+        },
+        {
+          "sigma_donor": 0.7,
+          "min_donors_per_group": 23,
+          "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8"
+        }
+      ],
+      "min_universe_size": 200,
+      "min_cells": 10,
+      "min_counts": 1000,
+      "lambda_naive_go": 2.0,
+      "lambda_naive_strong_go": 3.0,
+      "naive_floor_over_null_strong_go": 10
+    },
+    "pre_registered_source": "pbcheck.gate_config.PRE_REGISTERED",
+    "operating_envelope": [
+      {
+        "sigma_donor": 0.2,
+        "min_donors_per_group": 4,
+        "grid_support": "not in the grid; Amendment 1 frontier only"
+      },
+      {
+        "sigma_donor": 0.35,
+        "min_donors_per_group": 8,
+        "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8"
+      },
+      {
+        "sigma_donor": 0.5,
+        "min_donors_per_group": 13,
+        "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12"
+      },
+      {
+        "sigma_donor": 0.7,
+        "min_donors_per_group": 23,
+        "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8"
+      }
+    ],
+    "platform": "Windows-10-10.0.26200",
+    "python": "3.12.4",
+    "packages": {
+      "numpy": "1.26.4",
+      "scipy": "1.13.1",
+      "pandas": "2.2.2",
+      "anndata": "0.10.7",
+      "scanpy": "1.10.1",
+      "statsmodels": "0.14.2",
+      "decoupler": "1.7.0",
+      "pydeseq2": "0.4.10"
+    }
+  }
+}
