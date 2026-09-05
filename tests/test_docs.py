@@ -63,6 +63,14 @@ def test_readme_quotes_envelope_sentence():
     assert quoted in text
 
 
+def test_usage_quotes_envelope_sentence():
+    from pbcheck.render.text import envelope_sentence
+
+    text = _normalised(ROOT / "docs" / "USAGE.md")
+    quoted = re.sub(r"\s+", " ", envelope_sentence())
+    assert quoted in text
+
+
 def test_readme_contains_no_numeric_token_from_demo_readouts():
     demo_dir = ROOT / "demo"
     if not demo_dir.exists():
