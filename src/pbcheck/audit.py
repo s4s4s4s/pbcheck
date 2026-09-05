@@ -52,14 +52,15 @@ from pbcheck.render.text import CAVEATS, LAMBDA_CLASS_WORDS, caveat_text, envelo
 #: Requested donor permutations for the naive arm. PRODUCT VALUE, not a protocol constant: it is
 #: this module's own budget and never the gate script's pre-registered permutation count, which
 #: answers a different question and is not read anywhere here (``pbcheck.gate_config`` is out of
-#: bounds for any runtime decision of the product). Provisional: part 3 of this work package sets both
-#: permutation counts by the measured-runtime rule of the release plan (reference shape, both
-#: settings timed on the laptop) and replaces these two values with what that measurement decides.
-PRODUCT_N_PERM = 200
+#: bounds for any runtime decision of the product). Set by the runtime rule of the release plan
+#: (``scripts/measure_audit_runtime.py``): the reference shape (``null_oracle(seed=1, n_genes=8000,
+#: n_donors_per_group=8, n_cells_per_donor=625)``) at (1000, 200) measured 228.6 s wall, under the
+#: 300 s cap, on a Windows 11 laptop (Intel Core, 20 logical CPUs) on 2026-09-05.
+PRODUCT_N_PERM = 1000
 
 #: Requested donor permutations for the pseudobulk arm; the paired series is
-#: ``min(n_perm, n_perm_pb)`` permutations long. PRODUCT VALUE, not a protocol constant.
-#: Provisional on the same measurement as :data:`PRODUCT_N_PERM`.
+#: ``min(n_perm, n_perm_pb)`` permutations long. PRODUCT VALUE, not a protocol constant. Set by the
+#: same 2026-09-05 measurement as :data:`PRODUCT_N_PERM`.
 PRODUCT_N_PERM_PB = 200
 
 #: Minimum donors per condition, before aggregation, below which the DE arms are not run at all.
