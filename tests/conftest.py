@@ -54,3 +54,23 @@ def donor_design_df(small_null_adata):
         .drop_duplicates()
         .reset_index(drop=True)
     )
+
+
+#: Shape of :func:`audit_shape_oracle`: the smallest oracle draw that clears all three floors the
+#: audit gates on at once. Measured on this shape: ``build_pseudobulk`` keeps 8 of 8 donor profiles
+#: (4 per group, above ``audit.PRODUCT_MIN_PROFILES_PER_GROUP``), ``frozen_universe`` keeps all 600
+#: genes (well above ``gate_config.MIN_UNIVERSE_SIZE`` = 200), and 4 donors per group clears
+#: ``audit.PRODUCT_MIN_DONORS_PER_GROUP``. ``tests/test_audit.py`` re-measures all three so the
+#: numbers in this comment cannot rot silently.
+AUDIT_ORACLE_SHAPE = dict(n_genes=600, n_donors_per_group=4, n_cells_per_donor=60)
+
+
+@pytest.fixture(scope="session")
+def audit_shape_oracle():
+    """The one oracle draw the audit tests share: no true DE, donor effect present, 480 cells.
+
+    Session-scoped because ``simulate()`` at this shape is the expensive part of the audit tests
+    and the draw is immutable; every test that needs to touch the data copies ``.adata`` first,
+    as ``small_null_adata`` does for the smaller shape above.
+    """
+    return null_oracle(seed=7, **AUDIT_ORACLE_SHAPE)
