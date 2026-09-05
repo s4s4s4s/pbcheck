@@ -1,6 +1,6 @@
 # Contributing
 
-**pbcheck is a pre-registered measurement study, not a conventional software project.**
+**pbcheck is a pre-registered measurement study that also ships a released tool; the study's rules come first.**
 [`docs/PHASE0_SPEC.md`](docs/PHASE0_SPEC.md) is the frozen protocol: it was written before any
 data was seen, and it is not edited after the fact. Any change to the measurement protocol — a
 test, a threshold, an oracle, a decision rule, which datasets get selected — requires a dated,
@@ -59,6 +59,18 @@ commit.
 
 ## What this repo deliberately does not have
 
-No CODEOWNERS, issue/PR templates, code of conduct, coverage threshold gate, PyPI release
-workflow, generated docs site, or logging framework. This is a solo pre-release research repo;
-that scaffolding is a deliberate omission, not an oversight.
+No CODEOWNERS, issue/PR templates, code of conduct, coverage threshold gate, generated docs
+site, or logging framework. This is a solo research repo with a released tool; that scaffolding
+is a deliberate omission, not an oversight.
+
+## Releases
+
+Tag `vX.Y.Z` on `main`. The version is kept in sync in `src/pbcheck/__init__.py` and
+`CITATION.cff` (`scripts/check_version_consistency.py --tag`). `release.yml` publishes to PyPI by
+trusted publishing; the GitHub Release it creates triggers the Zenodo archive.
+
+Decision of 2026-09-05 (owner): shipping v0.1.0 is treated as an engineering change under the
+amendment test because it changes no number `scripts/synthetic_gate.py` prints and touches no
+frozen file; the product's wording is a protocol surface (`src/pbcheck/render/text.py`, tested
+for forbidden claims), and any future product output that could be read as a Phase 0 conclusion
+needs an amendment.

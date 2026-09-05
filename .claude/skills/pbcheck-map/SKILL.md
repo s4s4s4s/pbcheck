@@ -8,9 +8,10 @@ color: cyan
 ---
 
 Verified against `c3c2556` on `main` (clean tree): `pytest -q` → **367 passed**, 0 failed, in ~20s
-(18 files under `tests/`). `git log --oneline -20` shows the last five commits are Amendment 5 Part A,
-two engine-affordability fixes, the stratum-list machine-checking pass, and Amendment 4 Part A —
-i.e. today's work is the tip of the amendment chain, not a side branch of it.
+(18 files under `tests/`). <!-- test count: filled by the integrator --> `git log --oneline -20`
+shows the last five commits are Amendment 5 Part A, two engine-affordability fixes, the
+stratum-list machine-checking pass, and Amendment 4 Part A, i.e. today's work is the tip of the
+amendment chain, not a side branch of it.
 
 ## What this project is
 
@@ -42,11 +43,19 @@ Census stratum has been analysed.
 | `gate_config.py` | every threshold in one place, tagged by provenance — see Frozen material below |
 | `census_select.py` | `.obs`-only real-data stratum selection (spec §1): pinned Census version, `(dataset_id × cell_type)` strata, inclusion gate, confound pre-screen, candidate manifest. **Admits nothing** |
 | `io_counts.py` | the counts gate (spec §9 item 2): integer-count assertion on values not dtype, frozen-universe sizing, fills the columns `census_select` left `pending`. **Admits nothing** |
+| `audit_schema.py` | `AUDIT_SCHEMA_VERSION = "pbcheck-audit/1"`, the JSON schema's key lists, `validate(payload)`. Pure stdlib, product release (v0.1.0), not a Phase 0 module |
+| `audit.py` | the v0.1.0 product's only module that calls the engine: `AuditSettings`, `run_audit`, `audit_h5ad`, the `PRODUCT_*`/`FALLBACK_*` constants. See Traps for why its constants are not `gate_config` values |
+| `example.py` | `example_adata(...)` - a small gamma-Poisson generator for the offline quickstart, not the Phase 0 oracle in `synthetic/oracles.py` |
+| `render/` | `render_markdown`, `render_html`, `write_outputs`, `sections.py`'s shared section model, and `text.py`'s wording constants and forbidden-pattern list. See Traps |
+| `cli.py` | the `pbcheck` command's argparse and `main(argv=None)` |
+| `__main__.py` | `python -m pbcheck` entry point, delegates to `cli.main` |
 
 `design.py`, `gene_universe.py`, `methods/`, `metrics.py`, `mtc.py`, `permutation.py` are the built
 measurement engine. `census_select.py` + `io_counts.py` are the real-data harness's first two modules
-(of the plan in spec §9); `controls.py`, `decision.py`, `report.py` are specified but **not built** —
-see `pilot/README.md`'s "What remains".
+(of the plan in spec §9); `controls.py`, `decision.py`, `report.py` are specified but **not built**,
+see `pilot/README.md`'s "What remains". `audit_schema.py`, `audit.py`, `example.py`, `render/`,
+`cli.py` and `__main__.py` are the v0.1.0 product release, built on the same engine, outside the
+Phase 0 protocol.
 
 ### `scripts/` — drivers, one job each
 
@@ -60,7 +69,18 @@ see `pilot/README.md`'s "What remains".
 | `fetch_preregistration_evidence.py` | re-fetches (does NOT need to be re-run — its output is pinned) the two external indexes the freeze reasons about |
 | `check_upper_bound_claim.py` | reproducer for Amendment 4 Part A's Correction 1 probe table (named seeds, committed artifact) |
 | `check_version_consistency.py` | guards `CITATION.cff` against drifting from `src/pbcheck/__init__.py`'s version |
-| `proof_of_life.py` | **historical**, predates the frozen protocol; importing it warns — not comparable to anything current |
+| `proof_of_life.py` | **historical**, predates the frozen protocol; importing it warns, not comparable to anything current |
+| `demo_kang2018.py` | v0.1.0 demonstration driver: runs `pbcheck audit` on Kang et al. 2018, a paired design the tool's own design gate stops |
+| `demo_two_arm.py` | v0.1.0 demonstration driver: runs `pbcheck audit` end to end on an unpaired public dataset |
+| `changelog_section.py` | extracts one `## [x.y.z]` section from `CHANGELOG.md`, used by `release.yml` for the GitHub Release notes |
+| `protocol_safety_check.py` | machine check that product code (`audit.py`, `cli.py`, `example.py`, `render/`) never reads `gate_config.N_PERM*` and never contains the forbidden protocol strings |
+| `check_docstring_only_diff.py` | AST comparison guarding the one permitted docstring-only change to `metrics.signal_above_floor` |
+| `compare_gate_scalars.py` | compares two gate-run JSON artifacts' scalar values |
+| `measure_audit_runtime.py` | measures `pbcheck audit` wall time on reference-shaped data; its output feeds `docs/USAGE.md`'s runtime table |
+
+`.github/workflows/release.yml` builds the sdist/wheel, publishes to TestPyPI/PyPI by trusted
+publishing on a `vX.Y.Z` tag, and creates the GitHub Release that triggers the Zenodo archive
+(section 5 of the release plan).
 
 ### `synthetic/oracles.py`
 
@@ -69,13 +89,16 @@ The correctness spec, not shipped runtime code (imported by tests via `sys.path`
 effect; the NULL oracle (no true DE) and POSITIVE oracle (log2FC=1.0 injected into K=200 genes) are
 what every gate number is computed on. `donor_sigma=0` is the falsification control.
 
-### `tests/` — 18 files, 367 tests, all offline
+### `tests/` - 18 files, 367 tests, all offline <!-- test count: filled by the integrator -->
 
 No test needs the network or `cellxgene-census`; `pytest -m "not slow"` skips DESeq2-touching /
 multi-permutation end-to-end tests. `tests/conftest.py` holds the shared oracle fixtures.
 `tests/test_stratum_list_freeze.py`, `test_census_select.py`, `test_io_counts.py` and
-`test_census_candidates.py` are the largest files — they exercise the real-data harness's admission
-logic against synthetic `obs` frames, never a real Census read.
+`test_census_candidates.py` are the largest files, they exercise the real-data harness's admission
+logic against synthetic `obs` frames, never a real Census read. `test_render_text.py` pins the
+forbidden-pattern list and the wording constants in `render/text.py`; `test_checklist_scripts.py`,
+`test_protocol_safety_check.py` and `test_measure_audit_runtime.py` cover the v0.1.0 release
+checklist scripts above.
 
 ### `pilot/` — committed Phase 0 artifacts, no code
 
@@ -85,7 +108,14 @@ logic against synthetic `obs` frames, never a real Census read.
 | `testsel/` | `summary.{csv,json}` — the frozen 146-cell test-selection grid (commit `72dec7b`) that Amendment 2's test choice rests on |
 | `preregistration/` | the frozen §1 stratum list + the whole-Census candidate manifest it derives from + two pinned external indexes + the redacted proposal doc — see Frozen material |
 | `upper_bound_check/` | Amendment 4 Part A Correction 1's reproducer artifact (named seeds); `replicates.jsonl` is a resume ledger, gitignored |
-| `results/` | **empty by design** — gitignored except `.gitkeep`; see Traps |
+| `results/` | **empty by design**, gitignored except `.gitkeep`; see Traps |
+
+### `demo/` - v0.1.0 demonstrations, outside the protocol
+
+Committed output of `scripts/demo_kang2018.py` and `scripts/demo_two_arm.py`: `pbcheck audit` run on
+two real public datasets that are not among the 17 frozen Phase 0 datasets. `demo/README.md` states
+the datasets, licences and disclaimer; neither demonstration is a Phase 0 measurement or a claim
+about the underlying publications.
 
 ### `docs/`
 
@@ -160,8 +190,9 @@ by a real run.
 
 ## Current state (verified this session)
 
-- `pytest -q` on `c3c2556`: **367 passed**, 0 failed (~20s). Coverage is report-only (no `--cov-fail-under`
-  gate — deliberate, see `tests.yml`).
+- v0.1.0 released; PyPI trusted publishing via `release.yml`.
+- `pytest -q` on `c3c2556`: **367 passed**, 0 failed (~20s). <!-- test count: filled by the integrator -->
+  Coverage is report-only (no `--cov-fail-under` gate, deliberate, see `tests.yml`).
 - The committed gate run (`pilot/gate/synthetic_gate_2026-08-15.json`) verdict: **`INSTRUMENT VALID
   WITHIN THE STATED OPERATING ENVELOPE`**. λ_pseudobulk 1.01 (band [0.9, 1.1]), pseudobulk perm-null FP
   rate 0.035 (7/200), λ_naive 54.57, naive floor 1162/1500 genes (77.4%), power 0.86 at the envelope
@@ -216,6 +247,11 @@ by a real run.
 7. **`scripts/pb_calibration_probe.py` is frozen evidence, not a place to fix bugs going forward.** It
    generated the Amendment 1/2 grid and is deliberately not refactored or made to import `gate_config`;
    new pseudobulk-arm work belongs in `src/pbcheck/methods/moderated.py`.
+8. **The wording constants in `render/text.py` are a protocol surface.** Every sentence template and
+   the forbidden-pattern list (words like "valid", "finding", "GO"/"NO-GO", "Tier", "risk score") are
+   tested so the product's report can never be read as stating a Phase 0 result. `audit.py`'s product
+   constants (`PRODUCT_N_PERM`, `FALLBACK_UNIVERSE_MIN_SIZE`, and the rest) are **not** `gate_config`
+   values, and `audit.py`/`cli.py` never read `gate_config.N_PERM*`; a machine check enforces this.
 
 ## Where to start
 
