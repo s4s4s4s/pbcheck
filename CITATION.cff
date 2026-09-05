@@ -8,12 +8,12 @@ authors:
     email: s4s4spol@gmail.com
 repository-code: "https://github.com/s4s4s4s/pbcheck"
 license: BSD-3-Clause
-version: 0.0.1.dev0
+version: 0.1.0
 abstract: >-
   pbcheck estimates how much an existing single-cell RNA-seq differential-expression
-  analysis is inflated by pseudoreplication — treating individual cells as independent
-  replicates when the true unit of replication is the donor. Phase 0 is a pre-registered
-  measurement study that decides whether the full tool is worth building; its frozen
+  analysis is inflated by pseudoreplication, treating individual cells as independent
+  replicates when the true unit of replication is the donor. v0.1.0 is the single-stratum
+  audit tool; Phase 0, a pre-registered measurement study, continues alongside it; its frozen
   protocol is in docs/PHASE0_SPEC.md and every deviation is recorded in docs/AMENDMENTS.md.
 keywords:
   - single-cell

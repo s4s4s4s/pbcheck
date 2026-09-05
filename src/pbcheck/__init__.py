@@ -1,15 +1,11 @@
-"""pbcheck — an auditor of pseudoreplication in single-cell RNA-seq differential expression.
+"""pbcheck - an auditor of pseudoreplication in single-cell RNA-seq differential expression.
 
-Phase 0 (pilot): the public surface is curated rather than exhaustive while the measurement
-engine is validated on synthetic oracles — everything below is exercised by the test suite. The
-rest of the real-data harness (``controls``, ``decision``, ``report``), the ``risk_score``, the
-HTML report and the no-raw-counts mode are specified but not yet built (see
-``docs/PHASE0_SPEC.md`` and README's "What exists, and what does not"). ``pbcheck.census_select``
-(obs only) and ``pbcheck.io_counts`` (the counts gate) are built and are imported directly rather
-than re-exported here: they are drivers for the real-data sweep, and between them they emit
-*candidates* — not an admission, and not the §1 pre-registration of the stratum list. No
-``py.typed`` marker: annotation coverage across the package is uneven and a deliberate call, not
-an oversight.
+v0.1.0 ships the single-stratum audit (``pbcheck.audit``), its Markdown/HTML report
+(``pbcheck.render``) and the ``pbcheck`` CLI, all outside the Phase 0 protocol. The Phase 0
+real-data harness (``controls``, ``decision``, the spec section 9 ``report``) is specified but
+not built; no ``risk_score`` exists and none is promised (see README's "What exists, and what
+does not"). No ``py.typed`` marker: annotation coverage across the package is uneven and a
+deliberate call, not an oversight.
 """
 
 from pbcheck.design import DesignReport, audit_design
@@ -29,7 +25,7 @@ from pbcheck.metrics import (
 from pbcheck.mtc import PairedBH, bh_both_arms, bh_over_universe
 from pbcheck.permutation import build_perms, labels_for, run_null
 
-__version__ = "0.0.1.dev0"
+__version__ = "0.1.0"
 
 __all__ = [
     "__version__",
