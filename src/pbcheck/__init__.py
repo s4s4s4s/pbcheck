@@ -10,7 +10,11 @@ pre-registration of the stratum list. No ``py.typed`` marker: annotation coverag
 package is uneven and a deliberate call, not an oversight.
 """
 
+__version__ = "0.1.0"
+
+from pbcheck.audit import AuditInputError, AuditSettings, audit_h5ad, run_audit
 from pbcheck.design import DesignReport, audit_design
+from pbcheck.example import example_adata
 from pbcheck.gene_universe import UniverseTooSmall, frozen_universe
 from pbcheck.methods import ebayes_from_pdata, naive_de, pseudobulk_de
 from pbcheck.metrics import (
@@ -27,11 +31,16 @@ from pbcheck.metrics import (
 from pbcheck.mtc import PairedBH, bh_both_arms, bh_over_universe
 from pbcheck.permutation import build_perms, labels_for, run_null
 
-__version__ = "0.1.0"
-
 __all__ = [
     "__version__",
-    # design.py — the metadata-only auditor
+    # audit.py - the single-stratum audit orchestration
+    "AuditSettings",
+    "AuditInputError",
+    "run_audit",
+    "audit_h5ad",
+    # example.py - the offline quickstart generator
+    "example_adata",
+    # design.py - the metadata-only auditor
     "audit_design",
     "DesignReport",
     # gene_universe.py — the frozen, label-agnostic universe both arms share
