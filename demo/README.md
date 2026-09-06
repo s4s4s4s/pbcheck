@@ -56,8 +56,16 @@ Command:
 python scripts/demo_two_arm.py --dataset stephenson2021 --out demo/stephenson2021_two_arm
 ```
 
-The script confirmed the download size (700,549,709 bytes, about 0.65 GiB, well under the 3 GB
-bound) from the figshare API endpoint recovered from pertpy's git history for the
+The numbers in this subsection (the download size, the cell count, the value range) are the
+developer's own observations from running this script once on a laptop on 2026-09-06, before the
+attempt aborted; no console log or `pbcheck_audit.json` from that run is committed anywhere under
+`demo/`, since the run never reached `run_audit`, so none of these numbers is independently
+checkable from a committed artifact the way the two runtime numbers in this README are (those trace
+to each committed `pbcheck_audit.json`'s own `runtime_seconds`). Treat them as unverifiable
+developer-session notes, not as measurements this repository can reproduce a check against.
+
+The script confirmed the download size (observed: 700,549,709 bytes, about 0.65 GiB, well under the
+3 GB bound) from the figshare API endpoint recovered from pertpy's git history for the
 `stephenson_2021_subsampled` artifact (file id 38171703; pertpy's current loader downloads the same
 file from `https://exampledata.scverse.org/pertpy/stephenson_2021_subsampled.h5ad` instead, the same
 figshare-to-scverse migration `scripts/demo_kang2018.py` documents for Kang 2018), downloaded and
@@ -65,10 +73,10 @@ verified it by sha256, and confirmed the `patient_id` (donor), `Status` (conditi
 columns exist.
 
 Reason for stopping (exit code 3): `no_raw_counts_anywhere`. `adata.X` is `float32` but not
-integer-valued (log-normalised, values up to about 7.5 on 62,509 cells), the file has no named
-`.layers` and no `.raw`, so `pbcheck.io_counts.check_integer_counts` failed on `X` and there was no
-second matrix to check it on. Per the release plan, this stops the attempt without opening a second
-real dataset on the auditor's own word; `example_reference` is the committed run instead.
+integer-valued (observed: log-normalised, values up to about 7.5 on 62,509 cells), the file has no
+named `.layers` and no `.raw`, so `pbcheck.io_counts.check_integer_counts` failed on `X` and there
+was no second matrix to check it on. Per the release plan, this stops the attempt without opening a
+second real dataset on the auditor's own word; `example_reference` is the committed run instead.
 
 Citation (recorded for completeness; no number from this attempt is used anywhere): Stephenson, E.,
 Reynolds, G., Botting, R.A. et al. Single-cell multi-omics analysis of the immune response in

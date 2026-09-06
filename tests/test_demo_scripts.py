@@ -13,6 +13,7 @@ import hashlib
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 import anndata as ad
@@ -264,3 +265,97 @@ def test_demo_readme_contains_disclaimer_first_sentence():
         pytest.skip("no demo/README.md yet")
     text = demo_readme.read_text(encoding="utf-8")
     assert _DISCLAIMER_FIRST_SENTENCE in text
+
+
+# ---------------------------------------------------------------------------
+# scripts/demo_two_arm.py: pinned sha256, the raw-counts-everywhere scan, the wall-time bound and
+# the fallback exit. All offline: no download, no real dataset, synthetic AnnData only.
+# ---------------------------------------------------------------------------
+
+
+def test_stephenson_2021_sha256_is_pinned_hex_digest():
+    import demo_two_arm
+
+    sha = demo_two_arm.STEPHENSON_2021_SHA256
+    assert isinstance(sha, str)
+    assert re.fullmatch(r"[0-9a-f]{64}", sha), (
+        f"STEPHENSON_2021_SHA256 is not a 64-hex sha256: {sha!r}"
+    )
+
+
+def _adata_with_x_and_layers(x, layers=None):
+    n_obs, n_var = x.shape
+    obs = pd.DataFrame(index=[f"cell_{i}" for i in range(n_obs)])
+    var = pd.DataFrame(index=[f"gene_{j}" for j in range(n_var)])
+    return ad.AnnData(X=x, obs=obs, var=var, layers=(layers or {}))
+
+
+def test_check_raw_counts_everywhere_returns_none_when_x_passes():
+    import demo_two_arm
+
+    x = np.array([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]], dtype=np.float32)
+    adata = _adata_with_x_and_layers(x)
+    assert demo_two_arm._check_raw_counts_everywhere(adata) is None
+
+
+def test_check_raw_counts_everywhere_finds_a_passing_layer():
+    import demo_two_arm
+
+    x = np.array([[0.1, 1.2], [2.3, 3.4]], dtype=np.float32)  # not integer-valued
+    counts = np.array([[0.0, 1.0], [2.0, 3.0]], dtype=np.float32)  # integer-valued
+    adata = _adata_with_x_and_layers(x, layers={"counts": counts})
+    assert demo_two_arm._check_raw_counts_everywhere(adata) == "counts"
+
+
+def test_check_raw_counts_everywhere_reports_sentinel_when_nothing_passes():
+    import demo_two_arm
+
+    x = np.array([[0.1, 1.2], [2.3, 3.4]], dtype=np.float32)
+    normalized = np.array([[0.5, 0.6], [0.7, 0.8]], dtype=np.float32)
+    adata = _adata_with_x_and_layers(x, layers={"normalized": normalized})
+    assert demo_two_arm._check_raw_counts_everywhere(adata) == "__none_found__"
+
+
+def test_check_raw_counts_everywhere_ignores_empty_layers_group():
+    import demo_two_arm
+
+    x = np.array([[0.1, 1.2], [2.3, 3.4]], dtype=np.float32)
+    adata = _adata_with_x_and_layers(x)
+    assert demo_two_arm._check_raw_counts_everywhere(adata) == "__none_found__"
+
+
+def test_exit_fallback_raises_system_exit_3():
+    import demo_two_arm
+
+    with pytest.raises(SystemExit) as excinfo:
+        demo_two_arm._exit_fallback("some reason")
+    assert excinfo.value.code == demo_two_arm.EXIT_FALLBACK == 3
+
+
+def test_run_with_wall_time_bound_returns_result_within_budget():
+    import demo_two_arm
+
+    result = demo_two_arm._run_with_wall_time_bound(lambda: 42, budget_seconds=5.0)
+    assert result == 42
+
+
+def test_run_with_wall_time_bound_falls_back_on_timeout():
+    import demo_two_arm
+
+    def _slow():
+        time.sleep(1.0)
+        return "should never be observed"
+
+    with pytest.raises(SystemExit) as excinfo:
+        demo_two_arm._run_with_wall_time_bound(_slow, budget_seconds=0.01)
+    assert excinfo.value.code == demo_two_arm.EXIT_FALLBACK == 3
+
+
+def test_run_with_wall_time_bound_reraises_the_callable_exception():
+    import demo_two_arm
+
+    def _raises():
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError, match="boom"):
+        demo_two_arm._run_with_wall_time_bound(_raises, budget_seconds=5.0)

@@ -7,8 +7,8 @@ tools: Read, Glob, Grep
 color: cyan
 ---
 
-Verified on branch `release/0.1.0` (after the demonstrations landed, clean tree): `pytest -q` → **716 passed**
-(716 collected, all green, 0 skipped: the two `demo/` checks now run against the committed demos), 0 failed. `main`'s engine
+Verified on branch `release/0.1.0` (after the demonstrations landed, clean tree): `pytest -q` → **725 passed**
+(725 collected, all green, 0 skipped: the two `demo/` checks now run against the committed demos), 0 failed. `main`'s engine
 history (Amendment 5 Part A, the naive-engine speedup, the stratum-list freeze, Amendment 4 Part A)
 is unchanged by this branch; the branch's own commits are the v0.1.0 release (WP1-WP5) and this
 fix pass over its post-integration review (schema/caveat renames, the audit fixes, the renderer and
@@ -202,7 +202,7 @@ by a real run.
 ## Current state (verified this session)
 
 - v0.1.0 is prepared on `release/0.1.0`, not yet tagged or published; PyPI trusted publishing via `release.yml`.
-- `pytest -q` on `release/0.1.0` (this pass): **716 passed** (716 green, 0 skipped), 0 failed.
+- `pytest -q` on `release/0.1.0` (this pass): **725 passed** (725 green, 0 skipped), 0 failed.
   Coverage is report-only (no `--cov-fail-under` gate, deliberate, see `tests.yml`).
 - The committed gate run (`pilot/gate/synthetic_gate_2026-08-15.json`) verdict: **`INSTRUMENT VALID
   WITHIN THE STATED OPERATING ENVELOPE`**. λ_pseudobulk 1.01 (band [0.9, 1.1]), pseudobulk perm-null FP
