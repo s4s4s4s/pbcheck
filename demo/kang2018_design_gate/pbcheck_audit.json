@@ -1,0 +1,228 @@
+{
+  "schema_version": "pbcheck-audit/1",
+  "pbcheck_version": "0.1.0",
+  "generated_utc": "2026-09-06T07:18:48Z",
+  "runtime_seconds": 0.41882020000048215,
+  "runtime_by_stage_seconds": {
+    "load": null,
+    "prepare": 0.3068808000025456,
+    "design": 0.01704040000186069,
+    "counts": null,
+    "pseudobulk_build": null,
+    "universe": null,
+    "real_label": null,
+    "permutation_null": null,
+    "render": null
+  },
+  "status": "design_only",
+  "status_reason": "donor_spans_conditions",
+  "input": {
+    "path": null,
+    "n_cells_loaded": 24673,
+    "n_genes_loaded": 15706,
+    "n_cells_audited": 11238,
+    "n_cells_dropped_other_condition": 0,
+    "n_cells_dropped_other_celltype": 13435,
+    "n_cells_dropped_missing_donor": 0,
+    "n_cells_dropped_missing_condition": 0,
+    "n_cells_dropped_missing_celltype": 0,
+    "donor_col": "replicate",
+    "condition_col": "label",
+    "test_level": "stim",
+    "ref_level": "ctrl",
+    "celltype_col": "cell_type",
+    "celltype_value": "CD4 T cells",
+    "celltype_like_columns_found": [
+      "cell_type"
+    ],
+    "batch_cols": [],
+    "counts_source": null
+  },
+  "counts_check": null,
+  "design": {
+    "condition_col": "label",
+    "donor_col": "replicate",
+    "n_cells": 11238,
+    "groups": {
+      "stim": 5678,
+      "ctrl": 5560
+    },
+    "donors_per_group": {
+      "ctrl": 8,
+      "stim": 8
+    },
+    "cells_per_donor": {
+      "patient_101": 820,
+      "patient_107": 379,
+      "patient_1015": 1786,
+      "patient_1016": 963,
+      "patient_1039": 503,
+      "patient_1244": 2000,
+      "patient_1256": 2042,
+      "patient_1488": 2745
+    },
+    "donor_nests_in_condition": false,
+    "min_donors_per_group": 8,
+    "imbalance_ratio": 1.0212230215827338,
+    "batch_confounded": {},
+    "batch_separates_condition": {},
+    "flags": [
+      "donor spans multiple conditions — not a standard case/control design"
+    ],
+    "min_donors": 3,
+    "usable_for_pseudobulk": false
+  },
+  "settings": {
+    "tool": {
+      "n_perm_requested": 1000,
+      "n_perm_pb_requested": 200,
+      "seed": 0,
+      "top_n": 25,
+      "design_only": false,
+      "naive_method": "wilcoxon",
+      "naive_engine": "fast",
+      "pseudobulk_method": "moderated_ebayes",
+      "trend": false,
+      "min_donors_per_group": 3,
+      "universe_min_total_count": 15,
+      "universe_min_prop": 0.5,
+      "fallback_universe_min_prop": 0.5,
+      "fallback_universe_min_size": 200,
+      "min_profiles_per_group_after_thin_filter": 3
+    },
+    "protocol_constants": {
+      "alpha": 0.05,
+      "lambda_band": [
+        0.9,
+        1.1
+      ],
+      "min_universe_size": 200,
+      "min_cells": 10,
+      "min_counts": 1000
+    }
+  },
+  "universe": {
+    "size": 0,
+    "min_size": 0,
+    "builder": null,
+    "builder_rule": "",
+    "thin_donor_filter": null,
+    "profiles_per_group_after_thin_filter": null
+  },
+  "real_label": null,
+  "permutation_null": null,
+  "readout": {
+    "lambda_naive_class": null,
+    "lambda_pseudobulk_class": null,
+    "naive_floor_solo": null,
+    "naive_real_solo": null,
+    "naive_real_over_floor_solo": null,
+    "pseudobulk_real_over_floor": null,
+    "paired_floor_shown": false,
+    "few_donors": false,
+    "few_donors_threshold": 8,
+    "min_donors_per_group": 8,
+    "min_profiles_per_group_after_thin_filter": null,
+    "n_perm_naive_requested": 1000,
+    "n_perm_naive_achieved": null,
+    "n_perm_pb_requested": 200,
+    "n_perm_pb_achieved": null,
+    "n_distinct_splits": null,
+    "sentences": []
+  },
+  "caveats": [
+    {
+      "id": "N1",
+      "text": "This is a pbcheck v0.1.0 audit of one stratum of one file. It measures how a naive per-cell test and a donor-pseudobulk test behave on this data under a donor-permutation null. It is run outside pbcheck's pre-registered Phase 0 protocol, is not a Phase 0 measurement, and makes no claim about any publication or about whether any reported result is true."
+    },
+    {
+      "id": "N2",
+      "text": "Amendment 3 declares an operating envelope for the pseudobulk arm on synthetic oracles. For each donor-variance point it states the donor count per group at which the power target is reached, and each row says what the committed grid supports there: a point measured on the grid, or a count derived or extrapolated from it.\nsigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')\nsigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')\nsigma_donor 0.5: at least 13 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.486 at 12v12, the largest n tested -> n* > 12')\nsigma_donor 0.7: at least 23 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.003 at 8v8 -> n* far above 8')\nThe arm's calibration was evaluated at one hard regime (sigma_donor 0.5, 8 against 8 donors) and nowhere else. pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here."
+    },
+    {
+      "id": "N3",
+      "text": "Everything in this report is a diagnostic of this file: the naive arm's inflation factor and permutation floor, the pseudobulk arm's inflation factor, floor and false-positive rate as its negative control, and the bookkeeping of the shared gene universe. None of it is a Phase 0 result, and pbcheck does not rate this file against the Phase 0 decision rule."
+    },
+    {
+      "id": "N7",
+      "text": "The engine was measured on one synthetic oracle point (sigma_donor 0.5, 8 against 8 donors, 1500 genes), recorded in pilot/gate/synthetic_gate_2026-08-15.json; that measurement is not repeated on this file. Of the settings below, only the ones listed as protocol constants are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values."
+    }
+  ],
+  "provenance": {
+    "pre_registered": {
+      "alpha": 0.05,
+      "lambda_band": [
+        0.9,
+        1.1
+      ],
+      "power_target": 0.6,
+      "oracle_log2fc": 1.0,
+      "oracle_k": 200,
+      "calibration_eval_sigma": 0.5,
+      "power_eval_sigma": 0.35,
+      "operating_envelope": [
+        {
+          "sigma_donor": 0.2,
+          "min_donors_per_group": 4,
+          "grid_support": "not in the grid; Amendment 1 frontier only"
+        },
+        {
+          "sigma_donor": 0.35,
+          "min_donors_per_group": 8,
+          "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8"
+        },
+        {
+          "sigma_donor": 0.5,
+          "min_donors_per_group": 13,
+          "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12"
+        },
+        {
+          "sigma_donor": 0.7,
+          "min_donors_per_group": 23,
+          "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8"
+        }
+      ],
+      "min_universe_size": 200,
+      "min_cells": 10,
+      "min_counts": 1000,
+      "lambda_naive_go": 2.0,
+      "lambda_naive_strong_go": 3.0,
+      "naive_floor_over_null_strong_go": 10
+    },
+    "pre_registered_source": "docs/PHASE0_SPEC.md (frozen; changes go through docs/AMENDMENTS.md)",
+    "operating_envelope": [
+      {
+        "sigma_donor": 0.2,
+        "min_donors_per_group": 4,
+        "grid_support": "not in the grid; Amendment 1 frontier only"
+      },
+      {
+        "sigma_donor": 0.35,
+        "min_donors_per_group": 8,
+        "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8"
+      },
+      {
+        "sigma_donor": 0.5,
+        "min_donors_per_group": 13,
+        "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12"
+      },
+      {
+        "sigma_donor": 0.7,
+        "min_donors_per_group": 23,
+        "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8"
+      }
+    ],
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "packages": {
+      "numpy": "2.5.2",
+      "scipy": "1.18.0",
+      "pandas": "3.0.3",
+      "anndata": "0.13.2",
+      "scanpy": "1.12.2",
+      "statsmodels": "0.14.6",
+      "decoupler": "2.2.0",
+      "pydeseq2": "0.5.4"
+    }
+  }
+}
