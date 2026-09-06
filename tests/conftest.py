@@ -1,3 +1,4 @@
+import subprocess
 import sys
 from pathlib import Path
 
@@ -74,3 +75,28 @@ def audit_shape_oracle():
     as ``small_null_adata`` does for the smaller shape above.
     """
     return null_oracle(seed=7, **AUDIT_ORACLE_SHAPE)
+
+
+#: The branch the release checks diff against. A CI checkout of a branch, a pull request or a
+#: tag holds it only as the remote-tracking ref (tests.yml and release.yml fetch the full history
+#: so that ref exists); a checkout with neither is too shallow to diff, which is an error in the
+#: checkout, not a reason to skip a check.
+_BASE_REF_CANDIDATES = ("main", "origin/main")
+
+
+@pytest.fixture(scope="session")
+def base_ref() -> str:
+    """``main`` where the checkout has it, else ``origin/main``; fails if neither resolves."""
+    root = Path(__file__).resolve().parents[1]
+    for ref in _BASE_REF_CANDIDATES:
+        cp = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "--verify", "--quiet", ref],
+            capture_output=True,
+            text=True,
+        )
+        if cp.returncode == 0:
+            return ref
+    raise AssertionError(
+        "neither main nor origin/main resolves in this checkout; the release checks need the base "
+        "branch (tests.yml and release.yml check out with fetch-depth 0)"
+    )

@@ -283,19 +283,20 @@ def test_pilot_readme_distinguishes_protocol_from_release():
     assert "outside the protocol" in text
 
 
-def test_pilot_readme_at_most_one_deleted_line_against_main():
+def test_pilot_readme_at_most_one_deleted_line_against_main(base_ref):
     """r_wp5 minor: the frozen-adjacent narrative must not be rewritten wholesale."""
     import subprocess
 
     result = subprocess.run(
-        ["git", "diff", "main...HEAD", "--numstat", "--", "pilot/README.md"],
+        ["git", "diff", f"{base_ref}...HEAD", "--numstat", "--", "pilot/README.md"],
         cwd=ROOT,
         capture_output=True,
         text=True,
         check=False,
     )
-    if result.returncode != 0 or not result.stdout.strip():
-        pytest.skip("no 'main' ref reachable in this checkout to diff against")
+    assert result.returncode == 0, result.stderr
+    if not result.stdout.strip():
+        pytest.skip(f"pilot/README.md is unchanged against {base_ref}, nothing to bound")
     added, deleted, _ = result.stdout.split(maxsplit=2)
     assert int(deleted) <= 1, (
         f"pilot/README.md has {deleted} deleted lines against main, expected <= 1"

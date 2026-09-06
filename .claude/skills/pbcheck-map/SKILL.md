@@ -83,6 +83,11 @@ Phase 0 protocol.
 `.github/workflows/release.yml` builds the sdist/wheel, publishes to TestPyPI/PyPI by trusted
 publishing on a `vX.Y.Z` tag, and creates the GitHub Release that triggers the Zenodo archive
 (section 5 of the release plan).
+Both workflows check out with `fetch-depth: 0` (`tests.yml`'s `test` and `lock` jobs,
+`release.yml`'s `check` job): the release checks in `tests/test_protocol_safety_check.py` and
+`tests/test_docs.py` diff against the base branch through the `base_ref` fixture in
+`tests/conftest.py`, which resolves `main` locally and `origin/main` on a branch, pull-request
+or tag checkout, and fails when neither exists.
 
 ### `synthetic/oracles.py`
 
@@ -91,10 +96,11 @@ The correctness spec, not shipped runtime code (imported by tests via `sys.path`
 effect; the NULL oracle (no true DE) and POSITIVE oracle (log2FC=1.0 injected into K=200 genes) are
 what every gate number is computed on. `donor_sigma=0` is the falsification control.
 
-### `tests/` - 32 files, 716 tests, all offline
+### `tests/` - 32 files, 725 tests, all offline
 
 No test needs the network or `cellxgene-census`; `pytest -m "not slow"` skips DESeq2-touching /
-multi-permutation end-to-end tests. `tests/conftest.py` holds the shared oracle fixtures.
+multi-permutation end-to-end tests. `tests/conftest.py` holds the shared oracle fixtures and
+the `base_ref` fixture.
 `tests/test_stratum_list_freeze.py`, `test_census_select.py`, `test_io_counts.py` and
 `test_census_candidates.py` are the largest files, they exercise the real-data harness's admission
 logic against synthetic `obs` frames, never a real Census read.

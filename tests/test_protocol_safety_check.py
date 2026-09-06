@@ -124,7 +124,9 @@ def test_skip_when_a_row_input_is_absent(tmp_path):
 
 def test_engine_module_change_fails(tmp_path):
     repo = _make_repo(tmp_path)
-    (repo / "src" / "pbcheck" / "design.py").write_text("# changed\n", encoding="utf-8", newline="\n")
+    (repo / "src" / "pbcheck" / "design.py").write_text(
+        "# changed\n", encoding="utf-8", newline="\n"
+    )
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "head: touches an engine module")
 
@@ -150,17 +152,23 @@ def test_conftest_deletion_fails_existing_tests_row(tmp_path):
     assert ok is False
 
 
-def test_gate_row_requires_with_gate_flag(tmp_path):
+def test_gate_row_requires_with_gate_flag(tmp_path, monkeypatch):
     repo = _make_repo(tmp_path)
     _git(repo, "commit", "-q", "--allow-empty", "-m", "head: no-op")
+    # The row refuses every platform but the one the gate was recorded on before it looks at
+    # its inputs (test_gate_row_fails_on_platform_or_interpreter_mismatch covers that), so pin
+    # the recorded platform: this test is about the missing-input SKIP, on every CI runner.
+    # The pin is process-wide, so call the row alone rather than run_checklist: other rows
+    # read sys.platform too (row_pilot_subtrees_frozen) and must not see a forged one.
+    monkeypatch.setattr(protocol_safety_check.sys, "platform", "win32")
+    monkeypatch.setattr(protocol_safety_check.sys, "version_info", (3, 12, 0, "final", 0))
 
-    results, _ = protocol_safety_check.run_checklist(
-        repo, "main", "HEAD", tmp_path / "scratch", with_gate=True
+    row = protocol_safety_check.row_gate_numbers(
+        repo=repo, base="main", head="HEAD", scratch=tmp_path / "scratch", with_gate=True
     )
-    by_name = {r.name: r for r in results}
     # compare_gate_scalars.py does not exist in this synthetic repo
-    assert by_name["Gate numbers do not move"].status == "SKIP"
-    assert "compare_gate_scalars.py" in by_name["Gate numbers do not move"].detail
+    assert row.status == "SKIP"
+    assert "compare_gate_scalars.py" in row.detail
 
 
 def test_cli_exits_nonzero_on_failure(tmp_path):
@@ -170,7 +178,16 @@ def test_cli_exits_nonzero_on_failure(tmp_path):
     _git(repo, "commit", "-q", "-m", "head: touches a frozen doc")
 
     cp = subprocess.run(
-        [sys.executable, str(_SCRIPT_PATH), "--base", "main", "--head", "HEAD", "--repo", str(repo)],
+        [
+            sys.executable,
+            str(_SCRIPT_PATH),
+            "--base",
+            "main",
+            "--head",
+            "HEAD",
+            "--repo",
+            str(repo),
+        ],
         capture_output=True,
         text=True,
     )
@@ -184,19 +201,28 @@ def test_cli_exits_zero_on_success(tmp_path):
     _git(repo, "commit", "-q", "--allow-empty", "-m", "head: no-op")
 
     cp = subprocess.run(
-        [sys.executable, str(_SCRIPT_PATH), "--base", "main", "--head", "HEAD", "--repo", str(repo)],
+        [
+            sys.executable,
+            str(_SCRIPT_PATH),
+            "--base",
+            "main",
+            "--head",
+            "HEAD",
+            "--repo",
+            str(repo),
+        ],
         capture_output=True,
         text=True,
     )
     assert cp.returncode == 0, cp.stdout
 
 
-def test_real_repository_run_exits_zero():
+def test_real_repository_run_exits_zero(base_ref):
     """This must exit 0 at the commit this release ships from: rows whose inputs
     (product code, demo docs, new test files) do not exist yet at HEAD report SKIP,
     never PASS or FAIL."""
     cp = subprocess.run(
-        [sys.executable, str(_SCRIPT_PATH), "--base", "main", "--head", "HEAD"],
+        [sys.executable, str(_SCRIPT_PATH), "--base", base_ref, "--head", "HEAD"],
         cwd=_REPO_ROOT,
         capture_output=True,
         text=True,
@@ -467,10 +493,14 @@ def test_invalid_ref_exits_2_with_a_one_line_message(tmp_path):
 
     cp = subprocess.run(
         [
-            sys.executable, str(_SCRIPT_PATH),
-            "--base", "this-ref-does-not-exist",
-            "--head", "HEAD",
-            "--repo", str(repo),
+            sys.executable,
+            str(_SCRIPT_PATH),
+            "--base",
+            "this-ref-does-not-exist",
+            "--head",
+            "HEAD",
+            "--repo",
+            str(repo),
         ],
         capture_output=True,
         text=True,

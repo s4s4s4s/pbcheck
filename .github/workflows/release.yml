@@ -19,6 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # A tag push checks out the tag alone; tests/test_protocol_safety_check.py needs
+          # origin/main to diff against, so fetch the full history here as tests.yml does.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7
         with:
