@@ -369,7 +369,9 @@ def row_gate_numbers(repo: Path, base: str, head: str, scratch: Path, with_gate:
 
 
 def row_readme_no_demo_number(repo: Path, base: str, head: str, **_: object) -> RowResult:
-    return _pytest_row(repo, "README carries no demo number", "tests/test_docs.py", ["-k", "demo_numbers"])
+    return _pytest_row(
+        repo, "README carries no demo number", "tests/test_docs.py", ["-k", "demo_readouts"]
+    )
 
 
 def row_frozen_tooling(repo: Path, base: str, head: str, **_: object) -> RowResult:
