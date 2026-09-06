@@ -207,6 +207,8 @@ def _grep_row(
     skipped_binaries: list[str] = []
     for p in existing:
         files = [p] if p.is_file() else sorted(f for f in p.rglob("*") if f.is_file())
+        # compiled bytecode caches are build residue, not product output: neither grepped nor listed
+        files = [f for f in files if "__pycache__" not in f.parts]
         files = [f for f in files if f.relative_to(repo).as_posix() not in exclude_files]
         for f in files:
             if _is_binary(f):

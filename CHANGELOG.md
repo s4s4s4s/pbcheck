@@ -38,6 +38,10 @@ Phase 0 result.
 - Changed (fix pass, post-review): the lambda-class enum was renamed `calibrated`/`inflated`/`under`
   to the neutral `in_band`/`above_band`/`below_band`, and the caveat ids `C1`..`C9`/`A1` to
   `N1`..`N9`/`R1`, across the schema, the renderer, the fixtures and this documentation.
+- Changed (fix pass, post-review): the licence is declared in the PEP 639 form (`license = "BSD-3-Clause"`,
+  `license-files = ["LICENSE"]`), and building from source needs hatchling 1.27 or newer, now the
+  declared build floor: older hatchling writes the legacy `License` field and no `License-File`
+  into the wheel metadata.
 - Changed: version 0.0.1.dev0 to 0.1.0; `Development Status :: 3 - Alpha`; one sentence
   appended to the docstring of `metrics.signal_above_floor`.
 - Unchanged: `docs/PHASE0_SPEC.md`, `docs/AMENDMENTS.md`, `pilot/preregistration`, `pilot/gate`,

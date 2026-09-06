@@ -328,6 +328,32 @@ def test_grep_row_skips_binary_files_and_reports_them(tmp_path):
     assert ok is True
 
 
+def test_grep_row_ignores_compiled_bytecode_caches(tmp_path):
+    """A __pycache__ directory under a target is neither grepped nor reported:
+    stale .pyc files are build residue, not product output, and listing them as
+    skipped binaries would bury a real skip in noise."""
+    repo = _make_repo(tmp_path)
+    for rel in ("audit.py", "cli.py", "example.py"):
+        _write(repo / "src" / "pbcheck" / rel, "# stub\n")
+    _write(repo / "src" / "pbcheck" / "render" / "__init__.py", "# render package\n")
+    _write(repo / "tests" / "test_render.py", "def test_forbidden():\n    assert True\n")
+    _write(repo / "tests" / "test_cli.py", "def test_forbidden():\n    assert True\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "head: clean product tree")
+    cache = repo / "src" / "pbcheck" / "render" / "__pycache__"
+    cache.mkdir(parents=True)
+    (cache / "text.cpython-312.pyc").write_bytes(b"NO-GO" + bytes([0]) + b"compiled payload")
+
+    results, ok = protocol_safety_check.run_checklist(
+        repo, "main", "HEAD", tmp_path / "scratch", with_gate=False
+    )
+    by_name = {r.name: r for r in results}
+    row = by_name["No protocol language in product output"]
+    assert row.status == "PASS"
+    assert row.detail == ""
+    assert ok is True
+
+
 def test_existing_tests_row_exempts_only_files_added_in_the_range(tmp_path):
     """r_s4 MAJOR-3: the exemption is derived from git diff --diff-filter=A,
     not a hard-coded name list; a genuinely new test file is exempt, an edit
