@@ -187,6 +187,67 @@ def test_docstring_only_reports_unparsable_revision(git_repo: Path):
     assert "does not parse" in result.stderr
 
 
+def test_comment_only_change_fails(git_repo: Path):
+    """A rewritten comment is not a docstring change, and the script must not call it one.
+
+    A comment is not a node of the abstract syntax tree, so a tree comparison answers "only
+    docstrings changed" here: the whole reason the check compares token streams.
+    """
+    with_comment = MODULE_V1.replace("    total = x + y",
+                                     "    # add the two arguments\n    total = x + y")
+    reworded = with_comment.replace("# add the two arguments", "# now subtract them instead")
+    _commit_version(git_repo, with_comment)
+    _commit_version(git_repo, reworded)
+
+    result = _run(DOCSTRING_SCRIPT, "HEAD~1", "HEAD", "mod.py", cwd=git_repo)
+
+    assert result.returncode == 1
+    assert "not only docstrings" in result.stdout
+
+
+def test_added_comment_fails(git_repo: Path):
+    """A comment added where there was none is a change to the file's text that no docstring
+    accounts for."""
+    _commit_version(git_repo, MODULE_V1.replace("CONSTANT = 3",
+                                                "# the constant everything depends on\n"
+                                                "CONSTANT = 3"))
+
+    result = _run(DOCSTRING_SCRIPT, "base", "HEAD", "mod.py", cwd=git_repo)
+
+    assert result.returncode == 1
+    assert "not only docstrings" in result.stdout
+
+
+def test_added_decorator_fails(git_repo: Path):
+    """A decorator changes what the function is, however small the diff looks."""
+    _commit_version(git_repo, MODULE_V1.replace("def f(x, y=2):", "@staticmethod\ndef f(x, y=2):"))
+
+    result = _run(DOCSTRING_SCRIPT, "base", "HEAD", "mod.py", cwd=git_repo)
+
+    assert result.returncode == 1
+    assert "not only docstrings" in result.stdout
+
+
+def test_docstring_written_as_two_literals_is_still_a_docstring(git_repo: Path):
+    """A docstring split over adjacent string literals is removed whole, not by its first part.
+
+    The docstring the checklist allows is one literal, but a file that writes one as several
+    adjacent literals must not turn every later edit into a false "code changed".
+    """
+    split_docstring = MODULE_V1.replace(
+        '    """Add two numbers."""',
+        '    ("Add two numbers, "\n     "in two literals.")',
+    )
+    rewritten = split_docstring.replace('"in two literals."', '"in two adjacent literals."')
+    _commit_version(git_repo, split_docstring)
+    _commit_version(git_repo, rewritten)
+
+    result = _run(DOCSTRING_SCRIPT, "HEAD~1", "HEAD", "mod.py", cwd=git_repo)
+
+    assert result.returncode == 0
+    assert "docstring-only" in result.stdout
+
+
 # ---------------------------------------------------------------------------
 # compare_gate_scalars.py
 # ---------------------------------------------------------------------------

@@ -13,7 +13,6 @@ here is about wiring, and the product defaults would only buy resolution no asse
 
 from __future__ import annotations
 
-import copy
 import inspect
 from pathlib import Path
 
@@ -26,6 +25,7 @@ from conftest import AUDIT_ORACLE_SHAPE
 from pbcheck import audit, audit_schema, gate_config, gene_universe, io_counts
 from pbcheck.audit import AuditSettings, run_audit
 from pbcheck.methods.pseudobulk import build_pseudobulk
+from pbcheck.render import sections, text
 from pbcheck.render.text import LAMBDA_CLASS_WORDS
 
 # The oracle's own column names and levels (synthetic/oracles.py).
@@ -96,7 +96,9 @@ def complete_run(audit_shape_oracle):
         "obs": adata.obs.copy(),
         "var_names": list(adata.var_names),
         "obs_names": list(adata.obs_names),
-        "layers": sorted(adata.layers.keys()),
+        "var": adata.var.copy(),
+        "layers": {name: np.asarray(matrix).copy()
+                   for name, matrix in adata.layers.items()},
     }
     payload = run_audit(adata, _settings())
     return {"payload": payload, "adata": adata, "before": before}
@@ -135,10 +137,10 @@ def test_audit_shape_oracle_clears_all_floors(audit_shape_oracle):
 def test_run_audit_complete_on_null_oracle(complete_run):
     """The whole path on raw counts: both arms, both nulls, a validated payload.
 
-    ``lambda_naive_class == "inflated"`` is the instrument's own sanity condition: the oracle has a
-    donor random effect and no true DE, so a per-cell test that treats cells as replicates must
-    show inflation. If it did not, the audit would be reporting a number the engine's own gate
-    (``scripts/synthetic_gate.py``) would refuse.
+    ``lambda_naive_class == "above_band"`` is the instrument's own sanity condition: the oracle has
+    a donor random effect and no true DE, so a per-cell test that treats cells as replicates must
+    land above the donor-pseudobulk arm's band. If it did not, the audit would be reporting a
+    number the engine's own gate (``scripts/synthetic_gate.py``) would refuse.
     """
     payload = complete_run["payload"]
     audit_schema.validate(payload)
@@ -163,18 +165,18 @@ def test_run_audit_complete_on_null_oracle(complete_run):
     assert null["n_distinct_splits"] == 68
 
     readout = payload["readout"]
-    assert readout["lambda_naive_class"] == "inflated"
+    assert readout["lambda_naive_class"] == "above_band"
     assert readout["lambda_pseudobulk_class"] in LAMBDA_CLASS_WORDS
     assert readout["naive_floor_solo"]["n_perm"] == N_PERM
     assert readout["naive_real_solo"] == payload["real_label"]["naive"]["n_significant_solo"]
-    assert "A1" in _caveat_ids(payload)
+    assert "R1" in _caveat_ids(payload)
 
 
 def test_run_audit_on_no_donor_effect_oracle(audit_shape_oracle):
-    """Falsification control: with ``donor_sigma = 0`` the naive arm must come back calibrated.
+    """Falsification control: with ``donor_sigma = 0`` the naive arm must land inside the band.
 
-    Same shape, same settings, one parameter of the generator changed. A pipeline that called
-    every dataset inflated would pass the test above and fail this one.
+    Same shape, same settings, one parameter of the generator changed. A pipeline that put every
+    dataset above the band would pass the test above and fail this one.
     """
     from oracles import no_donor_effect_oracle
 
@@ -182,7 +184,7 @@ def test_run_audit_on_no_donor_effect_oracle(audit_shape_oracle):
     payload = run_audit(oracle.adata, _settings())
 
     assert payload["status"] == "complete"
-    assert payload["readout"]["lambda_naive_class"] == "calibrated"
+    assert payload["readout"]["lambda_naive_class"] == "in_band"
 
 
 def test_design_only(small_null_adata):
@@ -200,12 +202,13 @@ def test_design_only(small_null_adata):
     assert payload["design"]["donor_nests_in_condition"] is True
 
     ids = _caveat_ids(payload)
-    for always in ("C1", "C2", "C3", "C7"):
+    assert payload["readout"]["sentences"] == []
+    for always in ("N1", "N2", "N3", "N7"):
         assert always in ids
-    assert "A1" not in ids
+    assert "R1" not in ids
     # The oracle's own ``cell_type`` column matches the cell-type-like pattern, and no cell type
     # was selected, so the pooling caveat is due.
-    assert "C8" in ids
+    assert "N8" in ids
     assert payload["input"]["celltype_like_columns_found"] == [CELLTYPE_COL]
 
 
@@ -253,7 +256,7 @@ def test_non_integer_x_drops_pseudobulk_and_runs_naive(audit_shape_oracle):
     """A matrix that is not raw counts: the pseudobulk arm is dropped, never rounded.
 
     The naive arm still runs, on the matrix as found, and the payload says so in three places at
-    once: the status reason, the universe builder and the C6 caveat. The action sentence A1, which
+    once: the status reason, the universe builder and the N6 caveat. The action sentence R1, which
     compares the two arms, is not rendered because one of them does not exist here.
     """
     adata = audit_shape_oracle.adata.copy()
@@ -280,10 +283,13 @@ def test_non_integer_x_drops_pseudobulk_and_runs_naive(audit_shape_oracle):
     assert payload["readout"]["paired_floor_shown"] is False
 
     ids = _caveat_ids(payload)
-    assert "C6" in ids
-    assert "A1" not in ids
-    c6 = next(c["text"] for c in payload["caveats"] if c["id"] == "C6")
-    assert payload["counts_check"]["reason"] in c6
+    assert "N6" in ids
+    assert "R1" not in ids
+    n6 = next(c["text"] for c in payload["caveats"] if c["id"] == "N6")
+    # The reason is the user's own file talking, so the note carries it as a quoted identifier,
+    # shortened by ``text.quoted`` when it is longer than one masked span may be.
+    assert text.quoted(payload["counts_check"]["reason"]) in n6
+    assert payload["counts_check"]["reason"].startswith("non-integer values in X")
 
     # The naive-only path summarises its own null after the engine call; that work is charged to
     # the permutation stage rather than falling outside the table.
@@ -388,7 +394,11 @@ def test_run_audit_does_not_mutate_input(complete_run):
     assert audit.STRATUM_COL not in adata.obs.columns
     assert list(adata.var_names) == before["var_names"]
     assert list(adata.obs_names) == before["obs_names"]
-    assert sorted(adata.layers.keys()) == before["layers"]
+    assert adata.var.equals(before["var"])
+    assert list(adata.var.columns) == list(before["var"].columns)
+    assert sorted(adata.layers.keys()) == sorted(before["layers"])
+    for name, matrix in before["layers"].items():
+        assert np.array_equal(np.asarray(adata.layers[name]), matrix, equal_nan=True)
 
 
 def test_no_protocol_constant_from_gate_config_for_perms():
@@ -554,7 +564,7 @@ def test_too_few_profiles_after_thin_filter(audit_shape_oracle):
     # The naive arm saw the thinned donors too: the thin-donor filter is an aggregation rule.
     assert payload["design"]["donors_per_group"][REF_LEVEL] == \
         AUDIT_ORACLE_SHAPE["n_donors_per_group"]
-    assert "A1" not in _caveat_ids(payload)
+    assert "R1" not in _caveat_ids(payload)
 
 
 def test_unused_condition_level_does_not_distort_design(audit_shape_oracle):
@@ -664,9 +674,9 @@ def test_celltype_subset_and_constant_column(audit_shape_oracle):
 
     assert pooled["input"]["celltype_col"] is None
     assert pooled["input"]["celltype_like_columns_found"] == [CELLTYPE_COL]
-    assert "C8" in _caveat_ids(pooled)
+    assert "N8" in _caveat_ids(pooled)
     assert explicit["input"]["celltype_value"] == CELLTYPE_VALUE
-    assert "C8" not in _caveat_ids(explicit)
+    assert "N8" not in _caveat_ids(explicit)
 
     # The mirror of the "column without a value" error: a value with no column to read it from
     # would otherwise be copied into the payload as a subset that was never taken.
@@ -690,7 +700,7 @@ def test_universe_too_small_becomes_design_only(small_null_adata):
     assert payload["universe"]["min_size"] == gate_config.MIN_UNIVERSE_SIZE
     assert payload["real_label"] is None
     assert payload["permutation_null"] is None
-    assert "A1" not in _caveat_ids(payload)
+    assert "R1" not in _caveat_ids(payload)
 
 
 def test_paired_bh_consistent_with_run_null(complete_run):
@@ -730,15 +740,13 @@ def test_paired_floor_hidden_when_pseudobulk_nans(audit_shape_oracle, complete_r
     assert payload["real_label"]["paired_bh"]["n_na_pseudobulk"] == 0
     assert payload["readout"]["paired_floor_shown"] is True
 
-    # The rule itself, on the payload of the ordinary complete run: one NaN in the pseudobulk arm
-    # and the paired series stops being comparable with the real-label count.
-    nan_payload = copy.deepcopy(complete_run["payload"])
-    assert nan_payload["readout"]["paired_floor_shown"] is True
-    nan_payload["real_label"]["paired_bh"]["n_na_pseudobulk"] = 1
-    nan_payload["real_label"]["paired_bh"]["pseudobulk_na_free"] = False
-    audit._readout_from(nan_payload, [])
-    assert nan_payload["readout"]["paired_floor_shown"] is False
-    assert nan_payload["permutation_null"]["naive"]["floor_solo"]["bh_mode"] == "solo"
+    assert payload["permutation_null"]["naive"]["floor_solo"]["bh_mode"] == "solo"
+    assert payload["permutation_null"]["naive"]["floor_paired"]["bh_mode"] == "paired"
+    assert payload["permutation_null"]["pseudobulk"]["floor"]["bh_mode"] == "paired"
+    assert complete_run["payload"]["readout"]["paired_floor_shown"] is True
+    # The other side of the rule (a real pseudobulk NaN switching the paired floor off) is
+    # exercised end to end in
+    # ``test_paired_floor_hidden_when_the_pseudobulk_arm_returns_a_nan``.
 
 
 def test_solo_floor_mc_se_matches_engine_formula(engine_null, complete_run):
@@ -769,18 +777,23 @@ def test_solo_floor_mc_se_matches_engine_formula(engine_null, complete_run):
 
 
 def test_readout_classes_match_gate_bands():
-    """The three read-out words are the pre-registered band's own three cases, and nothing else."""
+    """The three class names are the band's own three cases, and they name a position only.
+
+    The names describe where a lambda falls against ``gate_config.LAMBDA_BAND``, the
+    donor-pseudobulk arm's band, and award no property to the arm they describe; the renderer's
+    phrase table is keyed by exactly these three names.
+    """
     low, high = gate_config.LAMBDA_BAND
     assert (low, high) == (0.9, 1.1)
 
-    assert audit._lambda_class(0.85) == "under"
-    assert audit._lambda_class(1.0) == "calibrated"
-    assert audit._lambda_class(1.15) == "inflated"
-    assert audit._lambda_class(low) == "calibrated"
-    assert audit._lambda_class(high) == "calibrated"
+    assert audit._lambda_class(0.85) == "below_band"
+    assert audit._lambda_class(1.0) == "in_band"
+    assert audit._lambda_class(1.15) == "above_band"
+    assert audit._lambda_class(low) == "in_band"
+    assert audit._lambda_class(high) == "in_band"
     assert audit._lambda_class(None) is None
     assert audit._lambda_class(float("nan")) is None
-    assert set(LAMBDA_CLASS_WORDS) == {"calibrated", "inflated", "under"}
+    assert set(LAMBDA_CLASS_WORDS) == {"in_band", "above_band", "below_band"}
 
 
 def test_achieved_perm_counts_and_coarse_caveat(audit_shape_oracle):
@@ -811,7 +824,7 @@ def test_achieved_perm_counts_and_coarse_caveat(audit_shape_oracle):
     assert readout["n_perm_pb_achieved"] <= N_PERM_PB
     assert readout["naive_floor_solo"]["n_perm"] == 18
 
-    caveat = next(c["text"] for c in payload["caveats"] if c["id"] == "C9")
+    caveat = next(c["text"] for c in payload["caveats"] if c["id"] == "N9")
     assert "18" in caveat and "1000" in caveat
 
 
@@ -872,7 +885,7 @@ def test_run_audit_complete_at_product_counts_on_gate_shape():
     """The whole path at the gate's own oracle shape and 200/200 permutations.
 
     The fast tests above run 20 permutations on 600 genes, which is enough to pin wiring and
-    nothing else. This one runs the shape the instrument was calibrated on (8v8 donors, 1500
+    nothing else. This one runs the shape the instrument was measured on (8v8 donors, 1500
     genes) at a permutation budget whose floor is readable, and demands the instrument's own
     sanity condition on that floor: on a synthetic null with donor structure the per-cell arm's
     permutation floor must be at least ``gate_config.INSTRUMENT_NAIVE_FLOOR_FRAC_MIN`` of the
@@ -891,11 +904,166 @@ def test_run_audit_complete_at_product_counts_on_gate_shape():
     assert payload["permutation_null"]["n_perm_pb_achieved"] == SLOW_N_PERM_PB
 
     readout = payload["readout"]
-    assert readout["lambda_naive_class"] == "inflated"
+    assert readout["lambda_naive_class"] == "above_band"
     assert (payload["permutation_null"]["naive"]["lambda"]
             >= gate_config.INSTRUMENT_LAMBDA_NAIVE_MIN)
     assert readout["naive_floor_solo"]["median_frac"] >= \
         gate_config.INSTRUMENT_NAIVE_FLOOR_FRAC_MIN
     assert readout["n_perm_naive_achieved"] == SLOW_N_PERM
-    assert "C4" not in _caveat_ids(payload)
-    assert "C9" not in _caveat_ids(payload)
+    assert "N4" not in _caveat_ids(payload)
+    assert "N9" not in _caveat_ids(payload)
+
+
+def test_readout_sentences_are_written_by_the_audit(complete_run):
+    """The read-out lines are payload fields: filled here, printed verbatim by the renderer.
+
+    Each line is checked against the payload value it interpolates, so a renderer that prints
+    ``readout.sentences`` cannot show a number the payload does not carry. The naive lambda line
+    is also where the band is attributed: the band is the donor-pseudobulk arm's, shown to
+    describe the naive number and not as the naive arm's own criterion.
+    """
+    payload = complete_run["payload"]
+    readout = payload["readout"]
+    naive_null = payload["permutation_null"]["naive"]
+    lines = readout["sentences"]
+
+    assert len(lines) == 5
+    assert all("{" not in line and "}" not in line for line in lines)
+
+    floor_line, lambda_line, pseudobulk_line, donor_line, profile_line = lines
+    assert audit.format_scalar(naive_null["floor_solo"]["median_count"]) in floor_line
+    assert audit.format_scalar(readout["naive_real_solo"]) in floor_line
+    assert "solo BH" in floor_line
+    # The coarse clause and note N9 answer the same condition: the achieved permutation count.
+    coarse = readout["n_perm_naive_achieved"] < audit.COARSE_NULL_THRESHOLD
+    assert (audit.COARSE_NULL_NOTE in floor_line) is coarse
+    assert ("N9" in _caveat_ids(payload)) is coarse
+
+    assert audit.format_scalar(naive_null["lambda"]) in lambda_line
+    assert LAMBDA_CLASS_WORDS[readout["lambda_naive_class"]] in lambda_line
+    assert str(gate_config.LAMBDA_BAND[0]) in lambda_line
+    assert "the donor-pseudobulk arm's band" in lambda_line
+
+    pb_null = payload["permutation_null"]["pseudobulk"]
+    assert audit.format_scalar(pb_null["lambda"]) in pseudobulk_line
+    assert audit.format_scalar(pb_null["fp_rate"]) in pseudobulk_line
+    assert "paired BH" in pseudobulk_line
+
+    assert text.quoted(TEST_LEVEL) in donor_line
+    assert text.quoted(REF_LEVEL) in donor_line
+    assert str(payload["permutation_null"]["n_distinct_splits"]) in donor_line
+
+    profiles = payload["universe"]["profiles_per_group_after_thin_filter"]
+    assert str(profiles[TEST_LEVEL]) in profile_line
+    assert str(gate_config.MIN_CELLS) in profile_line
+
+    for line in lines:
+        assert text.forbidden_pattern_hits(line) == ()
+
+
+def test_readout_sentence_says_the_pseudobulk_arm_did_not_run(audit_shape_oracle):
+    """With no pseudobulk arm the read-out says so in words, and says why."""
+    normalised = audit_shape_oracle.adata.copy()
+    normalised.X = np.asarray(normalised.X, dtype=float) / 2.0
+
+    payload = run_audit(normalised, _settings())
+    lines = payload["readout"]["sentences"]
+
+    assert payload["status"] == "naive_only"
+    assert payload["permutation_null"]["pseudobulk"] is None
+    assert lines[2] == text.sentence_text(
+        "pseudobulk_not_run",
+        reason_text=sections.STATUS_REASON_WORDS[payload["status_reason"]],
+    )
+
+
+def test_format_scalar_is_the_reports_own_number_format():
+    """The sentences and the report's tables format a number the same way; two formatters would
+    show one payload value differently in two places of the same report."""
+    for value in (None, True, False, 0.5, 1.0 / 3.0, 1234567.0, 12, "0.9"):
+        assert audit.format_scalar(value) == sections._fmt(value)
+    assert audit.format_scalar(1.0 / 3.0) == "0.3333"
+
+
+def test_few_donors_flag_note_and_readout_clause(complete_run):
+    """Below the donor threshold: the flag, the note and the read-out's replaced clause.
+
+    The oracle shape is under ``product_constants.FEW_DONORS_THRESHOLD`` donors per group, so the
+    read-out paragraph must not carry the categorical clause: change 2 of the fifth amendment
+    (docs/AMENDMENTS.md) admits the floor-based ratio outside the envelope only when every group
+    has at least that many donors.
+    """
+    payload = complete_run["payload"]
+    readout = payload["readout"]
+
+    assert readout["min_donors_per_group"] == AUDIT_ORACLE_SHAPE["n_donors_per_group"]
+    assert readout["few_donors_threshold"] == audit.FEW_DONORS_THRESHOLD
+    assert readout["few_donors"] is True
+    assert "N4" in _caveat_ids(payload)
+
+    r1 = next(c["text"] for c in payload["caveats"] if c["id"] == "R1")
+    assert text.R1_CLAUSES["separable"] not in r1
+    assert text.R1_CLAUSES["leak_contaminated"].format(
+        threshold=audit.FEW_DONORS_THRESHOLD) in r1
+
+    # The pseudobulk clause is rendered exactly when the paired floor is shown, with the numbers
+    # of the arm it names and the BH convention they were produced under.
+    pb_clause = text.R1_CLAUSES["pseudobulk"].format(
+        pb_real=payload["real_label"]["pseudobulk"]["n_significant_paired"],
+        pb_floor=f"{payload['permutation_null']['pseudobulk']['floor']['median_count']:.0f}",
+    )
+    assert (pb_clause in r1) is readout["paired_floor_shown"]
+
+
+def test_paired_floor_hidden_when_the_pseudobulk_arm_returns_a_nan(audit_shape_oracle,
+                                                                   monkeypatch):
+    """A real NaN in the pseudobulk arm switches the paired floor and its clause off.
+
+    The construction the plan named does not produce a NaN on this engine (see
+    ``test_paired_floor_hidden_when_pseudobulk_nans``); the only documented source is a non-finite
+    residual variance in ``moderated_t``. That state is injected at the engine boundary the audit
+    calls, so the paired bookkeeping, the read-out flag and the read-out paragraph are reached the
+    way a real NaN would reach them, rather than by editing the finished payload.
+    """
+    real_pseudobulk_de = audit.pseudobulk_de
+
+    def one_nan_gene(*args, **kwargs):
+        result = real_pseudobulk_de(*args, **kwargs)
+        result.table.loc[result.table.index[0], ["pval", "padj"]] = np.nan
+        return result
+
+    monkeypatch.setattr(audit, "pseudobulk_de", one_nan_gene)
+    payload = run_audit(audit_shape_oracle.adata.copy(), _settings())
+    audit_schema.validate(payload)
+
+    assert payload["status"] == "complete"
+    assert payload["real_label"]["paired_bh"]["n_na_pseudobulk"] == 1
+    assert payload["real_label"]["paired_bh"]["pseudobulk_na_free"] is False
+    assert payload["readout"]["paired_floor_shown"] is False
+
+    r1 = next(c["text"] for c in payload["caveats"] if c["id"] == "R1")
+    assert "paired BH)." not in r1
+    assert text.R1_CLAUSES["pseudobulk"].split("{")[0] not in r1
+
+
+def test_audit_h5ad_reads_the_file_and_records_it(small_null_adata, tmp_path):
+    """``audit_h5ad`` audits what it read, and the payload says which file and how long the read
+    took: the path, the load stage and a total runtime that includes it."""
+    path = tmp_path / "stratum.h5ad"
+    small_null_adata.write_h5ad(path)
+
+    settings = _settings(celltype_col=None, celltype_value=None, design_only=True)
+    payload = audit.audit_h5ad(path, settings)
+    audit_schema.validate(payload)
+
+    in_memory = run_audit(small_null_adata, settings)
+    assert payload["input"]["path"] == str(path)
+    assert payload["input"]["n_cells_loaded"] == in_memory["input"]["n_cells_loaded"]
+    assert payload["design"]["donors_per_group"] == in_memory["design"]["donors_per_group"]
+    assert payload["status"] == in_memory["status"] == "design_only"
+    assert in_memory["input"]["path"] is None
+
+    load_seconds = payload["runtime_by_stage_seconds"]["load"]
+    assert load_seconds is not None and load_seconds > 0
+    assert payload["runtime_seconds"] >= load_seconds
+    assert audit.audit_h5ad(str(path), settings)["input"]["path"] == str(path)
