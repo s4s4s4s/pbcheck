@@ -359,10 +359,10 @@ def test_n6_is_present_exactly_when_the_counts_gate_failed():
 
 
 def test_n4_is_present_exactly_when_the_readout_says_few_donors():
+    # The skeleton counts no donors, so it already says few donors and already carries N4.
     payload = empty_payload()
-    payload["readout"]["few_donors_threshold"] = product_constants.FEW_DONORS_THRESHOLD
     payload["readout"]["min_donors_per_group"] = 3
-    payload["readout"]["few_donors"] = True
+    payload["caveats"] = [entry for entry in payload["caveats"] if entry["id"] != "N4"]
     with pytest.raises(AuditSchemaError) as excinfo:
         validate(payload)
     assert "N4" in str(excinfo.value)
@@ -396,12 +396,30 @@ def test_a_quoted_identifier_in_a_caveat_text_is_not_a_forbidden_pattern():
 
 def test_few_donors_must_agree_with_the_donor_count_and_the_threshold():
     payload = empty_payload()
-    payload["readout"]["few_donors_threshold"] = product_constants.FEW_DONORS_THRESHOLD
-    payload["readout"]["min_donors_per_group"] = 3
-    payload["readout"]["few_donors"] = False
+    payload["readout"]["min_donors_per_group"] = product_constants.FEW_DONORS_THRESHOLD
     with pytest.raises(AuditSchemaError) as excinfo:
         validate(payload)
     assert str(excinfo.value).startswith("readout.few_donors:")
+
+
+def test_the_skeleton_declares_the_tools_own_donor_threshold():
+    assert empty_payload()["readout"]["few_donors_threshold"] == (
+        product_constants.FEW_DONORS_THRESHOLD
+    )
+
+
+def test_a_payload_declaring_its_own_donor_threshold_is_rejected():
+    # Without this rule the threshold is a knob inside the payload: a run with two donors per
+    # group could declare a threshold of two, keep few_donors false and so ship with no
+    # donor-threshold note and with the read-out paragraph's categorical clause switched on.
+    payload = empty_payload()
+    payload["readout"]["few_donors_threshold"] = 2
+    payload["readout"]["min_donors_per_group"] = 2
+    payload["readout"]["few_donors"] = False
+    payload["caveats"] = [entry for entry in payload["caveats"] if entry["id"] != "N4"]
+    with pytest.raises(AuditSchemaError) as excinfo:
+        validate(payload)
+    assert str(excinfo.value).startswith("readout.few_donors_threshold:")
 
 
 def test_paired_floor_shown_requires_a_paired_correction_free_of_missing_values():

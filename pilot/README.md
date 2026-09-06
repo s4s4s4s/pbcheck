@@ -26,16 +26,14 @@ where the confounds are messy. Methodology: [`../docs/PHASE0_SPEC.md`](../docs/P
 > Amendment 3 supplies the per-stratum estimation mechanism and explicitly not the anchor. Stratum
 > inclusion in the real sweep therefore now requires a per-stratum `sigma_donor` estimate and envelope
 > membership, on top of everything §1 already pins. Because the pseudobulk arm is the denominator of every
-> inflation number, no result here may be read as a finding; the v0.1.0 demonstrations under `demo/`
-> are real public data outside the protocol and are labelled so, and every number produced under this
+> inflation number, no result here may be read as a finding; every number produced under this
 > protocol is still
 > synthetic. Any further change to the frozen protocol will be recorded, dated, in
 > `../docs/AMENDMENTS.md` before it is applied.
 
 pbcheck v0.1.0 (the `pbcheck audit` CLI) is a product release built on this same engine. It runs one
-stratum at a time, outside this protocol, and makes no Phase 0 claim; the demonstrations shipped with
-it use datasets that are not among the 17 frozen datasets or 357 strata. The frozen material in this
-directory is untouched by the release.
+stratum at a time, outside the protocol, and makes no Phase 0 claim; it ships no run on any of the
+17 frozen datasets or 357 strata. The frozen material in this directory is untouched by the release.
 
 ## What is done (this repo, runs offline)
 

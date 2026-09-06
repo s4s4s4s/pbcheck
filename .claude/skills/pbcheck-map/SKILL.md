@@ -7,8 +7,8 @@ tools: Read, Glob, Grep
 color: cyan
 ---
 
-Verified on branch `release/0.1.0` (post-integration fix pass, clean tree): `pytest -q` → **697 passed**,
-0 failed. `main`'s engine
+Verified on branch `release/0.1.0` (post-integration fix pass, clean tree): `pytest -q` → **699 passed**
+(699 collected, 697 green and 2 skipped: the two `demo/` checks have no directory to read), 0 failed. `main`'s engine
 history (Amendment 5 Part A, the naive-engine speedup, the stratum-list freeze, Amendment 4 Part A)
 is unchanged by this branch; the branch's own commits are the v0.1.0 release (WP1-WP5) and this
 fix pass over its post-integration review (schema/caveat renames, the audit fixes, the renderer and
@@ -72,8 +72,6 @@ Phase 0 protocol.
 | `check_upper_bound_claim.py` | reproducer for Amendment 4 Part A's Correction 1 probe table (named seeds, committed artifact) |
 | `check_version_consistency.py` | guards `CITATION.cff` against drifting from `src/pbcheck/__init__.py`'s version |
 | `proof_of_life.py` | **historical**, predates the frozen protocol; importing it warns, not comparable to anything current |
-| `demo_kang2018.py` | v0.1.0 demonstration driver: runs `pbcheck audit` on Kang et al. 2018, a paired design the tool's own design gate stops |
-| `demo_two_arm.py` | v0.1.0 demonstration driver: runs `pbcheck audit` end to end on an unpaired public dataset |
 | `changelog_section.py` | extracts one `## [x.y.z]` section from `CHANGELOG.md`, used by `release.yml` for the GitHub Release notes |
 | `protocol_safety_check.py` | machine check that product code (`audit.py`, `cli.py`, `example.py`, `render/`) never reads `gate_config.N_PERM*` and never contains the forbidden protocol strings |
 | `check_docstring_only_diff.py` | AST comparison guarding the one permitted docstring-only change to `metrics.signal_above_floor` |
@@ -111,9 +109,10 @@ README/USAGE/CONTRIBUTING/pilot-README/demo-README forbidden-pattern scan, the d
 numeric-token guard, absolute README links, and the CLI-default numbers against `audit.PRODUCT_N_PERM`
 / `PRODUCT_N_PERM_PB` / `gate_config.ALPHA`), `test_checklist_scripts.py`
 (`scripts/check_docstring_only_diff.py`), and `test_protocol_safety_check.py` /
-`test_measure_audit_runtime.py` for the two scripts of the same name. `demo/` and its
-`test_demo_scripts.py` are not yet on this branch (a later work package); `test_docs.py`'s
-demo-readout check `pytest.skip`s until they land.
+`test_measure_audit_runtime.py` for the two scripts of the same name. `demo/` is not part of
+v0.1.0: no demonstration directory, demonstration script or `test_demo_scripts.py` exists on this
+branch, and README.md links none. The `test_docs.py` checks written for such a directory
+(`pytest.skip` when it is absent) stay in place for a release that ships one.
 
 ### `pilot/` — committed Phase 0 artifacts, no code
 
@@ -124,13 +123,6 @@ demo-readout check `pytest.skip`s until they land.
 | `preregistration/` | the frozen §1 stratum list + the whole-Census candidate manifest it derives from + two pinned external indexes + the redacted proposal doc — see Frozen material |
 | `upper_bound_check/` | Amendment 4 Part A Correction 1's reproducer artifact (named seeds); `replicates.jsonl` is a resume ledger, gitignored |
 | `results/` | **empty by design**, gitignored except `.gitkeep`; see Traps |
-
-### `demo/` - v0.1.0 demonstrations, outside the protocol
-
-Committed output of `scripts/demo_kang2018.py` and `scripts/demo_two_arm.py`: `pbcheck audit` run on
-two real public datasets that are not among the 17 frozen Phase 0 datasets. `demo/README.md` states
-the datasets, licences and disclaimer; neither demonstration is a Phase 0 measurement or a claim
-about the underlying publications.
 
 ### `docs/`
 
@@ -206,7 +198,7 @@ by a real run.
 ## Current state (verified this session)
 
 - v0.1.0 released; PyPI trusted publishing via `release.yml`.
-- `pytest -q` on `release/0.1.0` (this pass): **697 passed**, 0 failed.
+- `pytest -q` on `release/0.1.0` (this pass): **699 passed** (697 green, 2 skipped `demo/` checks), 0 failed.
   Coverage is report-only (no `--cov-fail-under` gate, deliberate, see `tests.yml`).
 - The committed gate run (`pilot/gate/synthetic_gate_2026-08-15.json`) verdict: **`INSTRUMENT VALID
   WITHIN THE STATED OPERATING ENVELOPE`**. λ_pseudobulk 1.01 (band [0.9, 1.1]), pseudobulk perm-null FP

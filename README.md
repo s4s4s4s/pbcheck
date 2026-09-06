@@ -69,8 +69,10 @@ because there were too few donors). Full detail on each status is in
 The pseudobulk arm's calibration itself has a stated limit, quoted here exactly as pbcheck's own
 report states it:
 
-> The pseudobulk arm's power was established on synthetic oracles only inside the operating
-> envelope declared in Amendment 3:
+> Amendment 3 declares an operating envelope for the pseudobulk arm on synthetic oracles. For each
+> donor-variance point it states the donor count per group at which the power target is reached, and
+> each row says what the committed grid supports there: a point measured on the grid, or a count
+> derived or extrapolated from it.
 >
 > sigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')
 > sigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')
@@ -94,8 +96,8 @@ report states it:
   stops at the design audit rather than running either differential-expression arm on it. There
   is no covariate for a repeated measurement, and combining donor and condition into one column
   to work around this is the exact error the tool exists to catch.
-- No claim about any real dataset or any publication of any kind. The demonstrations below are
-  outside the pre-registered protocol and are labelled as such.
+- No claim about any real dataset or any publication of any kind. v0.1.0 ships no run on real
+  data at all: the quickstart runs on generated example data.
 - No access to the 17 frozen datasets or 357 pre-registered strata; no Census access in the
   product path.
 - No multi-stratum batch mode, no plots, no R, no DESeq2 test arm.
@@ -123,7 +125,7 @@ results are inflated by this error. Pointers to prior art are welcome and will b
 | | |
 |---|---|
 | Measurement engine | built; tested in CI |
-| Real CELLxGENE data | **not touched.** The stratum list is pre-registered (frozen 2026-08-16; verify the date in [`pilot/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/pilot/README.md)); no frozen stratum has been run. The v0.1.0 demonstrations use public datasets outside the frozen list |
+| Real CELLxGENE data | **not touched.** The stratum list is pre-registered (frozen 2026-08-16; verify the date in [`pilot/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/pilot/README.md)); no frozen stratum has been run |
 | Every number in the Phase 0 sections | from synthetic oracles with known ground truth - instrument calibration, **not a result** |
 | Pseudobulk arm's test | **moderated eBayes** (Amendment 2), replacing the DESeq2-Wald arm Amendment 1 found miscalibrated |
 | Calibration (λ, FP rate) | **criteria met**, now at 200 permutations - the earlier marginal FP reading is resolved, see below |
@@ -233,17 +235,6 @@ built: the Phase 0 real-data harness (`controls`, `decision`, the spec section 9
 lists the spec corrections that are named in module docstrings but not yet implemented, so that
 nothing here reads as done when it is not.
 
-## Demonstrations
-
-Two committed demonstrations under `demo/` show pbcheck running against real public datasets
-outside the pre-registered Phase 0 protocol, including one where the tool's own design audit
-stops the run because the dataset uses a paired design. Both are labelled as demonstrations, not
-as a Phase 0 measurement, and quote no result about the underlying publications. See
-[`demo/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/demo/README.md) for the exact
-commands, the datasets, their licences and the full disclaimer. `demo/` itself is produced by the
-demonstration scripts of this release (`scripts/demo_kang2018.py`, `scripts/demo_two_arm.py`), not
-committed by hand.
-
 ## Layout
 
 ```
@@ -251,7 +242,6 @@ src/pbcheck/          # the auditor engine (methods/) and the release: audit.py,
 pilot/                # Phase 0 artifacts: committed test-selection grid + gate runs, no code
 scripts/              # the harness: synthetic gate, calibration probe, selection analyzer, Census candidate run
 synthetic/            # synthetic-oracle generators with known ground truth
-demo/                 # v0.1.0 demonstrations on real public data, outside the protocol
 tests/                # unit + regression + property tests (oracles are the correctness spec)
 docs/                 # PHASE0_SPEC.md (methodology), AMENDMENTS.md, ENV_NOTES.md, USAGE.md (CLI reference)
 ```

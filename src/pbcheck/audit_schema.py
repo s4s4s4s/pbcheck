@@ -21,6 +21,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from pbcheck.product_constants import FEW_DONORS_THRESHOLD
+
 AUDIT_SCHEMA_VERSION = "pbcheck-audit/1"
 
 
@@ -539,8 +541,21 @@ def _check_readout_consistency(payload: Mapping) -> None:
     clause hang on, and ``paired_floor_shown`` the flag its pseudobulk clause hangs on. Both are
     derivable from other fields of the same payload, so a payload that disagrees with itself here
     would render prose the numbers do not support.
+
+    ``few_donors_threshold`` is checked against
+    :data:`~pbcheck.product_constants.FEW_DONORS_THRESHOLD` first. It is a display copy of the
+    tool's own constant, not a knob: without this check a payload could declare a threshold of its
+    own choosing, keep ``few_donors`` false at any donor count and so switch the donor-threshold
+    note and the read-out paragraph's categorical clause on and off from inside the payload.
     """
     readout = payload["readout"]
+    if readout["few_donors_threshold"] != FEW_DONORS_THRESHOLD:
+        _fail(
+            "readout.few_donors_threshold",
+            f"must be the tool's donor threshold {FEW_DONORS_THRESHOLD}, "
+            f"got {readout['few_donors_threshold']}",
+        )
+
     if readout["few_donors"] != (
         readout["min_donors_per_group"] < readout["few_donors_threshold"]
     ):
@@ -607,11 +622,16 @@ def empty_payload() -> dict:
     """A payload with every schema key present, every arm ``null``, ``status`` ``design_only``.
 
     Every key that the schema marks nullable is set to ``None``; every other key holds a
-    type-correct placeholder (``""``, ``0``, ``0.0``, ``False``, ``{}`` or ``[]``), except the
-    caveat block, which carries the four always-on notes (:data:`ALWAYS_ON_CAVEAT_IDS`) because
-    :func:`validate` requires them of every payload. It is meant as a starting point for building
-    a real payload and as a fixture that :func:`validate` accepts.
+    type-correct placeholder (``""``, ``0``, ``0.0``, ``False``, ``{}`` or ``[]``), except two
+    blocks that :func:`validate` constrains against each other. The caveat block carries the four
+    always-on notes (:data:`ALWAYS_ON_CAVEAT_IDS`) and the donor-threshold note N4, because the
+    skeleton counts no donors: ``readout.min_donors_per_group`` is ``0``, the declared threshold is
+    :data:`~pbcheck.product_constants.FEW_DONORS_THRESHOLD` (the only value the validator accepts)
+    and ``readout.few_donors`` is therefore true. It is meant as a starting point for building a
+    real payload and as a fixture that :func:`validate` accepts.
     """
+    from pbcheck.render import text  # local: pbcheck.render imports this module's validator
+
     input_block = {
         "path": None,
         "n_cells_loaded": 0,
@@ -690,8 +710,8 @@ def empty_payload() -> dict:
         "naive_real_over_floor_solo": None,
         "pseudobulk_real_over_floor": None,
         "paired_floor_shown": False,
-        "few_donors": False,
-        "few_donors_threshold": 0,
+        "few_donors": True,
+        "few_donors_threshold": FEW_DONORS_THRESHOLD,
         "min_donors_per_group": 0,
         "min_profiles_per_group_after_thin_filter": None,
         "n_perm_naive_requested": 0,
@@ -728,5 +748,8 @@ def empty_payload() -> dict:
         "caveats": [],
         "provenance": provenance_block,
     }
-    payload["caveats"] = _always_on_caveats(payload)
+    payload["caveats"] = [
+        *_always_on_caveats(payload),
+        {"id": "N4", "text": text.caveat_text("N4")},
+    ]
     return payload

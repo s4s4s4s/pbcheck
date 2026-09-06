@@ -150,12 +150,14 @@ donor_spans_conditions`, and explains in the report why it stopped there.
   chosen significance level. That behaviour is the check that the pseudobulk arm's own error rate
   stays near that level on this file; it does not certify the naive arm, and it does not certify any published
   result.
-- **The envelope.** The pseudobulk arm's calibration and power were established on synthetic data
-  only, and only inside a stated range of donor counts and per-donor variability. Quoting the exact
-  wording pbcheck's own report uses for this:
+- **The envelope.** The pseudobulk arm's calibration and power come from synthetic data only, and
+  the envelope covers a stated range of donor counts and per-donor variability, each point carrying
+  what the committed grid supports there. Quoting the exact wording pbcheck's own report uses:
 
-  > The pseudobulk arm's power was established on synthetic oracles only inside the operating
-  > envelope declared in Amendment 3:
+  > Amendment 3 declares an operating envelope for the pseudobulk arm on synthetic oracles. For each
+  > donor-variance point it states the donor count per group at which the power target is reached,
+  > and each row says what the committed grid supports there: a point measured on the grid, or a
+  > count derived or extrapolated from it.
   >
   > sigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')
   > sigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')

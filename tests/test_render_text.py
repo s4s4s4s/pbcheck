@@ -99,8 +99,15 @@ def test_envelope_rows_render_one_row_per_envelope_point_with_its_meaning():
     assert text.envelope_rows() == _expected_envelope_rows()
 
 
-def test_envelope_rows_do_not_call_a_derived_or_extrapolated_row_established():
+def test_no_envelope_prose_calls_a_derived_or_extrapolated_row_established():
+    # The word has to be absent from the sentence that encloses the rows and from the glossary
+    # entry that repeats it, not only from the rows: docs/AMENDMENTS.md records two of these
+    # points as derived or extrapolated rather than measured, so any sentence covering all rows
+    # would assert more than the grid supports.
     assert "established" not in text.envelope_rows()
+    assert "established" not in text.envelope_sentence()
+    for term, sentence in text.GLOSSARY:
+        assert "established" not in sentence, f"GLOSSARY[{term}] says power was established"
 
 
 def test_envelope_sentence_matches_the_n2_template_filled_from_gate_config():
@@ -277,7 +284,8 @@ def test_n7_states_provenance_without_an_instrument_verdict():
 
 def test_n2_scopes_power_to_the_envelope_and_calibration_to_one_regime():
     rendered = text.envelope_sentence()
-    assert rendered.startswith("The pseudobulk arm's power was established")
+    assert rendered.startswith("Amendment 3 declares an operating envelope for the pseudobulk arm")
+    assert "the donor count per group at which the power target is reached" in rendered
     assert "calibration was evaluated at one hard regime" in rendered
     assert "pbcheck does not estimate sigma_donor for real data" in rendered
 

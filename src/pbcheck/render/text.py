@@ -198,8 +198,10 @@ CAVEATS = MappingProxyType({
         "result is true."
     ),
     "N2": (
-        "The pseudobulk arm's power was established on synthetic oracles only inside the operating "
-        "envelope declared in Amendment 3:\n{envelope_rows}\n"
+        "Amendment 3 declares an operating envelope for the pseudobulk arm on synthetic oracles. "
+        "For each donor-variance point it states the donor count per group at which the power "
+        "target is reached, and each row says what the committed grid supports there: a point "
+        "measured on the grid, or a count derived or extrapolated from it.\n{envelope_rows}\n"
         "The arm's calibration was evaluated at one hard regime (sigma_donor {calibration_sigma}, "
         "{oracle_donors} against {oracle_donors} donors) and nowhere else. pbcheck does not "
         "estimate sigma_donor for real data, so whether this stratum lies inside that envelope is "
@@ -481,8 +483,10 @@ GLOSSARY: tuple[tuple[str, str], ...] = (
     ),
     (
         "operating envelope",
-        "the region of donor count and donor-to-donor variability where the pseudobulk arm's "
-        "power was established on synthetic data.",
+        "the region of donor count and donor-to-donor variability that Amendment 3 declares for "
+        "the pseudobulk arm on synthetic data; each of its points states the donor count per "
+        "group at which the power target is reached, on the committed grid or by the derivation "
+        "the grid support of that point names.",
     ),
     (
         "sigma_donor",

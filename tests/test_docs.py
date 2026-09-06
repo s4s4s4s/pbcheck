@@ -124,7 +124,7 @@ def _readout_numeric_tokens(readout: object, tokens: set[str]) -> None:
 def test_readme_contains_no_numeric_token_from_demo_readouts():
     demo_dir = ROOT / "demo"
     if not demo_dir.exists():
-        pytest.skip("demo/ is produced by a later work package; nothing to check yet.")
+        pytest.skip("v0.1.0 ships no demo/ directory; the guard stays for a release that does.")
 
     numeric_tokens: set[str] = set()
     for payload_path in demo_dir.glob("**/pbcheck_audit.json"):
@@ -157,10 +157,8 @@ def test_readme_has_no_relative_markdown_link():
 
 
 def test_readme_absolute_repo_links_resolve_to_existing_files():
-    # demo/ is produced by a later work package (see the demo-readout guard above); README links
-    # to it in advance, so its absence here is expected and not a broken-link regression.
-    not_yet_landed = {"demo/README.md"}
-
+    # Every absolute repository link is asserted, with no exemption: README.md is the PyPI long
+    # description, and a link to a path this branch does not carry renders as a 404 there.
     text = ROOT.joinpath("README.md").read_text(encoding="utf-8")
     checked_any = False
     for target in _MARKDOWN_LINK.findall(text):
@@ -168,8 +166,6 @@ def test_readme_absolute_repo_links_resolve_to_existing_files():
             continue
         checked_any = True
         relative = target[len(REPO_BLOB_PREFIX):]
-        if relative in not_yet_landed and not (ROOT / relative).exists():
-            continue
         assert (ROOT / relative).exists(), f"README.md links {target!r}, which does not exist"
     assert checked_any, "expected at least one absolute repository link in README.md"
 
@@ -473,7 +469,7 @@ def test_doc_prose_matches_no_forbidden_pattern_outside_the_whitelist(relative: 
 def test_doc_prose_forbidden_pattern_scan_covers_demo_readme_when_present():
     demo_readme = ROOT / "demo" / "README.md"
     if not demo_readme.exists():
-        pytest.skip("demo/README.md is produced by a later work package; nothing to check yet.")
+        pytest.skip("v0.1.0 ships no demo/README.md; the scan stays for a release that does.")
 
     from pbcheck.render.text import forbidden_pattern_hits
 

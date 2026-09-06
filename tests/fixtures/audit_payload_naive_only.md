@@ -22,7 +22,7 @@ The donor-pseudobulk arm was not run: no counts matrix passed the raw-count chec
 
 Real-label calls over the permutation floor: the per-cell arm calls 1.54 times its own floor, both counts corrected over the whole universe on their own (solo BH).
 
-> The pseudobulk arm's power was established on synthetic oracles only inside the operating envelope declared in Amendment 3:  
+> Amendment 3 declares an operating envelope for the pseudobulk arm on synthetic oracles. For each donor-variance point it states the donor count per group at which the power target is reached, and each row says what the committed grid supports there: a point measured on the grid, or a count derived or extrapolated from it.  
 > sigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')  
 > sigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')  
 > sigma_donor 0.5: at least 13 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.486 at 12v12, the largest n tested -> n* > 12')  
@@ -49,7 +49,7 @@ replication unit: the unit whose independent draws the statistics assume; for do
 
 thin-donor filter: the rule that drops a donor's pseudobulk profile when it is built from too few cells or too few counts, rather than keeping a noisy profile.
 
-operating envelope: the region of donor count and donor-to-donor variability where the pseudobulk arm's power was established on synthetic data.
+operating envelope: the region of donor count and donor-to-donor variability that Amendment 3 declares for the pseudobulk arm on synthetic data; each of its points states the donor count per group at which the power target is reached, on the committed grid or by the derivation the grid support of that point names.
 
 sigma_donor: a knob of pbcheck's synthetic simulator for how much donors differ from each other; it cannot be measured on your data, which is why the envelope question is left open.
 
