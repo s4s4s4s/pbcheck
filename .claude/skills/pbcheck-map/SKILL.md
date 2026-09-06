@@ -207,7 +207,10 @@ by a real run.
 
 ## Current state (verified this session)
 
-- v0.1.0 is prepared on `release/0.1.0`, not yet tagged or published; PyPI trusted publishing via `release.yml`.
+- v0.1.0 released 2026-09-07: tag `v0.1.0` on `main` (release commit "Release 0.1.0"), published to PyPI by
+  `release.yml` (trusted publishing, environment `pypi`, no TestPyPI rehearsal), GitHub Release with the sdist
+  and wheel, Zenodo archive: concept DOI 10.5281/zenodo.22557143 (README Citation badge), version DOI
+  10.5281/zenodo.22557144 (`doi` in CITATION.cff). `release/0.1.0` is merged into `main` fast-forward.
 - `pytest -q` on `release/0.1.0` (this pass): **725 passed** (725 green, 0 skipped), 0 failed.
   Coverage is report-only (no `--cov-fail-under` gate, deliberate, see `tests.yml`).
 - The committed gate run (`pilot/gate/synthetic_gate_2026-08-15.json`) verdict: **`INSTRUMENT VALID
