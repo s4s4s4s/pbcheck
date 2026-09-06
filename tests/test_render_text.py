@@ -331,4 +331,4 @@ def test_sentence_text_quotes_the_user_supplied_condition_levels():
 def test_the_module_source_is_ascii_and_has_no_em_dash():
     source = inspect.getsource(text)
     assert source.isascii()
-    assert "—" not in source
+    assert "\u2014" not in source
