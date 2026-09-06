@@ -36,7 +36,16 @@ import numpy as np
 import pandas as pd
 from scipy import sparse as sp
 
-from pbcheck import __version__, audit_schema, gate_config, gene_universe, io_counts, metrics, mtc
+from pbcheck import (
+    __version__,
+    audit_schema,
+    gate_config,
+    gene_universe,
+    io_counts,
+    metrics,
+    mtc,
+    product_constants,
+)
 from pbcheck.design import audit_design
 from pbcheck.methods.naive import naive_de
 from pbcheck.methods.naive_engine import NaiveRelabelEngine
@@ -105,10 +114,10 @@ MAX_MISSING_OBS_FRACTION = 0.5
 COARSE_NULL_THRESHOLD = 100
 
 #: Donors per group below which floors are called coarse and cross-file comparison is warned
-#: against (caveat C4). PRODUCT VALUE for display; it is the donor count above which the project's
-#: own protocol treats a floor comparison as free of the per-cell leak, reused here as the point
-#: where this tool stops warning, and it gates nothing.
-FEW_DONORS_THRESHOLD = 8
+#: against (note N4). Defined in :mod:`pbcheck.product_constants` with its origin, and re-exported
+#: here under its established name: the report prose interpolates the same constant, and
+#: ``pbcheck.render.text`` cannot import this module (this module imports it).
+FEW_DONORS_THRESHOLD = product_constants.FEW_DONORS_THRESHOLD
 
 #: The constant cell-type column added when the caller selects no cell type, so that the engine's
 #: ``celltype_col`` argument is never ``None`` and the pseudobulk aggregation has one group.
