@@ -124,7 +124,7 @@ jobs:
       # The manifest itself is uploaded, never committed: pilot/results/ is gitignored, and a
       # candidate list that lands in git by way of a CI job has pre-registered itself by accident.
       - name: Upload the manifest and the run log
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: census-candidates-${{ github.run_id }}
