@@ -7,10 +7,7 @@ rather than by commit date, see `git log` for the literal timeline.
 
 ## [Unreleased]
 
-## [0.1.0] - YYYY-MM-DD
-
-<!-- YYYY-MM-DD is a literal placeholder on purpose: release step 3 (plan section 5.3) sets the
-     tag day here when the release commit is made. -->
+## [0.1.0] - 2026-09-07
 
 First release. pbcheck is installable from PyPI and audits one stratum of a single-cell
 dataset for pseudoreplication, on the engine Phase 0 calibrated on synthetic oracles. The
