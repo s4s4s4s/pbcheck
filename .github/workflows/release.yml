@@ -37,8 +37,16 @@ jobs:
       - name: Check CITATION.cff / CHANGELOG.md version match the package
         run: python scripts/check_version_consistency.py
 
+      - name: Reject malformed release tags
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tag '$GITHUB_REF_NAME' does not match v[0-9]+.[0-9]+.[0-9]+" >&2
+            exit 1
+          fi
+
       - name: Check the tag matches the released version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         run: python scripts/check_version_consistency.py --tag "$GITHUB_REF_NAME" --require-date
 
       - name: Run tests
@@ -76,7 +84,7 @@ jobs:
   publish-testpypi:
     name: publish to TestPyPI
     needs: build
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
@@ -87,14 +95,16 @@ jobs:
           name: dist
           path: dist/
 
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      # Pinned by commit SHA, not the release/v1 branch: a job holding id-token: write should
+      # not follow a moving ref. dc37677b2e1c63e2034f94d8a5b11f265b73ba33 == tag v1.14.2.
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
         with:
           repository-url: https://test.pypi.org/legacy/
 
   publish-pypi:
     name: publish to PyPI
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -105,7 +115,9 @@ jobs:
           name: dist
           path: dist/
 
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      # Pinned by commit SHA, not the release/v1 branch: a job holding id-token: write should
+      # not follow a moving ref. dc37677b2e1c63e2034f94d8a5b11f265b73ba33 == tag v1.14.2.
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
 
   github-release:
     name: create the GitHub Release

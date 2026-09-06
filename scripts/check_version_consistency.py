@@ -1,18 +1,25 @@
 """Guard against the version drifting across its independent copies.
 
-``pyproject.toml`` no longer carries its own copy: R3 made it ``dynamic = ["version"]``, read by
-hatchling out of ``src/pbcheck/__init__.py`` (:data:`pbcheck.__version__`), which is the single
-source of truth. ``CITATION.cff`` intentionally keeps a separate ``version:`` field - CFF is
-consumed by tools that read the file standalone (GitHub's "Cite this repository", Zenodo) and
-should not require importing the package - so it can still drift silently. ``CHANGELOG.md`` keeps
-a third independent copy, as a ``## [<version>]`` heading. This script is the one check that would
-catch any of the three drifting apart; run it locally or from CI (`.github/workflows/tests.yml`,
-`.github/workflows/release.yml`).
+``src/pbcheck/__init__.py`` (:data:`pbcheck.__version__`) is the single source of truth: this
+script parses it directly from source rather than importing the package or asking installed
+package metadata, so it works against a checkout that has never been installed. Four other copies
+can still drift silently and are each compared against the source value:
+
+* ``CITATION.cff`` (``version:``) - consumed by tools that read the file standalone (GitHub's
+  "Cite this repository", Zenodo).
+* ``.zenodo.json`` (``version``) - Zenodo's own metadata sidecar; without this key Zenodo falls
+  back to the release tag name instead of the package version.
+* installed package metadata (``importlib.metadata.version("pbcheck")``), when the package
+  happens to be installed - this is one more source to catch, not a requirement to be installed.
+* ``CHANGELOG.md`` (a ``## [<version>]`` heading).
+
+Run it locally or from CI (`.github/workflows/tests.yml`, `.github/workflows/release.yml`).
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from importlib import metadata
@@ -20,7 +27,16 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
+_SOURCE_VERSION_RE = re.compile(r'^__version__\s*=\s*"([^"]+)"\s*$', flags=re.MULTILINE)
 _CFF_VERSION_RE = re.compile(r"^version:\s*(\S+)\s*$", flags=re.MULTILINE)
+_CFF_DATE_RELEASED_RE = re.compile(r"^date-released:\s*(\S+)\s*$", flags=re.MULTILINE)
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def extract_source_version(init_text: str) -> str | None:
+    """Return the ``__version__`` value from ``src/pbcheck/__init__.py``, or ``None`` if absent."""
+    match = _SOURCE_VERSION_RE.search(init_text)
+    return match.group(1) if match else None
 
 
 def extract_cff_version(cff_text: str) -> str | None:
@@ -30,6 +46,19 @@ def extract_cff_version(cff_text: str) -> str | None:
     ``tests/test_packaging.py``, so the two cannot silently diverge.
     """
     match = _CFF_VERSION_RE.search(cff_text)
+    return match.group(1) if match else None
+
+
+def extract_cff_date_released(cff_text: str) -> str | None:
+    """Return the raw ``date-released:`` value from a CITATION.cff document, unvalidated."""
+    match = _CFF_DATE_RELEASED_RE.search(cff_text)
+    return match.group(1) if match else None
+
+
+def extract_changelog_heading_date(changelog_text: str, version: str) -> str | None:
+    """Return the raw date token after ``## [<version>] - ``, unvalidated, or ``None``."""
+    pattern = re.compile(r"^##\s*\[" + re.escape(version) + r"\]\s*-\s*(\S+)", flags=re.MULTILINE)
+    match = pattern.search(changelog_text)
     return match.group(1) if match else None
 
 
@@ -43,6 +72,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "(default: CHANGELOG.md at the repository root)",
     )
     parser.add_argument(
+        "--citation",
+        type=Path,
+        default=REPO / "CITATION.cff",
+        help="path to CITATION.cff (default: CITATION.cff at the repository root)",
+    )
+    parser.add_argument(
+        "--zenodo",
+        type=Path,
+        default=REPO / ".zenodo.json",
+        help="path to .zenodo.json (default: .zenodo.json at the repository root)",
+    )
+    parser.add_argument(
         "--tag",
         default=None,
         help="release tag (e.g. 'v0.1.0'); asserts tag[1:] == pbcheck.__version__",
@@ -50,7 +91,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--require-date",
         action="store_true",
-        help="also assert that CITATION.cff has an ISO 'date-released' value",
+        help="also assert that CITATION.cff has a real ISO 'date-released' value equal to the "
+        "CHANGELOG heading's date",
     )
     return parser.parse_args(argv)
 
@@ -58,18 +100,75 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
-    pkg_version = metadata.version("pbcheck")
+    init_path = REPO / "src" / "pbcheck" / "__init__.py"
+    init_text = init_path.read_text(encoding="utf-8")
+    pkg_version = extract_source_version(init_text)
+    if pkg_version is None:
+        print(
+            f"check_version_consistency: no '__version__' assignment found in {init_path}",
+            file=sys.stderr,
+        )
+        return 2
 
-    cff_text = (REPO / "CITATION.cff").read_text(encoding="utf-8")
+    if not args.citation.exists():
+        print(
+            f"check_version_consistency: citation file not found at {args.citation}",
+            file=sys.stderr,
+        )
+        return 2
+    cff_text = args.citation.read_text(encoding="utf-8")
     cff_version = extract_cff_version(cff_text)
     if cff_version is None:
-        print("check_version_consistency: no 'version:' line found in CITATION.cff", file=sys.stderr)
+        print(
+            f"check_version_consistency: no 'version:' line found in {args.citation}",
+            file=sys.stderr,
+        )
         return 2
 
     if pkg_version != cff_version:
         print(
             f"version drift: pbcheck.__version__ (via src/pbcheck/__init__.py) = {pkg_version!r} "
-            f"but CITATION.cff version = {cff_version!r}",
+            f"but {args.citation} version = {cff_version!r}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not args.zenodo.exists():
+        print(
+            f"check_version_consistency: zenodo metadata not found at {args.zenodo}",
+            file=sys.stderr,
+        )
+        return 2
+    zenodo_data = json.loads(args.zenodo.read_text(encoding="utf-8"))
+    zenodo_version = zenodo_data.get("version")
+    if zenodo_version is None:
+        print(
+            f"check_version_consistency: no 'version' key found in {args.zenodo}",
+            file=sys.stderr,
+        )
+        return 2
+    if zenodo_version != pkg_version:
+        print(
+            f"version drift: pbcheck.__version__ (via src/pbcheck/__init__.py) = {pkg_version!r} "
+            f"but {args.zenodo} version = {zenodo_version!r}",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        installed_version = metadata.version("pbcheck")
+    except metadata.PackageNotFoundError:
+        print(
+            "check_version_consistency: pbcheck is not installed in this environment "
+            "(pip install -e . first)",
+            file=sys.stderr,
+        )
+        return 2
+    if installed_version != pkg_version:
+        print(
+            f"version drift: pbcheck.__version__ (via src/pbcheck/__init__.py) = {pkg_version!r} "
+            f"but the installed distribution metadata reports {installed_version!r} "
+            "(reinstall with 'pip install -e .')",
             file=sys.stderr,
         )
         return 1
@@ -109,12 +208,26 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     if args.require_date:
-        date_match = re.search(
-            r"^date-released:\s*(\d{4}-\d{2}-\d{2})\s*$", cff_text, flags=re.MULTILINE
-        )
-        if not date_match:
+        date_released = extract_cff_date_released(cff_text)
+        if date_released is None or not _ISO_DATE_RE.match(date_released):
             print(
-                "check_version_consistency: CITATION.cff has no ISO 'date-released' value",
+                f"check_version_consistency: {args.citation} has no valid ISO 'date-released' "
+                f"value (got {date_released!r})",
+                file=sys.stderr,
+            )
+            return 1
+        heading_date = extract_changelog_heading_date(changelog_text, pkg_version)
+        if heading_date is None or not _ISO_DATE_RE.match(heading_date):
+            print(
+                f"check_version_consistency: {args.changelog} heading for [{pkg_version}] has no "
+                f"valid ISO date (got {heading_date!r})",
+                file=sys.stderr,
+            )
+            return 1
+        if heading_date != date_released:
+            print(
+                f"version drift: {args.changelog} heading date {heading_date!r} != "
+                f"{args.citation} date-released {date_released!r}",
                 file=sys.stderr,
             )
             return 1
