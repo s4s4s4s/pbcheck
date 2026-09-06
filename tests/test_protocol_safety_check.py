@@ -453,3 +453,24 @@ def test_invalid_ref_reports_a_fail_row_without_a_traceback(tmp_path):
     assert "Traceback" not in cp.stderr
     assert "FAIL" in cp.stdout
     assert "summary:" in cp.stdout
+
+
+def test_no_em_dash_in_this_areas_own_source():
+    """Acceptance ("Every area: no em dash in added lines") checked in Python
+    rather than with the shell one-liner the acceptance run uses
+    (``git diff ... | grep -P '^\\+.*\\x{2014}'``): on this machine's Git Bash,
+    that ``grep -P`` needs an explicit UTF-8 locale (``LANG`` or ``LC_ALL``) to
+    evaluate a ``\\x{2014}`` escape at all; with neither set, GNU grep 3.0
+    reports "character value in \\x{} or \\o{} is too large" and the pipeline's
+    exit status is the trailing ``head``'s, which is 0 regardless, masking a
+    real hit rather than proving its absence. Reading the files with Python's
+    own text decoding sidesteps the shell locale entirely, so this check is
+    the same acceptance rule made to hold regardless of the invoking shell's
+    environment. It is scoped to the two files this stage owns; the whole-diff
+    check that "Every area" runs is unaffected and still applies at the level
+    the repair spec sets it at.
+    """
+    em_dash = chr(0x2014)
+    for path in (_SCRIPT_PATH, _REPO_ROOT / "tests" / "test_protocol_safety_check.py"):
+        text = path.read_text(encoding="utf-8")
+        assert em_dash not in text, f"em dash (U+2014) found in {path}"
