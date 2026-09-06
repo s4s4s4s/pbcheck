@@ -3,7 +3,18 @@
 Runs every row of that table as its own check and prints one PASS / FAIL / SKIP
 line per row, then a summary. Exit status is 0 only when no row FAILs; a row
 that SKIPs (because one of its inputs does not exist yet at --head) never
-counts as PASS and never fails the run on its own.
+counts as PASS and never fails the run on its own. A row that bundles several
+machine checks (a grep plus a frozen-file diff, a numstat plus a pytest run)
+folds them with FAIL beating SKIP beating PASS, so a partially-present input
+set, or a partially-run sub-check, can never report a clean PASS.
+
+A frozen file touched and reverted inside the base..head range shows up as
+"untouched" for every row but one (docs/AMENDMENTS.md, which is additionally
+checked against git log): the checklist proves the endpoint diff the release
+ships, by design, not the history of the branch. This is intentional, not an
+oversight: what ships is what the two endpoints look like, and the git log
+guard on docs/AMENDMENTS.md is the one row where the plan asks for more than
+that.
 
 Uses only the standard library and subprocess (git is invoked with a list
 argv, never through a shell).
@@ -20,8 +31,14 @@ from pathlib import Path
 
 # Priority used when a single checklist row bundles more than one machine
 # check (as several rows in the table do): FAIL beats SKIP beats PASS, so a
-# row that references a not-yet-existing input can never report PASS.
+# row that references a not-yet-existing input, or a partially-present set of
+# inputs, can never report PASS.
 _STATUS_RANK = {"FAIL": 2, "SKIP": 1, "PASS": 0}
+
+# Number of leading bytes inspected to tell a text file from a binary one for
+# the grep rows (r_s4 MAJOR-2): a NUL byte in this window means "binary",
+# skip and report it rather than trying to grep it as text.
+_BINARY_SNIFF_BYTES = 8192
 
 
 class RowResult:
@@ -35,7 +52,8 @@ class RowResult:
 
     def line(self) -> str:
         if self.status == "PASS":
-            return f"{self.name}: PASS"
+            detail = f" ({self.detail})" if self.detail else ""
+            return f"{self.name}: PASS{detail}"
         if self.status == "SKIP":
             detail = f" {self.detail}" if self.detail else ""
             return f"{self.name}: SKIP{detail}"
@@ -89,10 +107,31 @@ def _log_empty(repo: Path, base: str, head: str, path: str) -> bool:
     return cp.stdout.strip() == ""
 
 
+def _added_files(repo: Path, base: str, head: str, path: str) -> list[str]:
+    """Repo-relative paths added (not modified, not renamed-into) in base..head."""
+    cp = _run_git(repo, ["diff", "--diff-filter=A", "--name-only", f"{base}..{head}", "--", path])
+    if cp.returncode != 0:
+        raise RuntimeError(f"git diff --diff-filter=A failed: {cp.stderr.strip()}")
+    return [line for line in cp.stdout.splitlines() if line.strip()]
+
+
 def _diff_row(repo: Path, base: str, head: str, paths: list[str], name: str) -> RowResult:
     if _diff_quiet(repo, base, head, paths):
         return RowResult(name, "PASS")
     return RowResult(name, "FAIL", f"diff on {', '.join(paths)}")
+
+
+def _deleted_lines_row(repo: Path, base: str, head: str, path: str, name: str, max_deleted: int) -> RowResult:
+    """FAIL when more than max_deleted lines were deleted from path, and FAIL
+    (not "zero deletions") when the diff is binary or otherwise unrepresentable
+    as a line count (r_s4 MINOR-4: git diff --numstat prints "-" for those)."""
+    rows = _numstat(repo, base, head, path)
+    if any(deleted == -1 for _, deleted, _ in rows):
+        return RowResult(name, "FAIL", f"binary or unrepresentable diff on {path}")
+    deleted = sum(d for _, d, _ in rows)
+    if deleted > max_deleted:
+        return RowResult(name, "FAIL", f"{deleted} deleted lines in {path}")
+    return RowResult(name, "PASS")
 
 
 def _pytest_row(
@@ -104,12 +143,31 @@ def _pytest_row(
     path = repo / target
     if not path.exists():
         return RowResult(name, "SKIP", f"missing: {target}")
-    cmd = [sys.executable, "-m", "pytest", "-q", target, *(extra_args or [])]
+    extra_args = extra_args or []
+    cmd = [sys.executable, "-m", "pytest", "-q", target, *extra_args]
     cp = subprocess.run(cmd, cwd=repo, capture_output=True, text=True)
+    if cp.returncode == 5:
+        # pytest's own "no tests collected" exit code: a -k selector that
+        # matched nothing is a checklist authoring bug, not a missing input
+        # (r_s4 MINOR-9), so it is an explicit, legible FAIL.
+        selector = ""
+        if "-k" in extra_args:
+            idx = extra_args.index("-k")
+            if idx + 1 < len(extra_args):
+                selector = extra_args[idx + 1]
+        return RowResult(name, "FAIL", f"no test matched -k {selector!r} in {target}")
     if cp.returncode != 0:
         tail = "\n".join(cp.stdout.strip().splitlines()[-5:])
         return RowResult(name, "FAIL", tail or f"pytest exit {cp.returncode}")
     return RowResult(name, "PASS")
+
+
+def _is_binary(path: Path) -> bool:
+    try:
+        chunk = path.read_bytes()[:_BINARY_SNIFF_BYTES]
+    except OSError:
+        return False
+    return b"\x00" in chunk
 
 
 def _grep_row(
@@ -119,33 +177,55 @@ def _grep_row(
     targets: list[str],
     exclude_files: frozenset[str] = frozenset(),
 ) -> RowResult:
-    """Fail on any regex hit in the named files/directories, skipping absent ones.
+    """Fail on any regex hit in the named files/directories.
 
-    ``exclude_files`` names files (repo-relative posix paths) that are skipped even
-    when they live under a matched directory, for files whose whole documented role
-    is to hold the very words being screened for (e.g. ``render/text.py``'s
-    ``FORBIDDEN_PATTERNS`` constant, per implementation-plan section 2.1).
+    Walks every regular file under a directory target, not only ``*.py``
+    (r_s4 MAJOR-2: the plan's ``grep -rnE`` reads every file). Binary files,
+    detected by a NUL byte in the first 8 KiB, are skipped and reported
+    rather than raising a decode error. When one or more targets are entirely
+    missing, that is folded into the row as a SKIP sub-result so a partially
+    present target set can never report a clean PASS (r_s4 BLOCKER-1) while a
+    genuine hit still wins as FAIL (SKIP never masks a real finding).
+
+    ``exclude_files`` names files (repo-relative posix paths) that are skipped
+    even when they live under a matched directory, for files whose whole
+    documented role is to hold the very words being screened for (e.g.
+    ``render/text.py``'s ``FORBIDDEN_PATTERNS`` constant, per implementation
+    plan section 2.1).
     """
     regex = re.compile(pattern)
+    missing: list[str] = []
     existing: list[Path] = []
     for target in targets:
         p = repo / target
         if p.exists():
             existing.append(p)
-    if not existing:
-        return RowResult(name, "SKIP", f"missing: {', '.join(targets)}")
+        else:
+            missing.append(target)
+
     hits: list[str] = []
+    skipped_binaries: list[str] = []
     for p in existing:
-        files = [p] if p.is_file() else sorted(p.rglob("*.py"))
+        files = [p] if p.is_file() else sorted(f for f in p.rglob("*") if f.is_file())
         files = [f for f in files if f.relative_to(repo).as_posix() not in exclude_files]
         for f in files:
+            if _is_binary(f):
+                skipped_binaries.append(f.relative_to(repo).as_posix())
+                continue
             text = f.read_text(encoding="utf-8", errors="replace")
             for lineno, line in enumerate(text.splitlines(), start=1):
                 if regex.search(line):
                     hits.append(f"{f.relative_to(repo).as_posix()}:{lineno}")
+
     if hits:
         return RowResult(name, "FAIL", "; ".join(hits[:5]))
-    return RowResult(name, "PASS")
+    if missing:
+        detail = f"missing: {', '.join(missing)}"
+        if skipped_binaries:
+            detail += f"; binary skipped: {', '.join(skipped_binaries[:5])}"
+        return RowResult(name, "SKIP", detail)
+    detail = f"binary skipped: {', '.join(skipped_binaries[:5])}" if skipped_binaries else ""
+    return RowResult(name, "PASS", detail)
 
 
 # --- individual checklist rows -------------------------------------------------
@@ -191,14 +271,10 @@ def row_pilot_subtrees_frozen(repo: Path, base: str, head: str, **_: object) -> 
 
 def row_pilot_readme(repo: Path, base: str, head: str, **_: object) -> RowResult:
     name = "pilot/README.md"
-    parts = []
-    rows = _numstat(repo, base, head, "pilot/README.md")
-    deleted = sum(d for _, d, _ in rows if d >= 0)
-    if deleted > 1:
-        parts.append(RowResult(name, "FAIL", f"{deleted} deleted lines in pilot/README.md"))
-    else:
-        parts.append(RowResult(name, "PASS"))
-    parts.append(_pytest_row(repo, name, "tests/test_docs.py", ["-k", "pilot_readme"]))
+    parts = [
+        _deleted_lines_row(repo, base, head, "pilot/README.md", name, max_deleted=1),
+        _pytest_row(repo, name, "tests/test_docs.py", ["-k", "pilot_readme"]),
+    ]
     return _combine(name, parts)
 
 
@@ -235,7 +311,11 @@ def row_metrics_docstring(repo: Path, base: str, head: str, **_: object) -> RowR
     parts = []
     script = repo / "scripts" / "check_docstring_only_diff.py"
     if not script.exists():
-        parts.append(RowResult(name, "SKIP", "missing: scripts/check_docstring_only_diff.py"))
+        # Without the AST-comparison helper there is no way to tell a
+        # docstring-only edit from a real one, so metrics.py (frozen by
+        # plan section 2.3) is guarded by a plain diff instead of being left
+        # entirely unchecked (r_s4 MINOR-8).
+        parts.append(_diff_row(repo, base, head, ["src/pbcheck/metrics.py"], name))
     else:
         cp = subprocess.run(
             [sys.executable, str(script), base, head, "src/pbcheck/metrics.py"],
@@ -250,37 +330,22 @@ def row_metrics_docstring(repo: Path, base: str, head: str, **_: object) -> RowR
     return _combine(name, parts)
 
 
-_EXISTING_TESTS_EXCLUDE = [
-    ":!tests/test_audit*.py",
-    ":!tests/test_render.py",
-    ":!tests/test_cli.py",
-    ":!tests/test_example.py",
-    ":!tests/test_packaging.py",
-    ":!tests/test_docs.py",
-    ":!tests/test_demo_scripts.py",
-    ":!tests/fixtures",
-    ":!tests/conftest.py",
-    # new files shipped in this release, not part of the frozen test suite
-    ":!tests/test_render_text.py",
-    ":!tests/test_checklist_scripts.py",
-    ":!tests/test_protocol_safety_check.py",
-    ":!tests/test_measure_audit_runtime.py",
-]
-
-
 def row_existing_tests_unchanged(repo: Path, base: str, head: str, **_: object) -> RowResult:
     name = "Existing tests unchanged"
     parts = []
-    if _diff_quiet(repo, base, head, ["tests/", *_EXISTING_TESTS_EXCLUDE]):
+    # The frozen-tests exemption is every test file (and fixture) added in the
+    # base..head range, derived from git rather than a hand-written name list
+    # that the checker's own author could quietly widen (r_s4 MAJOR-3).
+    added = _added_files(repo, base, head, "tests/")
+    # tests/conftest.py may gain lines (new fixtures for the new areas) without
+    # being "unchanged"; it is checked on its own right below, for deletions
+    # only, so it is excluded from the general diff rather than double-guarded.
+    exclude = [f":!{p}" for p in added] + [":!tests/conftest.py"]
+    if _diff_quiet(repo, base, head, ["tests/", *exclude]):
         parts.append(RowResult(name, "PASS"))
     else:
-        parts.append(RowResult(name, "FAIL", "diff outside the excluded tests/ paths"))
-    conf_rows = _numstat(repo, base, head, "tests/conftest.py")
-    conf_deleted = sum(d for _, d, _ in conf_rows if d >= 0)
-    if conf_deleted > 0:
-        parts.append(RowResult(name, "FAIL", f"{conf_deleted} deleted lines in tests/conftest.py"))
-    else:
-        parts.append(RowResult(name, "PASS"))
+        parts.append(RowResult(name, "FAIL", "diff outside files added in base..head"))
+    parts.append(_deleted_lines_row(repo, base, head, "tests/conftest.py", name, max_deleted=0))
     return _combine(name, parts)
 
 
@@ -343,6 +408,13 @@ def row_gate_numbers(repo: Path, base: str, head: str, scratch: Path, with_gate:
     name = "Gate numbers do not move"
     if not with_gate:
         return RowResult(name, "SKIP", "requires --with-gate")
+    # The gate artifact was measured on win32 / Python 3.12 (r_s4 MINOR-6); a
+    # reproduction attempted on a different platform or interpreter is not
+    # evidence about the recorded scalars, so it is a FAIL rather than a
+    # silently-accepted reproduction.
+    if sys.platform != "win32" or sys.version_info[:2] != (3, 12):
+        got = f"{sys.platform}, Python {sys.version_info.major}.{sys.version_info.minor}"
+        return RowResult(name, "FAIL", f"gate was recorded on win32, Python 3.12; this run is {got}")
     compare = repo / "scripts" / "compare_gate_scalars.py"
     if not compare.exists():
         return RowResult(name, "SKIP", "missing: scripts/compare_gate_scalars.py")
@@ -447,7 +519,15 @@ def main(argv: list[str] | None = None) -> int:
     repo = Path(args.repo).resolve() if args.repo else Path(__file__).resolve().parent.parent
     scratch = Path(args.scratch).resolve() if args.scratch else Path(tempfile.mkdtemp(prefix="pbcheck_gate_"))
 
-    results, ok = run_checklist(repo, args.base, args.head, scratch, args.with_gate)
+    try:
+        results, ok = run_checklist(repo, args.base, args.head, scratch, args.with_gate)
+    except RuntimeError as exc:
+        # An invalid --base/--head ref (or any other git failure) is a
+        # checklist FAIL, not an uncaught traceback (r_s4 MINOR-10).
+        print(f"checklist aborted: FAIL ({exc})")
+        print("summary: 0 passed, 1 failed, 0 skipped, 1 total")
+        return 1
+
     for r in results:
         print(r.line())
 
