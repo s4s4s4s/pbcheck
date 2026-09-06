@@ -7,12 +7,12 @@ tools: Read, Glob, Grep
 color: cyan
 ---
 
-Verified on branch `fix/core` (post-review fix pass, clean tree): `pytest -q` → **668 passed**,
-0 failed (31 files under `tests/`). <!-- test count: filled by the integrator --> `main`'s engine
+Verified on branch `release/0.1.0` (post-integration fix pass, clean tree): `pytest -q` → **697 passed**,
+0 failed. `main`'s engine
 history (Amendment 5 Part A, the naive-engine speedup, the stratum-list freeze, Amendment 4 Part A)
 is unchanged by this branch; the branch's own commits are the v0.1.0 release (WP1-WP5) and this
 fix pass over its post-integration review (schema/caveat renames, the audit fixes, the renderer and
-golden-fixture fixes, this documentation pass).
+golden-fixture fixes, this documentation pass, and the fix/core, fix/packaging, fix/safety merge).
 
 ## What this project is
 
@@ -206,7 +206,7 @@ by a real run.
 ## Current state (verified this session)
 
 - v0.1.0 released; PyPI trusted publishing via `release.yml`.
-- `pytest -q` on `fix/core` (this pass): **668 passed**, 0 failed. <!-- test count: filled by the integrator -->
+- `pytest -q` on `release/0.1.0` (this pass): **697 passed**, 0 failed.
   Coverage is report-only (no `--cov-fail-under` gate, deliberate, see `tests.yml`).
 - The committed gate run (`pilot/gate/synthetic_gate_2026-08-15.json`) verdict: **`INSTRUMENT VALID
   WITHIN THE STATED OPERATING ENVELOPE`**. λ_pseudobulk 1.01 (band [0.9, 1.1]), pseudobulk perm-null FP
