@@ -49,6 +49,9 @@ evidence = ["tiledb"]
 report = ["jinja2", "matplotlib", "tqdm"]
 dev = ["pytest", "pytest-cov", "hypothesis", "ruff>=0.15,<0.17", "pre-commit"]
 
+[project.scripts]
+pbcheck = "pbcheck.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/s4s4s4s/pbcheck"
 Repository = "https://github.com/s4s4s4s/pbcheck"
