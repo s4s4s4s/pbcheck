@@ -7,14 +7,14 @@ name = "pbcheck"
 dynamic = ["version"]
 description = "An auditor of pseudoreplication in single-cell RNA-seq differential expression analysis."
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 authors = [{ name = "Alexander Poliakov", email = "s4s4spol@gmail.com" }]
 keywords = ["single-cell", "scRNA-seq", "differential-expression", "pseudoreplication", "pseudobulk", "statistics", "reproducibility"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
@@ -22,12 +22,12 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 dependencies = [
-    "numpy",
-    "scipy",
-    "pandas",
+    "numpy>=2.5",
+    "scipy>=1.18",
+    "pandas>=3.0",
     "anndata>=0.13",
     "scanpy>=1.12",
-    "statsmodels",
+    "statsmodels>=0.14",
     "pydeseq2>=0.5.4",
     "decoupler>=2.0",
 ]
@@ -63,6 +63,11 @@ path = "src/pbcheck/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pbcheck"]
+
+[tool.hatch.build.targets.sdist]
+# The sdist otherwise inherits hatchling's gitignore-based default, which ships the whole
+# repository including editor/agent tooling that is never part of a source release.
+exclude = [".claude/**"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
