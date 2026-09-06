@@ -247,3 +247,20 @@ def test_demo_directory_exists_and_is_not_empty():
     if not demo_dirs:
         pytest.skip("no demo/ directory yet")
     assert demo_dirs
+
+
+# ---------------------------------------------------------------------------
+# demo/README.md: carries the disclaimer required by the release plan (section 6).
+# ---------------------------------------------------------------------------
+
+_DISCLAIMER_FIRST_SENTENCE = (
+    "These are demonstrations outside the pre-registered Phase 0 protocol."
+)
+
+
+def test_demo_readme_contains_disclaimer_first_sentence():
+    demo_readme = REPO_ROOT / "demo" / "README.md"
+    if not demo_readme.exists():
+        pytest.skip("no demo/README.md yet")
+    text = demo_readme.read_text(encoding="utf-8")
+    assert _DISCLAIMER_FIRST_SENTENCE in text

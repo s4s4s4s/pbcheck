@@ -96,8 +96,9 @@ report states it:
   stops at the design audit rather than running either differential-expression arm on it. There
   is no covariate for a repeated measurement, and combining donor and condition into one column
   to work around this is the exact error the tool exists to catch.
-- No claim about any real dataset or any publication of any kind. v0.1.0 ships no run on real
-  data at all: the quickstart runs on generated example data.
+- No claim about any real dataset or any publication of any kind. The quickstart runs on generated
+  example data; the demonstrations under `demo/` (see below) are outside the pre-registered
+  protocol and labelled as such.
 - No access to the 17 frozen datasets or 357 pre-registered strata; no Census access in the
   product path.
 - No multi-stratum batch mode, no plots, no R, no DESeq2 test arm.
@@ -125,7 +126,7 @@ results are inflated by this error. Pointers to prior art are welcome and will b
 | | |
 |---|---|
 | Measurement engine | built; tested in CI |
-| Real CELLxGENE data | **not touched.** The stratum list is pre-registered (frozen 2026-08-16; verify the date in [`pilot/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/pilot/README.md)); no frozen stratum has been run |
+| Real CELLxGENE data | **not touched.** The stratum list is pre-registered (frozen 2026-08-16; verify the date in [`pilot/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/pilot/README.md)); no frozen stratum has been run. The v0.1.0 demonstrations use datasets outside the frozen list |
 | Every number in the Phase 0 sections | from synthetic oracles with known ground truth - instrument calibration, **not a result** |
 | Pseudobulk arm's test | **moderated eBayes** (Amendment 2), replacing the DESeq2-Wald arm Amendment 1 found miscalibrated |
 | Calibration (λ, FP rate) | **criteria met**, now at 200 permutations - the earlier marginal FP reading is resolved, see below |
@@ -207,15 +208,16 @@ Built and exercised by the test suite:
   `disease vs normal` contrast per disease term, applies the inclusion-gate items metadata can decide,
   pre-screens confounding per donor and emits a **candidate** manifest.
 
-- **The counts gate** (`io_counts`, no network in the tests): the two inclusion-gate items only the count
-  matrix can decide. Raw integrality is checked on the *values* rather than the dtype - Census raw is
-  `float32` holding 0.0/1.0/7.0, and those are counts - with a normalised or log-transformed matrix
-  **dropped, never rounded**, and only the stored entries of a sparse `X` scanned. The frozen universe is
-  then sized with the arm's own aggregation and the C5 minimum applied, and the pending manifest columns
-  (integer check, universe size, counts per cell, sequencing-depth bin) are filled. Where the load disagrees
-  with the obs snapshot it was planned from, the row keeps its committed numbers and gains a discrepancy
-  flag. It admits nothing either: `sigma_donor` and envelope membership stay pending on the anchor
-  Amendment 3 leaves open, so every row still carries `admitted_to_sweep = False`.
+- **The counts gate** (`io_counts`, no network in the tests): the two inclusion-gate items only the
+  count matrix can decide. Raw integrality is checked on the *values* rather than the dtype - Census raw
+  is `float32` whose values are whole numbers (0, 1, 7), and those are counts - with a normalised or
+  log-transformed matrix **dropped, never rounded**, and only the stored entries of a sparse `X`
+  scanned. The frozen universe is then sized with the arm's own aggregation and the C5 minimum applied,
+  and the pending manifest columns (integer check, universe size, counts per cell, sequencing-depth bin)
+  are filled. Where the load disagrees with the obs snapshot it was planned from, the row keeps its
+  committed numbers and gains a discrepancy flag. It admits nothing either: `sigma_donor` and envelope
+  membership stay pending on the anchor Amendment 3 leaves open, so every row still carries
+  `admitted_to_sweep = False`.
 
 - **The candidate run over the whole Census** (`scripts/census_candidates.py`, dispatched manually from the
   `census candidates` workflow): two passes, because one query does not fit the machine. A streaming pass
@@ -235,6 +237,17 @@ built: the Phase 0 real-data harness (`controls`, `decision`, the spec section 9
 lists the spec corrections that are named in module docstrings but not yet implemented, so that
 nothing here reads as done when it is not.
 
+## Demonstrations
+
+Two committed demonstrations under `demo/` show pbcheck running against public datasets outside
+the pre-registered Phase 0 protocol, including one where the tool's own design audit stops the run
+because the dataset uses a paired design. Both are labelled as demonstrations, not as a Phase 0
+measurement, and state no result about the underlying publications. See
+[`demo/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/demo/README.md) for the exact
+commands, the datasets, their licence notes and the full disclaimer. `demo/` itself is produced by
+the demonstration scripts of this release (`scripts/demo_kang2018.py`, `scripts/demo_two_arm.py`),
+not committed by hand.
+
 ## Layout
 
 ```
@@ -242,6 +255,7 @@ src/pbcheck/          # the auditor engine (methods/) and the release: audit.py,
 pilot/                # Phase 0 artifacts: committed test-selection grid + gate runs, no code
 scripts/              # the harness: synthetic gate, calibration probe, selection analyzer, Census candidate run
 synthetic/            # synthetic-oracle generators with known ground truth
+demo/                 # v0.1.0 demonstrations on public data, outside the protocol
 tests/                # unit + regression + property tests (oracles are the correctness spec)
 docs/                 # PHASE0_SPEC.md (methodology), AMENDMENTS.md, ENV_NOTES.md, USAGE.md (CLI reference)
 ```

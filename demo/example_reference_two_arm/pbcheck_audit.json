@@ -1,0 +1,738 @@
+{
+  "schema_version": "pbcheck-audit/1",
+  "pbcheck_version": "0.1.0",
+  "generated_utc": "2026-09-06T07:37:08Z",
+  "runtime_seconds": 89.19546969999647,
+  "runtime_by_stage_seconds": {
+    "load": null,
+    "prepare": 0.2831323999998858,
+    "design": 0.01698690000193892,
+    "counts": 0.2681975999948918,
+    "pseudobulk_build": 2.3836682999972254,
+    "universe": 0.025621799999498762,
+    "real_label": 23.3481432999979,
+    "permutation_null": 62.79119540000829,
+    "render": null
+  },
+  "status": "complete",
+  "status_reason": null,
+  "input": {
+    "path": null,
+    "n_cells_loaded": 10000,
+    "n_genes_loaded": 8000,
+    "n_cells_audited": 10000,
+    "n_cells_dropped_other_condition": 0,
+    "n_cells_dropped_other_celltype": 0,
+    "n_cells_dropped_missing_donor": 0,
+    "n_cells_dropped_missing_condition": 0,
+    "n_cells_dropped_missing_celltype": 0,
+    "donor_col": "donor",
+    "condition_col": "condition",
+    "test_level": "disease",
+    "ref_level": "ctrl",
+    "celltype_col": "cell_type",
+    "celltype_value": "example",
+    "celltype_like_columns_found": [
+      "cell_type"
+    ],
+    "batch_cols": [],
+    "counts_source": "X"
+  },
+  "counts_check": {
+    "passed": true,
+    "reason": null,
+    "dtype": "int32",
+    "layer": "X",
+    "n_cells": 10000,
+    "n_genes": 8000,
+    "n_values_checked": 80000000,
+    "n_noninteger": 0,
+    "n_negative": 0,
+    "n_nonfinite": 0,
+    "max_abs_value": 755.0,
+    "examples": [],
+    "notes": [],
+    "rule": "spec §1 inclusion gate item 4; §10 risk 6 — non-integer strata are DROPPED, never rounded. Integral values in a float dtype PASS."
+  },
+  "design": {
+    "condition_col": "condition",
+    "donor_col": "donor",
+    "n_cells": 10000,
+    "groups": {
+      "ctrl": 5000,
+      "disease": 5000
+    },
+    "donors_per_group": {
+      "ctrl": 8,
+      "disease": 8
+    },
+    "cells_per_donor": {
+      "d00": 625,
+      "d01": 625,
+      "d02": 625,
+      "d03": 625,
+      "d04": 625,
+      "d05": 625,
+      "d06": 625,
+      "d07": 625,
+      "d08": 625,
+      "d09": 625,
+      "d10": 625,
+      "d11": 625,
+      "d12": 625,
+      "d13": 625,
+      "d14": 625,
+      "d15": 625
+    },
+    "donor_nests_in_condition": true,
+    "min_donors_per_group": 8,
+    "imbalance_ratio": 1.0,
+    "batch_confounded": {},
+    "batch_separates_condition": {},
+    "flags": [],
+    "min_donors": 3,
+    "usable_for_pseudobulk": true
+  },
+  "settings": {
+    "tool": {
+      "n_perm_requested": 1000,
+      "n_perm_pb_requested": 200,
+      "seed": 0,
+      "top_n": 25,
+      "design_only": false,
+      "naive_method": "wilcoxon",
+      "naive_engine": "fast",
+      "pseudobulk_method": "moderated_ebayes",
+      "trend": false,
+      "min_donors_per_group": 3,
+      "universe_min_total_count": 15,
+      "universe_min_prop": 0.5,
+      "fallback_universe_min_prop": 0.5,
+      "fallback_universe_min_size": 200,
+      "min_profiles_per_group_after_thin_filter": 3
+    },
+    "protocol_constants": {
+      "alpha": 0.05,
+      "lambda_band": [
+        0.9,
+        1.1
+      ],
+      "min_universe_size": 200,
+      "min_cells": 10,
+      "min_counts": 1000
+    }
+  },
+  "universe": {
+    "size": 8000,
+    "min_size": 200,
+    "builder": "pseudobulk_frozen",
+    "builder_rule": "A gene enters the frozen universe when its total count across the surviving donor pseudobulk profiles is at least 15 and it is detected (count greater than 0) in at least ceil(0.5 * n_profiles) of them. The rule ignores the condition labels, so the tested gene set cannot shift when the labels are permuted (pbcheck.gene_universe.frozen_universe, applied after the thin-donor filter).",
+    "thin_donor_filter": {
+      "min_cells": 10,
+      "min_counts": 1000,
+      "n_profiles_before": 16,
+      "n_profiles_after": 16,
+      "n_dropped": 0,
+      "dropped_profiles": [],
+      "per_threshold": {
+        "min_cells": 0,
+        "min_counts": 0
+      },
+      "semantics": "dropped, not merged (spec section 1 item 2; Amendment 2 Change 7)"
+    },
+    "profiles_per_group_after_thin_filter": {
+      "ctrl": 8,
+      "disease": 8
+    }
+  },
+  "real_label": {
+    "naive": {
+      "n_significant_paired": 6892,
+      "n_significant_solo": 6892,
+      "n_tested": 8000,
+      "top": [
+        {
+          "gene": "g0232",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 0.8765360713005066,
+          "pct_group": 0.9918,
+          "pct_reference": 0.953
+        },
+        {
+          "gene": "g0500",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -0.9130908846855164,
+          "pct_group": 0.968,
+          "pct_reference": 0.9938
+        },
+        {
+          "gene": "g0636",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 0.7820583581924438,
+          "pct_group": 0.9996,
+          "pct_reference": 0.9932
+        },
+        {
+          "gene": "g0752",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -0.7551304697990417,
+          "pct_group": 0.9828,
+          "pct_reference": 0.9954
+        },
+        {
+          "gene": "g1287",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -1.0714000463485718,
+          "pct_group": 0.8268,
+          "pct_reference": 0.948
+        },
+        {
+          "gene": "g1391",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 1.1178927421569824,
+          "pct_group": 0.9988,
+          "pct_reference": 0.9884
+        },
+        {
+          "gene": "g1629",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -1.1886564493179321,
+          "pct_group": 0.8302,
+          "pct_reference": 0.959
+        },
+        {
+          "gene": "g1976",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 0.9745172262191772,
+          "pct_group": 0.993,
+          "pct_reference": 0.961
+        },
+        {
+          "gene": "g2398",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -1.048557162284851,
+          "pct_group": 0.888,
+          "pct_reference": 0.9556
+        },
+        {
+          "gene": "g2753",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 0.7929177284240723,
+          "pct_group": 0.9998,
+          "pct_reference": 0.9994
+        },
+        {
+          "gene": "g3053",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 1.116199254989624,
+          "pct_group": 0.997,
+          "pct_reference": 0.9586
+        },
+        {
+          "gene": "g3452",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -0.919336199760437,
+          "pct_group": 0.9392,
+          "pct_reference": 0.9798
+        },
+        {
+          "gene": "g3643",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 0.7921550869941711,
+          "pct_group": 0.9994,
+          "pct_reference": 0.9984
+        },
+        {
+          "gene": "g3779",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 1.3003323078155518,
+          "pct_group": 0.8092,
+          "pct_reference": 0.5564
+        },
+        {
+          "gene": "g3932",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 0.9440535306930542,
+          "pct_group": 0.9996,
+          "pct_reference": 0.9962
+        },
+        {
+          "gene": "g4249",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 1.0025372505187988,
+          "pct_group": 0.9986,
+          "pct_reference": 0.9936
+        },
+        {
+          "gene": "g4458",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 1.4357011318206787,
+          "pct_group": 0.8492,
+          "pct_reference": 0.5708
+        },
+        {
+          "gene": "g4521",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -1.0325803756713867,
+          "pct_group": 0.8462,
+          "pct_reference": 0.9438
+        },
+        {
+          "gene": "g4581",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 1.1629151105880737,
+          "pct_group": 0.9124,
+          "pct_reference": 0.801
+        },
+        {
+          "gene": "g4820",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 0.963970422744751,
+          "pct_group": 0.9996,
+          "pct_reference": 0.996
+        },
+        {
+          "gene": "g5247",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 1.018886923789978,
+          "pct_group": 0.96,
+          "pct_reference": 0.8844
+        },
+        {
+          "gene": "g5317",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 1.0823369026184082,
+          "pct_group": 0.9436,
+          "pct_reference": 0.799
+        },
+        {
+          "gene": "g5405",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -1.1005712747573853,
+          "pct_group": 0.9508,
+          "pct_reference": 0.9944
+        },
+        {
+          "gene": "g5844",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": -0.810600221157074,
+          "pct_group": 0.9986,
+          "pct_reference": 1.0
+        },
+        {
+          "gene": "g6185",
+          "pval": 0.0,
+          "padj": 0.0,
+          "log2fc": 0.9638521075248718,
+          "pct_group": 0.9952,
+          "pct_reference": 0.9742
+        }
+      ]
+    },
+    "pseudobulk": {
+      "n_significant_paired": 0,
+      "n_tested": 8000,
+      "top": [
+        {
+          "gene": "g4458",
+          "pval": 9.850261241550888e-05,
+          "padj": 0.6983888972608842,
+          "log2fc": 1.3726425654837175
+        },
+        {
+          "gene": "g6837",
+          "pval": 0.0004186988822863406,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.2538117700337423
+        },
+        {
+          "gene": "g3878",
+          "pval": 0.0006037605271989352,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.2182541176154569
+        },
+        {
+          "gene": "g6862",
+          "pval": 0.0006301443122283239,
+          "padj": 0.6983888972608842,
+          "log2fc": 1.2367552366450987
+        },
+        {
+          "gene": "g3779",
+          "pval": 0.0006695972609154149,
+          "padj": 0.6983888972608842,
+          "log2fc": 1.1985679705118422
+        },
+        {
+          "gene": "g2522",
+          "pval": 0.0006997581353104117,
+          "padj": 0.6983888972608842,
+          "log2fc": 1.2193095872095245
+        },
+        {
+          "gene": "g1629",
+          "pval": 0.0007639421013982435,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.1773932374156217
+        },
+        {
+          "gene": "g6632",
+          "pval": 0.0009639820191966442,
+          "padj": 0.6983888972608842,
+          "log2fc": 1.1842648948520687
+        },
+        {
+          "gene": "g7623",
+          "pval": 0.0009680675721154493,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.1708030859952636
+        },
+        {
+          "gene": "g3053",
+          "pval": 0.0011820724233242356,
+          "padj": 0.6983888972608842,
+          "log2fc": 1.150410595023498
+        },
+        {
+          "gene": "g5003",
+          "pval": 0.0012047438322156884,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.153449504757706
+        },
+        {
+          "gene": "g5405",
+          "pval": 0.0012087382288578775,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.142200270901693
+        },
+        {
+          "gene": "g3343",
+          "pval": 0.0012565626716709295,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.1330217015932345
+        },
+        {
+          "gene": "g1287",
+          "pval": 0.0013609379403197379,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.1411669936414306
+        },
+        {
+          "gene": "g5317",
+          "pval": 0.0014551247353051509,
+          "padj": 0.6983888972608842,
+          "log2fc": 1.1403074173679304
+        },
+        {
+          "gene": "g1277",
+          "pval": 0.0014697745471656774,
+          "padj": 0.6983888972608842,
+          "log2fc": 1.130982374827255
+        },
+        {
+          "gene": "g1118",
+          "pval": 0.001484076406679379,
+          "padj": 0.6983888972608842,
+          "log2fc": -1.1417722829115746
+        },
+        {
+          "gene": "g0485",
+          "pval": 0.0015976077061108298,
+          "padj": 0.710047869382591,
+          "log2fc": 1.1213801621789976
+        },
+        {
+          "gene": "g1391",
+          "pval": 0.0017012435449544779,
+          "padj": 0.7163130715597802,
+          "log2fc": 1.1251508387564861
+        },
+        {
+          "gene": "g3425",
+          "pval": 0.002200312582647117,
+          "padj": 0.8801250330588468,
+          "log2fc": 1.093866671268664
+        },
+        {
+          "gene": "g1717",
+          "pval": 0.0023389080736401645,
+          "padj": 0.8910125994819674,
+          "log2fc": 1.079599344994108
+        },
+        {
+          "gene": "g6102",
+          "pval": 0.002558877002527113,
+          "padj": 0.930159144976378,
+          "log2fc": 1.0774244818421437
+        },
+        {
+          "gene": "g3973",
+          "pval": 0.0026819283665564094,
+          "padj": 0.930159144976378,
+          "log2fc": 1.0666587643455934
+        },
+        {
+          "gene": "g6808",
+          "pval": 0.002790477434929134,
+          "padj": 0.930159144976378,
+          "log2fc": 1.0566269996454913
+        },
+        {
+          "gene": "g4581",
+          "pval": 0.003256368222699408,
+          "padj": 0.9950732749246426,
+          "log2fc": 1.0422532012519135
+        }
+      ],
+      "moderation": {
+        "d0": 320.83470532558044,
+        "evar_total": 0.15979838766309853,
+        "evar_between_genes": 0.006253209703760976,
+        "trigamma_d_over_2": 0.15354517795933756,
+        "n_genes_used_in_prior": 8000,
+        "n_genes_dropped_zero_var": 0,
+        "prior_rank": 1,
+        "prior_df_d0": 320.83470532558044,
+        "prior_is_complete_pooling": false,
+        "residual_df_d": 14,
+        "total_df": 334.83470532558044,
+        "s0_squared": 0.4970760201324569,
+        "s0_squared_is_trended": false,
+        "median_s2_raw": 0.477238731128176,
+        "median_s2_posterior": 0.49624658984448866,
+        "shrinkage_factor_d0_over_d0_plus_d": 0.9581883246350257,
+        "moderation_applied": true,
+        "n_genes_nonfinite_s2": 0,
+        "n_pval_nan": 0,
+        "n_donors_test": 8,
+        "n_donors_ref": 8
+      }
+    },
+    "paired_bh": {
+      "n_universe": 8000,
+      "n_tested_common": 8000,
+      "n_na_naive": 0,
+      "n_na_pseudobulk": 0,
+      "n_dropped_for_fairness": 0,
+      "pseudobulk_na_free": true
+    },
+    "consistent_with_permutation_path": true
+  },
+  "permutation_null": {
+    "naive": {
+      "lambda": 144.65658249780805,
+      "lambda_iqr": 4.846512186788857,
+      "n_perm": 1000,
+      "b5_lambda_empirical": 0.988397018411168,
+      "floor_solo": {
+        "median_count": 6915.0,
+        "iqr_count": 44.0,
+        "median_frac": 0.864375,
+        "max_count": 7011.0,
+        "n_perm": 1000,
+        "bh_mode": "solo",
+        "mc_se": 1.017695012830042
+      },
+      "floor_paired": {
+        "median_count": 6912.0,
+        "iqr_count": 37.5,
+        "median_frac": 0.864,
+        "max_count": 6994.0,
+        "n_perm": 200,
+        "bh_mode": "paired",
+        "mc_se": 2.300082585364596
+      }
+    },
+    "pseudobulk": {
+      "lambda": 1.0003847765510434,
+      "lambda_iqr": 0.031312680918047064,
+      "n_perm": 200,
+      "b5_lambda_empirical": 0.9884430048128369,
+      "floor": {
+        "median_count": 0.0,
+        "iqr_count": 0.0,
+        "median_frac": 0.0,
+        "max_count": 2.0,
+        "n_perm": 200,
+        "bh_mode": "paired",
+        "mc_se": 0.017647440630414943
+      },
+      "fp_rate": 0.05,
+      "fp_rate_mc_se": 0.015411035007422441
+    },
+    "monte_carlo": {
+      "naive_floor_median": 6912.0,
+      "naive_floor_mc_se": 2.300082585364596,
+      "naive_floor_median_solo": 6915.0,
+      "pb_floor_median": 0.0,
+      "pb_floor_mc_se": 0.017647440630414943,
+      "pb_fp_rate": 0.05,
+      "pb_fp_rate_mc_se": 0.015411035007422441,
+      "bh_mode": "paired (mtc.bh_both_arms) over one common tested set — spec section 5",
+      "naive_floor_median_solo_bh_mode": "solo (mtc.bh_over_universe) — naive arm only",
+      "floor_gap": 6912.0,
+      "floor_gap_over_mc_se": 3005.1094877988257
+    },
+    "real_split_inside_perm_range": true,
+    "real_split_percentile_in_perms": 1.0,
+    "n_donors": 16,
+    "n_distinct_splits": 12868,
+    "n_perm_naive_achieved": 1000,
+    "n_perm_pb_achieved": 200,
+    "n_perm_paired": 200,
+    "engine_path": "run_null"
+  },
+  "readout": {
+    "lambda_naive_class": "above_band",
+    "lambda_pseudobulk_class": "in_band",
+    "naive_floor_solo": {
+      "median_count": 6915.0,
+      "median_frac": 0.864375,
+      "mc_se": 1.017695012830042,
+      "n_perm": 1000
+    },
+    "naive_real_solo": 6892,
+    "naive_real_over_floor_solo": 0.9966738973246565,
+    "pseudobulk_real_over_floor": 0.0,
+    "paired_floor_shown": true,
+    "few_donors": false,
+    "few_donors_threshold": 8,
+    "min_donors_per_group": 8,
+    "min_profiles_per_group_after_thin_filter": 8,
+    "n_perm_naive_requested": 1000,
+    "n_perm_naive_achieved": 1000,
+    "n_perm_pb_requested": 200,
+    "n_perm_pb_achieved": 200,
+    "n_distinct_splits": 12868,
+    "sentences": [
+      "Under donor permutation, with no true signal to find, the naive per-cell test calls a median of 6915 genes (86.44% of the 8000-gene universe; Monte-Carlo SE 1.018) over 1000 permutations; on the real labels it calls 6892. Both counts are corrected over the whole universe on their own (solo BH).",
+      "The naive arm's inflation factor lambda is 144.7 (IQR 4.847): above the band 0.9 to 1.1, which is the donor-pseudobulk arm's band, shown here to describe the naive number and not as the naive arm's own criterion.",
+      "The donor-pseudobulk arm's lambda is 1 (inside the band 0.9 to 1.1); its permutation false-positive rate is 0.05 (MC SE 0.01541) and its floor a median of 0 genes; on the real labels it calls 0 genes, corrected across both arms together (paired BH).",
+      "8 donors in 'disease', 8 in 'ctrl'; 12868 distinct donor splits exist.",
+      "After the thin-donor filter (fewer than 10 cells or 1000 counts), 8 and 8 pseudobulk profiles remain."
+    ]
+  },
+  "caveats": [
+    {
+      "id": "N1",
+      "text": "This is a pbcheck v0.1.0 audit of one stratum of one file. It measures how a naive per-cell test and a donor-pseudobulk test behave on this data under a donor-permutation null. It is run outside pbcheck's pre-registered Phase 0 protocol, is not a Phase 0 measurement, and makes no claim about any publication or about whether any reported result is true."
+    },
+    {
+      "id": "N2",
+      "text": "Amendment 3 declares an operating envelope for the pseudobulk arm on synthetic oracles. For each donor-variance point it states the donor count per group at which the power target is reached, and each row says what the committed grid supports there: a point measured on the grid, or a count derived or extrapolated from it.\nsigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')\nsigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')\nsigma_donor 0.5: at least 13 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.486 at 12v12, the largest n tested -> n* > 12')\nsigma_donor 0.7: at least 23 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.003 at 8v8 -> n* far above 8')\nThe arm's calibration was evaluated at one hard regime (sigma_donor 0.5, 8 against 8 donors) and nowhere else. pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here."
+    },
+    {
+      "id": "N3",
+      "text": "Everything in this report is a diagnostic of this file: the naive arm's inflation factor and permutation floor, the pseudobulk arm's inflation factor, floor and false-positive rate as its negative control, and the bookkeeping of the shared gene universe. None of it is a Phase 0 result, and pbcheck does not rate this file against the Phase 0 decision rule."
+    },
+    {
+      "id": "N7",
+      "text": "The engine was measured on one synthetic oracle point (sigma_donor 0.5, 8 against 8 donors, 1500 genes), recorded in pilot/gate/synthetic_gate_2026-08-15.json; that measurement is not repeated on this file. Of the settings below, only the ones listed as protocol constants are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values."
+    },
+    {
+      "id": "R1",
+      "text": "On this file, with condition labels shuffled between donors and therefore no real signal to find, the per-cell test still calls a median of 6915 of 8000 genes at FDR 0.05 (86.4%), corrected over the whole gene universe on its own (solo BH); on the real labels, corrected the same way, it calls 6892. A gene list produced by a per-cell test on this data cannot be separated from that floor. The donor is the replication unit this design supports. The donor-pseudobulk test called 0 genes on the real labels against a permutation median of 0, both corrected across the two arms together over the genes they have in common (paired BH)."
+    }
+  ],
+  "provenance": {
+    "pre_registered": {
+      "alpha": 0.05,
+      "lambda_band": [
+        0.9,
+        1.1
+      ],
+      "power_target": 0.6,
+      "oracle_log2fc": 1.0,
+      "oracle_k": 200,
+      "calibration_eval_sigma": 0.5,
+      "power_eval_sigma": 0.35,
+      "operating_envelope": [
+        {
+          "sigma_donor": 0.2,
+          "min_donors_per_group": 4,
+          "grid_support": "not in the grid; Amendment 1 frontier only"
+        },
+        {
+          "sigma_donor": 0.35,
+          "min_donors_per_group": 8,
+          "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8"
+        },
+        {
+          "sigma_donor": 0.5,
+          "min_donors_per_group": 13,
+          "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12"
+        },
+        {
+          "sigma_donor": 0.7,
+          "min_donors_per_group": 23,
+          "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8"
+        }
+      ],
+      "min_universe_size": 200,
+      "min_cells": 10,
+      "min_counts": 1000,
+      "lambda_naive_go": 2.0,
+      "lambda_naive_strong_go": 3.0,
+      "naive_floor_over_null_strong_go": 10
+    },
+    "pre_registered_source": "docs/PHASE0_SPEC.md (frozen; changes go through docs/AMENDMENTS.md)",
+    "operating_envelope": [
+      {
+        "sigma_donor": 0.2,
+        "min_donors_per_group": 4,
+        "grid_support": "not in the grid; Amendment 1 frontier only"
+      },
+      {
+        "sigma_donor": 0.35,
+        "min_donors_per_group": 8,
+        "grid_support": "ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8"
+      },
+      {
+        "sigma_donor": 0.5,
+        "min_donors_per_group": 13,
+        "grid_support": "ebayes power 0.486 at 12v12, the largest n tested -> n* > 12"
+      },
+      {
+        "sigma_donor": 0.7,
+        "min_donors_per_group": 23,
+        "grid_support": "ebayes power 0.003 at 8v8 -> n* far above 8"
+      }
+    ],
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "packages": {
+      "numpy": "2.5.2",
+      "scipy": "1.18.0",
+      "pandas": "3.0.3",
+      "anndata": "0.13.2",
+      "scanpy": "1.12.2",
+      "statsmodels": "0.14.6",
+      "decoupler": "2.2.0",
+      "pydeseq2": "0.5.4"
+    }
+  }
+}

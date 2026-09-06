@@ -164,6 +164,30 @@ def download(url: str, dest: str | Path, sha256: str) -> Path:
     raise RuntimeError(f"download of {url!r} did not complete (last status {last_status})")
 
 
+def probe_content_length(url: str, *, timeout: float = 60.0) -> int | None:
+    """Return the byte size ``url`` would download, without downloading the body.
+
+    Issues a single-byte range request (``Range: bytes=0-0``) and reads the total size back out of
+    the ``Content-Range`` header of the final (redirected) response; ``urllib.request`` follows
+    figshare's redirect to the presigned S3 URL internally, same as :func:`download`. Returns
+    ``None`` when the size cannot be determined (no ``Content-Range`` header, e.g. a server that
+    ignores range requests), so a caller's size bound treats "unknown" as "not verified small
+    enough" rather than silently passing it.
+    """
+    request = urllib.request.Request(url, headers={"Range": "bytes=0-0"})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            content_range = response.headers.get("Content-Range")
+    except urllib.error.HTTPError as exc:
+        content_range = exc.headers.get("Content-Range") if exc.headers else None
+    if not content_range or "/" not in content_range:
+        return None
+    total = content_range.rsplit("/", 1)[-1]
+    if not total.isdigit():
+        return None
+    return int(total)
+
+
 def _sha256_of(path: Path) -> str:
     digest = hashlib.sha256()
     with open(path, "rb") as handle:

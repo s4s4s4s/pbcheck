@@ -7,6 +7,7 @@ these tests are insensitive to how the source markdown happens to wrap a line.
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 
@@ -90,35 +91,92 @@ def test_readme_quickstart_command_has_no_line_continuation():
     assert "\\\n" not in quickstart
 
 
-def _readout_numeric_tokens(readout: object, tokens: set[str]) -> None:
-    """Recursively collect every numeric leaf of a readout-shaped structure, 4 significant figures.
+def _numeric_tokens(node: object, tokens: set[str]) -> None:
+    """Recursively collect the 4-significant-figure spelling of every numeric leaf.
 
     r_wp5 blocker 1: the guard walked ``readout.values()`` one level deep only, missing every
     number nested one level down (``naive_floor_solo`` is itself a dict) and missing
-    ``permutation_null`` entirely. This walks both, recursively, and rounds to 4 significant
+    ``permutation_null`` entirely. This walks any dict/list nesting and rounds to 4 significant
     figures so a README author's rounded quote (54.57) still matches the raw payload value
-    (54.5678).
-    """
-    if isinstance(readout, dict):
-        for value in readout.values():
-            _readout_numeric_tokens(value, tokens)
-    elif isinstance(readout, (list, tuple)):
-        for value in readout:
-            _readout_numeric_tokens(value, tokens)
-    elif isinstance(readout, bool):
-        return
-    elif isinstance(readout, (int, float)):
-        if readout == 0:
-            tokens.add("0")
-            return
-        from math import floor, log10
+    (54.5678); a whole-number float of 10 or more also yields its integer spelling (54.0 -> "54").
 
-        digits = 4
-        magnitude = floor(log10(abs(readout)))
-        rounded = round(readout, -magnitude + (digits - 1))
+    Bare digits are never produced: a whole-number float below 10 yields only its float spelling
+    ("0.0", "2.0") and an integer leaf below 10 yields nothing. In prose a bare digit is an ordinal
+    or a label (Phase 0, Amendment 2, DESeq2) far more often than a quoted measurement, so treating
+    it as evidence of a quote would forbid the README's own vocabulary while proving nothing.
+    """
+    if isinstance(node, dict):
+        for value in node.values():
+            _numeric_tokens(value, tokens)
+    elif isinstance(node, (list, tuple)):
+        for value in node:
+            _numeric_tokens(value, tokens)
+    elif isinstance(node, bool) or not isinstance(node, (int, float)):
+        return
+    elif isinstance(node, int):
+        if abs(node) >= 10:
+            tokens.add(str(node))
+    elif not math.isfinite(node):
+        return
+    elif node == 0:
+        tokens.add("0.0")
+    else:
+        magnitude = math.floor(math.log10(abs(node)))
+        rounded = round(node, -magnitude + 3)
         tokens.add(str(rounded))
-        if isinstance(rounded, float) and rounded == int(rounded):
+        if rounded == int(rounded) and abs(rounded) >= 10:
             tokens.add(str(int(rounded)))
+
+
+def _demo_numbers_quoted(text: str, payloads: list[dict]) -> set[str]:
+    """Numeric tokens of ``text`` that a demo payload measured and did not merely echo.
+
+    A payload carries two kinds of numbers. ``readout`` and ``permutation_null`` hold what the audit
+    measured on the demo data; ``settings`` and ``provenance.pre_registered`` hold what the audit
+    was told: the product defaults, alpha, the oracle constants and the operating envelope. The
+    README documents the second kind on purpose, and a measured value that merely echoes one of
+    them (``n_perm_pb_achieved`` equal to the requested count, a lambda that rounds to the oracle's
+    log2FC) is no evidence of a quote, so each payload's documented numbers are subtracted from its
+    measured ones before the comparison.
+    """
+    quotable: set[str] = set()
+    for payload in payloads:
+        measured: set[str] = set()
+        _numeric_tokens(payload.get("readout"), measured)
+        _numeric_tokens(payload.get("permutation_null"), measured)
+        documented: set[str] = set()
+        _numeric_tokens(payload.get("settings"), documented)
+        _numeric_tokens((payload.get("provenance") or {}).get("pre_registered"), documented)
+        quotable |= measured - documented
+    if not quotable:
+        raise AssertionError(
+            "no demo payload carries a measured number; the guard would pass vacuously"
+        )
+    return quotable & set(re.findall(r"[-+]?\d[\d.]*", text))
+
+
+def test_numeric_tokens_spellings():
+    tokens: set[str] = set()
+    _numeric_tokens(
+        {"a": 54.5678, "b": [0.0, 2.0, 7, 12, 1.0003847, 54.0], "c": True, "d": "8", "e": None},
+        tokens,
+    )
+    assert tokens == {"54.57", "0.0", "2.0", "12", "1.0", "54.0", "54"}
+
+
+def test_demo_numbers_quoted_separates_measurements_from_echoed_settings():
+    payload = {
+        "readout": {"lambda_naive": 1.3712, "n_perm_pb_achieved": 200, "floor": {"median": 0.0}},
+        "permutation_null": {"real_split_percentile_in_perms": 1.0},
+        "settings": {"tool": {"n_perm_pb_requested": 200}},
+        "provenance": {"pre_registered": {"oracle_log2fc": 1.0}},
+    }
+    prose = "Phase 0, Amendment 2, log2FC 1.0 in 200 genes, whole numbers (0, 1, 7)"
+    assert _demo_numbers_quoted(prose, [payload]) == set()
+    assert _demo_numbers_quoted(prose + ", lambda was 1.371", [payload]) == {"1.371"}
+    assert _demo_numbers_quoted(prose + ", the floor median was 0.0", [payload]) == {"0.0"}
+    with pytest.raises(AssertionError, match="vacuously"):
+        _demo_numbers_quoted(prose, [{"readout": {}, "settings": payload["settings"]}])
 
 
 def test_readme_contains_no_numeric_token_from_demo_readouts():
@@ -126,17 +184,14 @@ def test_readme_contains_no_numeric_token_from_demo_readouts():
     if not demo_dir.exists():
         pytest.skip("v0.1.0 ships no demo/ directory; the guard stays for a release that does.")
 
-    numeric_tokens: set[str] = set()
-    for payload_path in demo_dir.glob("**/pbcheck_audit.json"):
-        payload = json.loads(payload_path.read_text(encoding="utf-8"))
-        _readout_numeric_tokens(payload.get("readout"), numeric_tokens)
-        _readout_numeric_tokens(payload.get("permutation_null"), numeric_tokens)
-
-    text = _normalised(ROOT / "README.md")
-    found_tokens = set(re.findall(r"[-+]?\d[\d.]*", text))
-    overlap = numeric_tokens & found_tokens
+    payloads = [
+        json.loads(path.read_text(encoding="utf-8"))
+        for path in sorted(demo_dir.glob("**/pbcheck_audit.json"))
+    ]
+    assert payloads, "demo/ exists but carries no pbcheck_audit.json to guard against"
+    overlap = _demo_numbers_quoted(_normalised(ROOT / "README.md"), payloads)
     assert not overlap, (
-        f"README contains numeric token(s) {sorted(overlap)!r} that appear in a demo readout"
+        f"README contains numeric token(s) {sorted(overlap)!r} that a demo read-out measured"
     )
 
 
@@ -165,7 +220,7 @@ def test_readme_absolute_repo_links_resolve_to_existing_files():
         if not target.startswith(REPO_BLOB_PREFIX):
             continue
         checked_any = True
-        relative = target[len(REPO_BLOB_PREFIX):]
+        relative = target[len(REPO_BLOB_PREFIX) :]
         assert (ROOT / relative).exists(), f"README.md links {target!r}, which does not exist"
     assert checked_any, "expected at least one absolute repository link in README.md"
 
@@ -242,7 +297,9 @@ def test_pilot_readme_at_most_one_deleted_line_against_main():
     if result.returncode != 0 or not result.stdout.strip():
         pytest.skip("no 'main' ref reachable in this checkout to diff against")
     added, deleted, _ = result.stdout.split(maxsplit=2)
-    assert int(deleted) <= 1, f"pilot/README.md has {deleted} deleted lines against main, expected <= 1"
+    assert int(deleted) <= 1, (
+        f"pilot/README.md has {deleted} deleted lines against main, expected <= 1"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -260,10 +317,21 @@ def test_skill_map_lists_the_new_test_files():
     """r_wp5 major 5: the map lists every new module and test file, with a real, matching count."""
     text = _normalised(ROOT / ".claude" / "skills" / "pbcheck-map" / "SKILL.md")
     for token in (
-        "test_audit.py", "test_audit_schema.py", "test_render.py", "test_render_output.py",
-        "test_render_text.py", "test_cli.py", "test_example.py", "test_packaging.py",
-        "test_docs.py", "test_checklist_scripts.py", "test_protocol_safety_check.py",
-        "test_measure_audit_runtime.py", "markdown.py", "html.py", "sections.py",
+        "test_audit.py",
+        "test_audit_schema.py",
+        "test_render.py",
+        "test_render_output.py",
+        "test_render_text.py",
+        "test_cli.py",
+        "test_example.py",
+        "test_packaging.py",
+        "test_docs.py",
+        "test_checklist_scripts.py",
+        "test_protocol_safety_check.py",
+        "test_measure_audit_runtime.py",
+        "markdown.py",
+        "html.py",
+        "sections.py",
         "product_constants.py",
     ):
         assert token in text, f"SKILL.md is missing a mention of {token!r}"
@@ -349,7 +417,7 @@ _DOC_FORBIDDEN_WHITELIST: dict[str, tuple[tuple[str, str], ...]] = {
             "describes the Amendment 3 envelope narrowing, a Phase 0 status statement",
         ),
         (
-            'reports `INSTRUMENT VALID WITHIN THE STATED OPERATING ENVELOPE` - never an '
+            "reports `INSTRUMENT VALID WITHIN THE STATED OPERATING ENVELOPE` - never an "
             'unqualified "valid".',
             "quotes the gate script's own literal, already-qualified verdict string",
         ),
@@ -367,7 +435,7 @@ _DOC_FORBIDDEN_WHITELIST: dict[str, tuple[tuple[str, str], ...]] = {
             "Phase 0 status table: the decision has explicitly not been taken",
         ),
         (
-            '**GO** - inflation is large and consistent',
+            "**GO** - inflation is large and consistent",
             "names the Phase 0 pre-registered decision rule's own two outcomes",
         ),
         (
