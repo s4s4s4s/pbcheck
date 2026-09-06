@@ -33,6 +33,16 @@ def _escape(value: object) -> str:
     return escape(cell)
 
 
+def _escape_prose(text: str) -> str:
+    """A block of prose as escaped HTML, keeping the line breaks its author put in it.
+
+    Some of the report's prose is a list rather than a run of sentences (the operating-envelope
+    rows of note N2 are one row per line), and HTML would otherwise collapse those newlines into
+    spaces and run the rows together.
+    """
+    return "<br>\n".join(_escape(line) for line in text.split("\n"))
+
+
 def _render_table(headers: tuple[str, ...], rows: tuple[tuple[object, ...], ...], caption: str | None) -> str:
     parts = ['<div class="table-scroll"><table>']
     if caption:
@@ -47,9 +57,9 @@ def _render_table(headers: tuple[str, ...], rows: tuple[tuple[object, ...], ...]
 
 def _render_block(block: Block) -> str:
     if isinstance(block, Paragraph):
-        return f"<p>{_escape(block.text)}</p>"
+        return f"<p>{_escape_prose(block.text)}</p>"
     if isinstance(block, Callout):
-        return f"<blockquote>{_escape(block.text)}</blockquote>"
+        return f"<blockquote>{_escape_prose(block.text)}</blockquote>"
     if isinstance(block, Table):
         return _render_table(block.headers, block.rows, block.caption)
     if isinstance(block, KeyValues):

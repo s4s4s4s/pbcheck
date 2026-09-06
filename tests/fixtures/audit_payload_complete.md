@@ -2,7 +2,7 @@
 
 ## 1. Header
 
-pbcheck audit - lupus_kidney_pilot.h5ad
+pbcheck audit of 'lupus_kidney_pilot.h5ad'
 
 pbcheck 0.1.0, generated 2026-09-01T12:00:00Z.
 
@@ -12,27 +12,30 @@ Status: complete
 
 ## 2. Read-out
 
-Under donor permutation, with no true signal to find, the naive per-cell test calls a median of 41 genes (0.5% of the 8213-gene universe; Monte-Carlo SE 0.63) over 1000 permutations; on the real labels it calls 63.
+Under donor permutation, with no true signal to find, the naive per-cell test calls a median of 41 genes (0.5% of the 8213-gene universe; Monte-Carlo SE 0.63) over 1000 permutations; on the real labels it calls 63. Both counts are corrected over the whole universe on their own (solo BH).
 
-The naive arm's inflation factor lambda is 3.21 (IQR 0.44): inflated against the band 0.9-1.1.
+The naive arm's inflation factor lambda is 3.21 (IQR 0.44): above the band 0.9 to 1.1, which is the donor-pseudobulk arm's band, shown here to describe the naive number and not as the naive arm's own criterion.
 
-The donor-pseudobulk arm's lambda is 1.02 (calibrated); its permutation false-positive rate is 0.041 (MC SE 0.014) and its floor a median of 1 genes; on the real labels it calls 5 genes.
+The donor-pseudobulk arm's lambda is 1.02 (inside the band 0.9 to 1.1); its permutation false-positive rate is 0.041 (MC SE 0.014) and its floor a median of 1 genes; on the real labels it calls 5 genes, corrected across both arms together (paired BH).
 
-11 donors in lupus_nephritis, 10 in healthy; 352716 distinct donor splits exist.
+11 donors in 'lupus_nephritis', 10 in 'healthy'; 352716 distinct donor splits exist.
 
 After the thin-donor filter (fewer than 10 cells or 1000 counts), 10 and 10 pseudobulk profiles remain.
 
-Real-label calls over the permutation floor: naive 1.54 times the floor; pseudobulk 5 times the floor.
+Real-label calls over the permutation floor: the per-cell arm calls 1.54 times its own floor, both counts corrected over the whole universe on their own (solo BH). The donor-pseudobulk arm calls 5 times its floor, both counts corrected across the two arms together (paired BH).
 
-> On this file, with condition labels shuffled between donors and therefore no real signal to find, the per-cell test still calls a median of 41.0 of 8213 genes at FDR 0.05 (0.5%); on the real labels it calls 63. A gene list produced by a per-cell test on this data cannot be separated from that floor. The donor is the replication unit this design supports; the donor-pseudobulk test called 5 genes on the real labels against a permutation median of 1.0.
+> On this file, with condition labels shuffled between donors and therefore no real signal to find, the per-cell test still calls a median of 41 of 8213 genes at FDR 0.05 (0.5%), corrected over the whole gene universe on its own (solo BH); on the real labels, corrected the same way, it calls 63. A gene list produced by a per-cell test on this data cannot be separated from that floor. The donor is the replication unit this design supports. The donor-pseudobulk test called 5 genes on the real labels against a permutation median of 1, both corrected across the two arms together over the genes they have in common (paired BH).
 
-> The pseudobulk arm's calibration and power were established on synthetic oracles only inside the operating envelope declared in Amendment 3 (minimum donors per group 4 / 8 / 13 / 23 at sigma_donor 0.2 / 0.35 / 0.5 / 0.7). pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here.
+> The pseudobulk arm's power was established on synthetic oracles only inside the operating envelope declared in Amendment 3:  
+> sigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')  
+> sigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')  
+> sigma_donor 0.5: at least 13 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.486 at 12v12, the largest n tested -> n* > 12')  
+> sigma_donor 0.7: at least 23 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.003 at 8v8 -> n* far above 8')  
+> The arm's calibration was evaluated at one hard regime (sigma_donor 0.5, 8 against 8 donors) and nowhere else. pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here.
 
 > Everything in this report is a diagnostic of this file: the naive arm's inflation factor and permutation floor, the pseudobulk arm's inflation factor, floor and false-positive rate as its negative control, and the bookkeeping of the shared gene universe. None of it is a Phase 0 result, and pbcheck does not rate this file against the Phase 0 decision rule.
 
-> The design audit found a batch column that separates the two conditions (batch): condition and batch cannot be told apart in this stratum, and neither arm's real-label result can be read as a condition effect.
-
-> No cell type was selected, so all cells were pooled into one stratum; the file has a column that looks like a cell-type annotation (cell_type). Pooling mixes composition shifts between conditions into the contrast; rerun with --celltype cell_type --celltype-value <level> for a per-cell-type audit.
+> The design audit found a batch column that separates the two conditions ('batch'): condition and batch cannot be told apart in this stratum, and neither arm's real-label result can be read as a condition effect.
 
 ## 3. What these words mean
 
@@ -48,7 +51,7 @@ replication unit: the unit whose independent draws the statistics assume; for do
 
 thin-donor filter: the rule that drops a donor's pseudobulk profile when it is built from too few cells or too few counts, rather than keeping a noisy profile.
 
-operating envelope: the region of donor count and donor-to-donor variability where the pseudobulk arm's calibration and power were established on synthetic data.
+operating envelope: the region of donor count and donor-to-donor variability where the pseudobulk arm's power was established on synthetic data.
 
 sigma_donor: a knob of pbcheck's synthetic simulator for how much donors differ from each other; it cannot be measured on your data, which is why the envelope question is left open.
 
@@ -152,7 +155,7 @@ Examples of the values checked: 0.0, 1.0, 3.0, 12.0.
 | --- | --- |
 | lambda | 3.21 |
 | lambda IQR | 0.44 |
-| class | inflated |
+| class | above_band |
 
 **Solo permutation floor**
 
@@ -181,7 +184,7 @@ Examples of the values checked: 0.0, 1.0, 3.0, 12.0.
 | requested | 1000 |
 | achieved | 1000 |
 
-> B5 machinery check, not a calibration criterion: empirical-permutation-p lambda 1.02.
+> Machinery check of the permutation engine, not a criterion of any kind: the inflation factor of the empirical permutation p-values is 1.02.
 
 ## 7. Donor-pseudobulk arm
 
@@ -204,7 +207,7 @@ Examples of the values checked: 0.0, 1.0, 3.0, 12.0.
 | --- | --- |
 | lambda | 1.02 |
 | lambda IQR | 0.09 |
-| class | calibrated |
+| class | in_band |
 | false-positive rate | 0.041 |
 | false-positive rate Monte-Carlo SE | 0.014 |
 
@@ -224,7 +227,7 @@ Examples of the values checked: 0.0, 1.0, 3.0, 12.0.
 | requested | 200 |
 | achieved | 200 |
 
-> B5 machinery check, not a calibration criterion: empirical-permutation-p lambda 1.01.
+> Machinery check of the permutation engine, not a criterion of any kind: the inflation factor of the empirical permutation p-values is 1.01.
 
 **Moderated eBayes technical detail**
 
@@ -295,6 +298,7 @@ Builder rule: a gene is kept when its total count is at least 15 in at least hal
 | naive_engine | fast |
 | pseudobulk_method | moderated_ebayes |
 | trend | no |
+| min_donors_per_group | 3 |
 | universe_min_total_count | 15 |
 | universe_min_prop | 0.5 |
 | fallback_universe_min_prop | 0.5 |
@@ -354,7 +358,7 @@ Builder rule: a gene is kept when its total count is at least 15 in at least hal
 | permutation_null | 30.9 |
 | render | 0.2 |
 
-> This instrument was calibrated on synthetic oracles (pilot/gate/synthetic_gate_2026-08-15.json). Of the settings below, only those listed under 'protocol constants' are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values.
+> The engine was measured on one synthetic oracle point (sigma_donor 0.5, 8 against 8 donors, 1500 genes), recorded in pilot/gate/synthetic_gate_2026-08-15.json; that measurement is not repeated on this file. Of the settings below, only the ones listed as protocol constants are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values.
 
 ## 10. Footer
 

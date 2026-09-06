@@ -79,6 +79,8 @@ def _all_fixed_prose() -> dict[str, str]:
         prose[f"R1(few_donors={few_donors}, paired={paired})"] = rendered
     prose.update({f"SENTENCES[{k}]": v.format_map(dummy) for k, v in text.SENTENCES.items()})
     prose.update({f"GLOSSARY[{term}]": sentence for term, sentence in text.GLOSSARY})
+    prose.update({f"REPORT_LINES[{k}]": v.format_map(dummy) for k, v in text.REPORT_LINES.items()})
+    prose.update({f"STATUS_REASON_WORDS[{k}]": v for k, v in text.STATUS_REASON_WORDS.items()})
     return prose
 
 
@@ -158,6 +160,25 @@ def test_every_fixed_text_passes_the_forbidden_pattern_gate():
         assert text.forbidden_pattern_hits(prose) == (), (
             f"{name} matches a forbidden pattern: {text.forbidden_pattern_hits(prose)}"
         )
+
+
+def test_status_reason_words_state_the_whole_reason_for_a_paired_design():
+    """A donor measured under both conditions: the report says why that stops the run, not only
+    that it does (the design is paired, no paired or mixed model exists here, and the donor
+    permutation null would treat one donor's two halves as independent)."""
+    words = text.STATUS_REASON_WORDS["donor_spans_conditions"]
+    assert "paired design" in words
+    assert "paired or mixed model" in words
+    assert "does not implement" in words
+    assert "independent" in words
+
+
+def test_report_line_quotes_the_audited_file_name():
+    """The file name is user input and reaches the header, so it is quoted and masked like a
+    column name: a file called after a forbidden word cannot forge a sentence."""
+    line = text.report_line("header_title", file="GO.h5ad")
+    assert "'GO.h5ad'" in line
+    assert text.forbidden_pattern_hits(line) == ()
 
 
 def test_no_template_opens_a_quoted_span_of_its_own():

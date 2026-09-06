@@ -46,12 +46,12 @@ def write_outputs(
     ``sort_keys=False``, ``ensure_ascii=False``), ``"md"`` (``pbcheck_report.md``) and ``"html"``
     (``pbcheck_report.html``). Every file is written with ``encoding="utf-8"`` and
     ``newline="\\n"``. Unless ``overwrite`` is true, an existing target file raises
-    ``FileExistsError`` naming the file rather than being silently replaced.
+    ``FileExistsError`` naming the file rather than being silently replaced. Every target is
+    checked before anything is created, so a refused call leaves no file and no directory behind.
 
     Returns a mapping from each requested format to the ``Path`` written.
     """
     out_path = Path(out_dir)
-    out_path.mkdir(parents=True, exist_ok=True)
 
     targets: dict[str, Path] = {}
     for fmt in formats:
@@ -62,6 +62,8 @@ def write_outputs(
         if target.exists() and not overwrite:
             raise FileExistsError(f"refusing to overwrite existing file: {target}")
         targets[fmt] = target
+
+    out_path.mkdir(parents=True, exist_ok=True)
 
     written: dict[str, Path] = {}
     for fmt, target in targets.items():

@@ -56,7 +56,10 @@
     ],
     "notes": [
       "matrix is sparse; scan covered all stored entries"
-    ]
+    ],
+    "n_cells": 2080,
+    "n_genes": 21847,
+    "rule": "spec §1 inclusion gate item 4; §10 risk 6 - non-integer strata are DROPPED, never rounded. Integral values in a float dtype PASS."
   },
   "design": {
     "condition_col": "disease_state",
@@ -99,6 +102,7 @@
       "naive_engine": "fast",
       "pseudobulk_method": "moderated_ebayes",
       "trend": false,
+      "min_donors_per_group": 3,
       "universe_min_total_count": 15,
       "universe_min_prop": 0.5,
       "fallback_universe_min_prop": 0.5,
@@ -246,8 +250,8 @@
     "engine_path": "run_null"
   },
   "readout": {
-    "lambda_naive_class": "inflated",
-    "lambda_pseudobulk_class": "calibrated",
+    "lambda_naive_class": "above_band",
+    "lambda_pseudobulk_class": "in_band",
     "naive_floor_solo": {
       "median_count": 41.0,
       "median_frac": 0.005,
@@ -265,36 +269,44 @@
     "n_perm_pb_requested": 200,
     "n_perm_pb_achieved": 20,
     "n_distinct_splits": 20,
-    "sentences": []
+    "sentences": [
+      "Under donor permutation, with no true signal to find, the naive per-cell test calls a median of 41 genes (0.5% of the 4310-gene universe; Monte-Carlo SE 0.412) over 20 permutations, coarse because few distinct donor splits exist; on the real labels it calls 63. Both counts are corrected over the whole universe on their own (solo BH).",
+      "The naive arm's inflation factor lambda is 3.21 (IQR 0.44): above the band 0.9 to 1.1, which is the donor-pseudobulk arm's band, shown here to describe the naive number and not as the naive arm's own criterion.",
+      "The donor-pseudobulk arm's lambda is 1.02 (inside the band 0.9 to 1.1); its permutation false-positive rate is 0.041 (MC SE 0.014) and its floor a median of 1 genes; on the real labels it calls 5 genes, corrected across both arms together (paired BH).",
+      "3 donors in 'lupus_nephritis', 4 in 'healthy'; 20 distinct donor splits exist.",
+      "After the thin-donor filter (fewer than 10 cells or 1000 counts), 3 and 4 pseudobulk profiles remain."
+    ],
+    "few_donors_threshold": 8,
+    "few_donors": true
   },
   "caveats": [
     {
-      "id": "C1",
+      "id": "N1",
       "text": "This is a pbcheck v0.1.0 audit of one stratum of one file. It measures how a naive per-cell test and a donor-pseudobulk test behave on this data under a donor-permutation null. It is run outside pbcheck's pre-registered Phase 0 protocol, is not a Phase 0 measurement, and makes no claim about any publication or about whether any reported result is true."
     },
     {
-      "id": "C2",
-      "text": "The pseudobulk arm's calibration and power were established on synthetic oracles only inside the operating envelope declared in Amendment 3 (minimum donors per group 4 / 8 / 13 / 23 at sigma_donor 0.2 / 0.35 / 0.5 / 0.7). pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here."
+      "id": "N2",
+      "text": "The pseudobulk arm's power was established on synthetic oracles only inside the operating envelope declared in Amendment 3:\nsigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')\nsigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')\nsigma_donor 0.5: at least 13 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.486 at 12v12, the largest n tested -> n* > 12')\nsigma_donor 0.7: at least 23 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.003 at 8v8 -> n* far above 8')\nThe arm's calibration was evaluated at one hard regime (sigma_donor 0.5, 8 against 8 donors) and nowhere else. pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here."
     },
     {
-      "id": "C3",
+      "id": "N3",
       "text": "Everything in this report is a diagnostic of this file: the naive arm's inflation factor and permutation floor, the pseudobulk arm's inflation factor, floor and false-positive rate as its negative control, and the bookkeeping of the shared gene universe. None of it is a Phase 0 result, and pbcheck does not rate this file against the Phase 0 decision rule."
     },
     {
-      "id": "C4",
-      "text": "Fewer than 8 donors in at least one group: the permutation null has few distinct donor splits, floors are coarse, and pbcheck's own protocol treats floor-based comparisons below 8 donors per group as contaminated by the per-cell leak. Do not compare these numbers with a run on another file."
+      "id": "N4",
+      "text": "At least one group has fewer than 8 donors: the permutation null has few distinct donor splits and the floors are coarse. Amendment 5 Change 2 of pbcheck's protocol admits floor-based quantities outside the envelope only when every group has at least 8 donors, and this run is below that in at least one group, so its floor-based numbers describe this run alone. Do not compare them with a run on another file."
     },
     {
-      "id": "C7",
-      "text": "This instrument was calibrated on synthetic oracles (pilot/gate/synthetic_gate_2026-08-15.json). Of the settings below, only those listed under 'protocol constants' are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values."
+      "id": "N7",
+      "text": "The engine was measured on one synthetic oracle point (sigma_donor 0.5, 8 against 8 donors, 1500 genes), recorded in pilot/gate/synthetic_gate_2026-08-15.json; that measurement is not repeated on this file. Of the settings below, only the ones listed as protocol constants are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values."
     },
     {
-      "id": "C9",
-      "text": "Only 20 distinct donor splits exist for this design, so the permutation null has 20 draws, not the 1000 requested; the floor's Monte-Carlo standard error (0.412) is correspondingly large."
+      "id": "N9",
+      "text": "Only 20 distinct donor splits exist for this design, so the permutation null has 20 draws, not the 1000 requested; the floor's Monte-Carlo standard error (0.63) is correspondingly large."
     },
     {
-      "id": "A1",
-      "text": "On this file, with condition labels shuffled between donors and therefore no real signal to find, the per-cell test still calls a median of 41.0 of 8213 genes at FDR 0.05 (0.5%); on the real labels it calls 63. A gene list produced by a per-cell test on this data cannot be separated from that floor. The donor is the replication unit this design supports; the donor-pseudobulk test called 5 genes on the real labels against a permutation median of 1.0."
+      "id": "R1",
+      "text": "On this file, with condition labels shuffled between donors and therefore no real signal to find, the per-cell test still calls a median of 41 of 4310 genes at FDR 0.05 (0.5%), corrected over the whole gene universe on its own (solo BH); on the real labels, corrected the same way, it calls 63. With fewer than 8 donors in a group, the ratio of the real-label count to that floor is contaminated by the per-cell leak at this donor count and is not interpretable on this run. The donor is the replication unit this design supports."
     }
   ],
   "provenance": {

@@ -70,7 +70,7 @@ def test_small_shape_audit_reaches_complete_and_is_inflated():
     payload = run_audit(adata, settings)
     readout = payload["readout"]
     assert payload["status"] == "complete"
-    assert readout["lambda_naive_class"] == "inflated"
+    assert readout["lambda_naive_class"] == "above_band"
     # The three floors this generator exists to clear: the naive solo floor,
     # the naive paired floor (only rendered when the pseudobulk arm NaNs no
     # gene), and the pseudobulk floor itself.

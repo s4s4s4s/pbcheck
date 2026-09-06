@@ -2,12 +2,15 @@
 
 These texts are a protocol surface (the wording-rules section of the v0.1.0 implementation plan):
 they are checked against the forbidden patterns listed below and are changed only together with
-their tests. This module owns every fixed sentence the report can print, in four blocks:
+their tests. This module owns every fixed sentence the report can print, in six blocks:
 
 * :data:`CAVEATS` (the notes N1..N9 and the read-out paragraph R1) with :func:`caveat_text` and
   :func:`readout_caveat_text`, which assemble R1's conditional clauses;
 * :data:`SENTENCES`, the read-out line templates the audit fills and the renderer prints verbatim;
 * :data:`GLOSSARY`, the plain-language section;
+* :data:`REPORT_LINES` with :func:`report_line`, the report's remaining fixed lines (header,
+  "not run" notes, the read-out ratio line, the paired-floor explanations, the footer), and
+  :data:`STATUS_REASON_WORDS`, the plain words for each ``status_reason``;
 * :data:`FORBIDDEN_PATTERNS` with :func:`compiled_forbidden_patterns`, :func:`prose_for_pattern_check`
   and :func:`forbidden_pattern_hits`, the single place those patterns are compiled and applied.
 
@@ -43,7 +46,9 @@ MAX_QUOTED_VALUE_CHARS = 100
 #: check's reason string) rather than from the payload's own numbers. :func:`caveat_text` puts
 #: every one of them through :func:`quoted`, so the wording gate treats them as identifiers rather
 #: than as prose and a column named after a forbidden word cannot forge a sentence.
-USER_VALUE_PLACEHOLDERS = frozenset({"col", "cols", "reason", "test_level", "ref_level"})
+USER_VALUE_PLACEHOLDERS = frozenset(
+    {"col", "cols", "reason", "test_level", "ref_level", "file"}
+)
 
 
 def quoted(value: object) -> str:
@@ -343,6 +348,101 @@ def readout_caveat_text(
             "pseudobulk_clause": _format(pseudobulk, {"pb_real": pb_real, "pb_floor": pb_floor}),
         },
     )
+
+
+#: What a table cell says instead of a number when an arm never reached the permutation null: a
+#: fact about the run, not a missing value, so it is said in words.
+NOT_REACHED = "not reached"
+
+#: What the report says when a payload carries a ``status_reason`` this module has no words for.
+#: A schema-valid payload never reaches it (``status_reason`` is an enum), so it is a fallback,
+#: not a sentence the report is expected to print.
+NO_REASON_RECORDED = "no reason recorded"
+
+#: ``status_reason`` values in plain words, interpolated wherever the report says why an arm did
+#: not run (the status table of the plan's section 1.3). ``donor_spans_conditions`` carries the
+#: whole reason rather than its first clause: a donor measured under both conditions makes the
+#: design paired, pbcheck v0.1.0 implements no paired or mixed model, and the donor-permutation
+#: null would treat one donor's two halves as independent.
+#: :mod:`pbcheck.render.sections` renders these phrases and :mod:`pbcheck.audit` interpolates one
+#: of them into the read-out line of a run whose pseudobulk arm never started.
+STATUS_REASON_WORDS = MappingProxyType({
+    "design_only_requested": "a metadata-only run was requested",
+    "donor_spans_conditions": (
+        "at least one donor was measured under both conditions, which makes this a paired design; "
+        "a paired design needs a paired or mixed model, which pbcheck does not implement in this "
+        "release, and the donor-permutation null would treat the two halves of one donor as "
+        "independent"
+    ),
+    "too_few_donors": "fewer than the minimum donors were present in at least one group",
+    "non_integer_counts": "no counts matrix passed the raw-count check",
+    "universe_too_small": "the frozen gene universe was too small to proceed",
+    "too_few_profiles_after_thin_filter": (
+        "too few pseudobulk profiles remained after the thin-donor filter"
+    ),
+})
+
+#: The report's fixed lines that are not caveats, read-out sentences or glossary entries: the
+#: header, the "not run" notes, the read-out ratio line, the two paired-floor explanations, the
+#: machinery-check callout and the footer. They live here, with the rest of the report's fixed
+#: prose, so one module holds every sentence pbcheck can print and one test sweeps all of them
+#: through the wording gate; :mod:`pbcheck.render.sections` fills them by :func:`report_line` and
+#: composes no sentence of its own.
+REPORT_LINES = MappingProxyType({
+    "header_title": "pbcheck audit of {file}",
+    "header_version": "pbcheck {version}, generated {generated_utc}.",
+    "header_status": "Status: {status}",
+    "header_status_with_reason": "Status: {status} ({reason_text})",
+    "no_arms_run": "No detection arms were run at this status: {reason_text}.",
+    "arm_not_run": "{arm}: not run, because {reason_text}.",
+    "counts_check_not_run": "Counts check: not run, because {reason_text}.",
+    "ratio_solo": (
+        "Real-label calls over the permutation floor: the per-cell arm calls "
+        "{naive_ratio} times its own floor, both counts corrected over the whole universe on "
+        "their own (solo BH)."
+    ),
+    "ratio_paired": (
+        " The donor-pseudobulk arm calls {pseudobulk_ratio} times its floor, both counts "
+        "corrected across the two arms together (paired BH)."
+    ),
+    "ratio_leak_contaminated": (
+        " At fewer than {threshold} donors in a group these ratios are contaminated by the "
+        "per-cell leak and describe this run alone."
+    ),
+    "counts_examples": "Examples of the values checked: {examples}.",
+    "no_batch_columns": "No batch columns were provided.",
+    "thin_filter_not_run": "Thin-donor filter: not run.",
+    "builder_rule": "Builder rule: {rule}",
+    "glossary_entry": "{term}: {definition}",
+    "paired_floor_not_comparable": (
+        "The paired floor is not shown: the pseudobulk arm left {n_na_pseudobulk} genes without a "
+        "value, so a paired correction over the two arms would not cover the same genes; the solo "
+        "floor above stands alone."
+    ),
+    "paired_floor_not_measured": (
+        "The paired floor is not shown: the paired correction covers every gene of this run, but "
+        "the permutation null recorded no paired floor for the per-cell arm; the solo floor above "
+        "stands alone."
+    ),
+    "machinery_check": (
+        "Machinery check of the permutation engine, not a criterion of any kind: the inflation "
+        "factor of the empirical permutation p-values is {b5_lambda_empirical}."
+    ),
+    "footer": (
+        "Generated by pbcheck {version}. Protocol: docs/PHASE0_SPEC.md and docs/AMENDMENTS.md in "
+        "the pbcheck repository."
+    ),
+})
+
+
+def report_line(line_id: str, **values: object) -> str:
+    """Format ``REPORT_LINES[line_id]`` the way :func:`caveat_text` formats a caveat.
+
+    The same quoting applies: a placeholder listed in :data:`USER_VALUE_PLACEHOLDERS` (the audited
+    file's name among them) is rendered as a quoted identifier, so a file or column named after a
+    forbidden word is masked by :func:`prose_for_pattern_check` instead of forging a sentence.
+    """
+    return _format(REPORT_LINES[line_id], values)
 
 
 #: Plain-language glossary, section 3 of the report ("What these words mean"), one sentence per
