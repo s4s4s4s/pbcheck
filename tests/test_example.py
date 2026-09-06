@@ -68,5 +68,14 @@ def test_small_shape_audit_reaches_complete_and_is_inflated():
         n_perm_pb=10,
     )
     payload = run_audit(adata, settings)
+    readout = payload["readout"]
     assert payload["status"] == "complete"
-    assert payload["readout"]["lambda_naive_class"] == "inflated"
+    assert readout["lambda_naive_class"] == "inflated"
+    # The three floors this generator exists to clear: the naive solo floor,
+    # the naive paired floor (only rendered when the pseudobulk arm NaNs no
+    # gene), and the pseudobulk floor itself.
+    naive_floor_solo = readout["naive_floor_solo"]
+    assert naive_floor_solo is not None
+    assert naive_floor_solo["median_count"] is not None
+    assert readout["paired_floor_shown"] is True
+    assert readout["pseudobulk_real_over_floor"] is not None
