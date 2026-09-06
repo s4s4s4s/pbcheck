@@ -432,9 +432,10 @@ def test_gate_row_fails_on_platform_or_interpreter_mismatch(tmp_path, monkeypatc
     assert "Python 3.12" in row.detail
 
 
-def test_invalid_ref_reports_a_fail_row_without_a_traceback(tmp_path):
-    """r_s4 MINOR-10: an invalid --base/--head is a FAIL row, not an uncaught
-    traceback; exit status stays non-zero either way."""
+def test_invalid_ref_exits_2_with_a_one_line_message(tmp_path):
+    """r_s4 MINOR-10: an invalid --base/--head is a checklist-authoring
+    error, not a row FAIL and not an uncaught traceback. It exits 2, distinct
+    from exit 1 (a genuine row FAIL), with a one-line message."""
     repo = _make_repo(tmp_path)
     _git(repo, "commit", "-q", "--allow-empty", "-m", "head: no-op")
 
@@ -448,11 +449,11 @@ def test_invalid_ref_reports_a_fail_row_without_a_traceback(tmp_path):
         capture_output=True,
         text=True,
     )
-    assert cp.returncode == 1
+    assert cp.returncode == 2
     assert "Traceback" not in cp.stdout
     assert "Traceback" not in cp.stderr
-    assert "FAIL" in cp.stdout
-    assert "summary:" in cp.stdout
+    assert cp.stdout.count("\n") == 1
+    assert "checklist aborted:" in cp.stdout
 
 
 def test_no_em_dash_in_this_areas_own_source():

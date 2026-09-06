@@ -523,10 +523,11 @@ def main(argv: list[str] | None = None) -> int:
         results, ok = run_checklist(repo, args.base, args.head, scratch, args.with_gate)
     except RuntimeError as exc:
         # An invalid --base/--head ref (or any other git failure) is a
-        # checklist FAIL, not an uncaught traceback (r_s4 MINOR-10).
-        print(f"checklist aborted: FAIL ({exc})")
-        print("summary: 0 passed, 1 failed, 0 skipped, 1 total")
-        return 1
+        # checklist-authoring error, not a row FAIL and not an uncaught
+        # traceback: it exits 2, distinct from exit 1 (a genuine row FAIL)
+        # (r_s4 MINOR-10).
+        print(f"checklist aborted: {exc}")
+        return 2
 
     for r in results:
         print(r.line())
