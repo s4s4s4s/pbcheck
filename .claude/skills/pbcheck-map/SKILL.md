@@ -132,7 +132,7 @@ demo-number guard compares.
 
 | doc | for |
 |---|---|
-| `PHASE0_SPEC.md` | the frozen pre-registration: thesis, decision rule, corrections A1–D5, the full methodology (§1–§10). Changes only via `AMENDMENTS.md` |
+| `PHASE0_SPEC.md` | the frozen pre-registration: thesis, decision rule, corrections A1-D5, the full methodology (§1-§10). Changes only via `AMENDMENTS.md` |
 | `AMENDMENTS.md` | append-only, dated, numbered amendment log - currently **5 amendments** (Amendment 4 and 5 each have only a Part A so far; Part B is unrun for both) |
 | `PREREGISTRATION_STRATUM_LIST.md` | the machine-checked §1 pre-registration act itself: fixes 12 datasets / 251 strata, not an amendment |
 | `ENV_NOTES.md` | verified stack (Windows, Python 3.12.10) and upstream API drift (decoupler 2.x, PyDESeq2 0.5.4, scanpy 1.12.2) |
@@ -196,7 +196,7 @@ itself as a relaxation, not a clarification.
 Amendment 4 and Amendment 5 both currently have **only a Part A** - criteria and mechanism declared,
 committed *before* the run that will be judged by them. Neither has a Part B yet; `src/pbcheck/sigma_donor.py`
 does not exist. Do not write Part B's numbers into a Part A commit, and do not let `gate_config` gain a
-`SIGMA_GATE` block (Amendment 4's designated slot) before Part A's own criteria (V1–V11) are satisfied
+`SIGMA_GATE` block (Amendment 4's designated slot) before Part A's own criteria (V1-V11) are satisfied
 by a real run.
 
 ## Current state (verified this session)
@@ -285,7 +285,7 @@ by a real run.
 **Continuing the science.** The single open thread every recent amendment closes on is `sigma_donor`
 anchoring. The next concrete step is **Amendment 4 Part B**: build `src/pbcheck/sigma_donor.py` per the
 estimator Part A specifies, run the confirmatory validation grid on the declared non-overlapping seed
-range, and judge it against the pre-declared V1–V11 criteria - a criterion that fails is a result, not
+range, and judge it against the pre-declared V1-V11 criteria - a criterion that fails is a result, not
 something to loosen. Read Amendment 4 Part A in full first (`docs/AMENDMENTS.md`); it is long because
 it pre-declares exactly what would make the estimator untrustworthy.
 
