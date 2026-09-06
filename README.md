@@ -186,7 +186,7 @@ selected to span the outcome space rather than to cherry-pick (spec §1):
 - **GO** - inflation is large and consistent → build the full auditor and publish the "map of false discoveries".
 - **NO-GO** - inflation is small or erratic → reformat or pivot.
 
-The pilot's measurement engine is calibrated first on **synthetic oracles with known ground truth** (a correct
+The pilot's measurement engine is checked first against **synthetic oracles with known ground truth** (a correct
 auditor must report high inflation on a synthetic null and none on a synthetic positive) - only then is it trusted
 on real data. Statistics are verified by hand against these oracles, not assumed.
 

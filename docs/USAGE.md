@@ -147,8 +147,8 @@ donor_spans_conditions`, and explains in the report why it stopped there.
   against its own floor, not in isolation.
 - **The negative control (the pseudobulk arm's floor and false-positive rate).** The donor-pseudobulk
   test is expected to keep its own floor near zero and its permutation false-positive rate near the
-  chosen significance level. That behaviour is the check that the pseudobulk arm itself is well
-  calibrated on this file; it does not certify the naive arm, and it does not certify any published
+  chosen significance level. That behaviour is the check that the pseudobulk arm's own error rate
+  stays near that level on this file; it does not certify the naive arm, and it does not certify any published
   result.
 - **The envelope.** The pseudobulk arm's calibration and power were established on synthetic data
   only, and only inside a stated range of donor counts and per-donor variability. Quoting the exact
@@ -191,7 +191,7 @@ donor_spans_conditions`, and explains in the report why it stopped there.
 | `permutation_null` | The donor-permutation null results for each arm that ran: inflation, floor, and (for the pseudobulk arm) the false-positive rate, plus how many permutations were requested versus actually distinct. `null` in `design_only`. |
 | `readout` | The plain-language read-out derived from the fields above: inflation classes, floors, ratios of real result to floor, and the sentences shown in the report. |
 | `caveats` | The list of caveat texts shown in this report, each with a stable identifier (see the "What each number means" section and the report itself for their wording). |
-| `provenance` | What pbcheck was calibrated against, which settings are pre-registered protocol constants, and the platform and package versions the run used. |
+| `provenance` | Which recorded synthetic measurement pbcheck's settings were fixed against, which settings are pre-registered protocol constants, and the platform and package versions the run used. |
 
 ## Settings (`settings.tool`)
 

@@ -332,7 +332,7 @@ def test_lambda_class_words_are_the_schema_classes_with_neutral_phrases():
         "below_band": "below the band",
     }
     with pytest.raises(TypeError):
-        text.LAMBDA_CLASS_WORDS["in_band"] = "calibrated"
+        text.LAMBDA_CLASS_WORDS["in_band"] = "some other phrase"
 
 
 def test_the_naive_lambda_sentence_says_the_band_is_the_pseudobulk_arms():

@@ -21,6 +21,14 @@ from pbcheck.audit_schema import (
 from pbcheck.render import text
 
 
+# The names the fix pass retired (cross-cutting renames X1 and X2 of the fix specification).
+# They are spelled out here, in one place, so that the migration is pinned by a test instead of by
+# a grep over the tree: every one of them must be rejected by the enums that replaced them. No
+# other test file, product module or fixture may spell them.
+RETIRED_LAMBDA_CLASS_VALUES = ("calibrated", "inflated", "under")
+RETIRED_CAVEAT_IDS = ("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "A1")
+
+
 def _caveat(caveat_id: str, **values) -> dict:
     return {"id": caveat_id, "text": text.caveat_text(caveat_id, **values)}
 
@@ -249,10 +257,11 @@ def test_lambda_class_enum_holds_the_neutral_band_names():
         payload["readout"]["lambda_naive_class"] = value
         validate(payload)
 
-    payload["readout"]["lambda_naive_class"] = "calibrated"
-    with pytest.raises(AuditSchemaError) as excinfo:
-        validate(payload)
-    assert str(excinfo.value).startswith("readout.lambda_naive_class:")
+    for retired in RETIRED_LAMBDA_CLASS_VALUES:
+        payload["readout"]["lambda_naive_class"] = retired
+        with pytest.raises(AuditSchemaError) as excinfo:
+            validate(payload)
+        assert str(excinfo.value).startswith("readout.lambda_naive_class:")
 
 
 def test_engine_path_and_floor_bh_mode_enums_reject_unknown_values():
@@ -305,11 +314,12 @@ def test_settings_tool_carries_the_product_constants_the_report_documents():
 
 
 def test_caveat_ids_are_restricted_to_the_enum():
-    payload = empty_payload()
-    payload["caveats"].append({"id": "C1", "text": "an id from the retired scheme"})
-    with pytest.raises(AuditSchemaError) as excinfo:
-        validate(payload)
-    assert "caveats" in str(excinfo.value)
+    for retired in RETIRED_CAVEAT_IDS:
+        payload = empty_payload()
+        payload["caveats"].append({"id": retired, "text": "an id from the retired scheme"})
+        with pytest.raises(AuditSchemaError) as excinfo:
+            validate(payload)
+        assert "caveats" in str(excinfo.value)
 
 
 def test_every_payload_carries_the_always_on_notes():
