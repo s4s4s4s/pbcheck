@@ -298,4 +298,12 @@ python scripts/synthetic_gate.py
 
 BSD-3-Clause. See [LICENSE](https://github.com/s4s4s4s/pbcheck/blob/main/LICENSE).
 
-<!-- DOI badge added after the Zenodo release -->
+## Citation
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22557143.svg)](https://doi.org/10.5281/zenodo.22557143)
+
+Every release is archived on Zenodo; the DOI above, 10.5281/zenodo.22557143, always resolves to the
+latest version, and v0.1.0 itself is 10.5281/zenodo.22557144. Citation metadata (authors, version,
+release date, DOI) is in
+[CITATION.cff](https://github.com/s4s4s4s/pbcheck/blob/main/CITATION.cff), which GitHub renders
+under "Cite this repository".

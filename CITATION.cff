@@ -10,6 +10,7 @@ repository-code: "https://github.com/s4s4s4s/pbcheck"
 license: BSD-3-Clause
 version: 0.1.0
 date-released: 2026-09-07
+doi: 10.5281/zenodo.22557144
 abstract: >-
   pbcheck estimates how much an existing single-cell RNA-seq differential-expression
   analysis is inflated by pseudoreplication, treating individual cells as independent
