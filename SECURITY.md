@@ -5,6 +5,7 @@
 | Version | Supported |
 |---|---|
 | 0.1.x | :white_check_mark: |
+| pre-0.1.0 (untagged, unreleased) | :x: |
 
 ## Reporting a vulnerability
 
