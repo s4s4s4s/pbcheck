@@ -5,11 +5,12 @@ flags that switch conditional prose on)."""
 from __future__ import annotations
 
 import copy
+import inspect
 from types import MappingProxyType
 
 import pytest
 
-from pbcheck import gate_config, io_counts, product_constants
+from pbcheck import audit_schema, gate_config, io_counts, product_constants
 from pbcheck.audit_schema import (
     ALWAYS_ON_CAVEAT_IDS,
     AUDIT_SCHEMA_VERSION,
@@ -408,3 +409,12 @@ def test_paired_floor_shown_requires_a_paired_correction_free_of_missing_values(
 
     payload["real_label"]["paired_bh"] = _paired_bh(n_na_pseudobulk=0)
     validate(payload)
+
+
+def test_the_module_source_is_ascii_and_has_no_em_dash():
+    """The wording rules of the fix pass forbid the em dash U+2014 in anything this package
+    writes; the schema module carries the error messages, so it is pinned here the same way
+    tests/test_render_text.py pins the sentence module."""
+    module_source = inspect.getsource(audit_schema)
+    assert module_source.isascii()
+    assert chr(0x2014) not in module_source
