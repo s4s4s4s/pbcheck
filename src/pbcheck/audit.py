@@ -6,7 +6,7 @@ holds raw counts, freezes the gene universe, runs the two DE arms and the donor-
 and assembles the payload that :mod:`pbcheck.audit_schema` validates and :mod:`pbcheck.render`
 renders.
 
-What it is not: a Phase 0 measurement. The engine it drives was calibrated on synthetic oracles
+What it is not: a Phase 0 measurement. The engine it drives was measured on synthetic oracles
 inside the operating envelope of Amendment 3; this module runs it on a user's file, outside the
 pre-registered protocol, and the payload says so in every report it feeds (the caveat block).
 
