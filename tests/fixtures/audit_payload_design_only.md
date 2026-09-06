@@ -2,7 +2,7 @@
 
 ## 1. Header
 
-pbcheck audit - small_pilot_cohort.h5ad
+pbcheck audit of 'small_pilot_cohort.h5ad'
 
 pbcheck 0.1.0, generated 2026-09-01T12:00:00Z.
 
@@ -14,11 +14,18 @@ Status: design_only (fewer than the minimum donors were present in at least one 
 
 No detection arms were run at this status: fewer than the minimum donors were present in at least one group.
 
-> The pseudobulk arm's calibration and power were established on synthetic oracles only inside the operating envelope declared in Amendment 3 (minimum donors per group 4 / 8 / 13 / 23 at sigma_donor 0.2 / 0.35 / 0.5 / 0.7). pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here.
+> The pseudobulk arm's power was established on synthetic oracles only inside the operating envelope declared in Amendment 3:  
+> sigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')  
+> sigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')  
+> sigma_donor 0.5: at least 13 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.486 at 12v12, the largest n tested -> n* > 12')  
+> sigma_donor 0.7: at least 23 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.003 at 8v8 -> n* far above 8')  
+> The arm's calibration was evaluated at one hard regime (sigma_donor 0.5, 8 against 8 donors) and nowhere else. pbcheck does not estimate sigma_donor for real data, so whether this stratum lies inside that envelope is not determined here.
 
 > Everything in this report is a diagnostic of this file: the naive arm's inflation factor and permutation floor, the pseudobulk arm's inflation factor, floor and false-positive rate as its negative control, and the bookkeeping of the shared gene universe. None of it is a Phase 0 result, and pbcheck does not rate this file against the Phase 0 decision rule.
 
-> Fewer than 8 donors in at least one group: the permutation null has few distinct donor splits, floors are coarse, and pbcheck's own protocol treats floor-based comparisons below 8 donors per group as contaminated by the per-cell leak. Do not compare these numbers with a run on another file.
+> At least one group has fewer than 8 donors: the permutation null has few distinct donor splits and the floors are coarse. Amendment 5 Change 2 of pbcheck's protocol admits floor-based quantities outside the envelope only when every group has at least 8 donors, and this run is below that in at least one group, so its floor-based numbers describe this run alone. Do not compare them with a run on another file.
+
+> No cell type was selected, so all cells were pooled into one stratum; the file has a column that looks like a cell-type annotation ('cell_type'). Pooling mixes composition shifts between conditions into the contrast; rerun with --celltype 'cell_type' --celltype-value <level> for a per-cell-type audit.
 
 ## 3. What these words mean
 
@@ -34,7 +41,7 @@ replication unit: the unit whose independent draws the statistics assume; for do
 
 thin-donor filter: the rule that drops a donor's pseudobulk profile when it is built from too few cells or too few counts, rather than keeping a noisy profile.
 
-operating envelope: the region of donor count and donor-to-donor variability where the pseudobulk arm's calibration and power were established on synthetic data.
+operating envelope: the region of donor count and donor-to-donor variability where the pseudobulk arm's power was established on synthetic data.
 
 sigma_donor: a knob of pbcheck's synthetic simulator for how much donors differ from each other; it cannot be measured on your data, which is why the envelope question is left open.
 
@@ -85,15 +92,15 @@ No batch columns were provided.
 
 ## 5. Counts check
 
-Counts check: not run (fewer than the minimum donors were present in at least one group).
+Counts check: not run, because fewer than the minimum donors were present in at least one group.
 
 ## 6. Naive per-cell arm
 
-Naive per-cell arm: not run: fewer than the minimum donors were present in at least one group.
+Naive per-cell arm: not run, because fewer than the minimum donors were present in at least one group.
 
 ## 7. Donor-pseudobulk arm
 
-Donor-pseudobulk arm: not run: fewer than the minimum donors were present in at least one group.
+Donor-pseudobulk arm: not run, because fewer than the minimum donors were present in at least one group.
 
 ## 8. Shared universe bookkeeping
 
@@ -124,6 +131,7 @@ Thin-donor filter: not run.
 | naive_engine | fast |
 | pseudobulk_method | moderated_ebayes |
 | trend | no |
+| min_donors_per_group | 3 |
 | universe_min_total_count | 15 |
 | universe_min_prop | 0.5 |
 | fallback_universe_min_prop | 0.5 |
@@ -183,7 +191,7 @@ Thin-donor filter: not run.
 | permutation_null | 30.9 |
 | render | 0.2 |
 
-> This instrument was calibrated on synthetic oracles (pilot/gate/synthetic_gate_2026-08-15.json). Of the settings below, only those listed under 'protocol constants' are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values.
+> The engine was measured on one synthetic oracle point (sigma_donor 0.5, 8 against 8 donors, 1500 genes), recorded in pilot/gate/synthetic_gate_2026-08-15.json; that measurement is not repeated on this file. Of the settings below, only the ones listed as protocol constants are pre-registered values taken from pbcheck.gate_config (alpha, lambda_band, min_universe_size, min_cells, min_counts); the permutation counts, the universe filter parameters, the fallback universe rule and the display settings are the tool's own and are not protocol values.
 
 ## 10. Footer
 

@@ -4,8 +4,9 @@
 
 > Status: **v0.1.0 - a released single-stratum audit tool, built on the engine of Phase 0, a
 > pre-registered measurement study** whose decision rule was frozen in
-> [`docs/PHASE0_SPEC.md`](docs/PHASE0_SPEC.md) *before* the data was seen; every departure from it
-> is dated and justified in [`docs/AMENDMENTS.md`](docs/AMENDMENTS.md). The release runs outside
+> [`docs/PHASE0_SPEC.md`](https://github.com/s4s4s4s/pbcheck/blob/main/docs/PHASE0_SPEC.md) *before*
+> the data was seen; every departure from it is dated and justified in
+> [`docs/AMENDMENTS.md`](https://github.com/s4s4s4s/pbcheck/blob/main/docs/AMENDMENTS.md). The release runs outside
 > that protocol and claims no Phase 0 result.
 
 ## Install
@@ -22,17 +23,16 @@ Python 3.12 or newer is required.
 # 1. write a small synthetic dataset with donor structure, no download needed
 pbcheck example example.h5ad
 
-# 2. audit it
-pbcheck audit example.h5ad --donor donor --condition condition --test disease --ref ctrl \
-    --n-perm 50 --n-perm-pb 20
+# 2. audit it (one line; works as written in bash, PowerShell and cmd)
+pbcheck audit example.h5ad --donor donor --condition condition --test disease --ref ctrl --n-perm 50 --n-perm-pb 20
 
 # 3. on your own data, check the design first without touching expression values
 pbcheck audit yourfile.h5ad --donor <col> --condition <col> --test <a> --ref <b> --design-only
 ```
 
 Each run writes `pbcheck_audit.json`, `pbcheck_report.md` and `pbcheck_report.html` into an
-output directory. See [`docs/USAGE.md`](docs/USAGE.md) for the full CLI reference, exit codes,
-the JSON schema and what every number means.
+output directory. See [`docs/USAGE.md`](https://github.com/s4s4s4s/pbcheck/blob/main/docs/USAGE.md)
+for the full CLI reference, exit codes, the JSON schema and what every number means.
 
 The same audit is available from Python:
 
@@ -51,26 +51,35 @@ pbcheck runs two tests on your data: a naive per-cell test (the common but incor
 which treats every cell as an independent replicate) and a donor-pseudobulk test (which
 aggregates to one profile per donor before testing, the correct unit of replication). Both are
 also run many times with donor labels shuffled between conditions, so that by construction there
-is no real signal to find; the false-positive rate under that shuffling is the **permutation
-floor**, and how far a test's real-label result sits above its own floor is the **genomic
-inflation factor (lambda)**. The pseudobulk arm's floor and false-positive rate serve as a
-**negative control**: they check that the pseudobulk arm itself behaves as it should on this
-file. None of this certifies a published result.
+is no real signal to find. The **permutation floor** is how many genes a test still calls
+significant under that shuffling (`*_floor_solo` / the pseudobulk floor); the **ratio of the
+real-label result to that floor** (the `*_real_over_floor_*` fields) says how far above pure
+noise the real result sits; **genomic inflation (lambda)** is a separate summary of the shape of
+the whole real-label p-value distribution, not derived from the floor. The pseudobulk arm's floor
+and false-positive rate serve as a **negative control**: they check that the pseudobulk arm itself
+behaves as it should on this file. None of this certifies a published result.
 
 Every audit ends in one of three statuses: `complete` (both arms ran), `naive_only` (the
 pseudobulk arm could not run, for example because the count matrix was not raw counts, or too
 few donor profiles survived aggregation), and `design_only` (pbcheck stopped before touching
 expression data at all, for example because a donor was measured under both conditions, or
 because there were too few donors). Full detail on each status is in
-[`docs/USAGE.md`](docs/USAGE.md).
+[`docs/USAGE.md`](https://github.com/s4s4s4s/pbcheck/blob/main/docs/USAGE.md).
 
 The pseudobulk arm's calibration itself has a stated limit, quoted here exactly as pbcheck's own
 report states it:
 
-> The pseudobulk arm's calibration and power were established on synthetic oracles only inside
-> the operating envelope declared in Amendment 3 (minimum donors per group 4 / 8 / 13 / 23 at
-> sigma_donor 0.2 / 0.35 / 0.5 / 0.7). pbcheck does not estimate sigma_donor for real data, so
-> whether this stratum lies inside that envelope is not determined here.
+> The pseudobulk arm's power was established on synthetic oracles only inside the operating
+> envelope declared in Amendment 3:
+>
+> sigma_donor 0.2: at least 4 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'not in the grid; Amendment 1 frontier only')
+> sigma_donor 0.35: at least 8 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.793 at 8v8 (calibrated) -> n* <= 8')
+> sigma_donor 0.5: at least 13 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.486 at 12v12, the largest n tested -> n* > 12')
+> sigma_donor 0.7: at least 23 donors per group (power at least 0.6 at log2FC 1.0 in 200 genes; grid support 'ebayes power 0.003 at 8v8 -> n* far above 8')
+>
+> The arm's calibration was evaluated at one hard regime (sigma_donor 0.5, 8 against 8 donors) and
+> nowhere else. pbcheck does not estimate sigma_donor for real data, so whether this stratum lies
+> inside that envelope is not determined here.
 
 ## What pbcheck does not do
 
@@ -114,12 +123,12 @@ results are inflated by this error. Pointers to prior art are welcome and will b
 | | |
 |---|---|
 | Measurement engine | built; tested in CI |
-| Real CELLxGENE data | **not touched.** The stratum list is pre-registered (frozen 2026-08-16; verify the date in [`pilot/README.md`](pilot/README.md)); no frozen stratum has been run. The v0.1.0 demonstrations use public datasets outside the frozen list |
+| Real CELLxGENE data | **not touched.** The stratum list is pre-registered (frozen 2026-08-16; verify the date in [`pilot/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/pilot/README.md)); no frozen stratum has been run. The v0.1.0 demonstrations use public datasets outside the frozen list |
 | Every number in the Phase 0 sections | from synthetic oracles with known ground truth - instrument calibration, **not a result** |
 | Pseudobulk arm's test | **moderated eBayes** (Amendment 2), replacing the DESeq2-Wald arm Amendment 1 found miscalibrated |
 | Calibration (λ, FP rate) | **criteria met**, now at 200 permutations - the earlier marginal FP reading is resolved, see below |
 | Power at the pre-registered effect size | **met, inside a stated envelope only** - 0.86 vs the required ≥ 0.60 at σ_donor = 0.35 with 8 donors/group. At σ_donor = 0.5 it is still **0.35: unmet, and not claimed** |
-| Instrument validity | **established only within the operating envelope** declared by [Amendment 3](docs/AMENDMENTS.md) - minimum donors/group 4 / 8 / 13 / 23 at σ_donor 0.2 / 0.35 / 0.5 / 0.7. Outside it this instrument makes no claim |
+| Instrument validity | **established only within the operating envelope** declared by [Amendment 3](https://github.com/s4s4s4s/pbcheck/blob/main/docs/AMENDMENTS.md) - minimum donors/group 4 / 8 / 13 / 23 at σ_donor 0.2 / 0.35 / 0.5 / 0.7. Outside it this instrument makes no claim |
 | Whether any *real* stratum falls inside that envelope | **unknown.** σ_donor is an unanchored knob of our own simulator - open since Amendment 1, still open |
 | GO / NO-GO | not taken |
 
@@ -134,7 +143,7 @@ python scripts/synthetic_gate.py
 
 On a synthetic null with donor structure where the true number of DE genes is **exactly zero**, and a synthetic
 positive at the pre-registered effect size (log2FC = 1.0, K = 200), default parameters, most recent run 511.8s
-at 200 permutations ([full artifact](pilot/gate/synthetic_gate_2026-08-15.json)):
+at 200 permutations ([full artifact](https://github.com/s4s4s4s/pbcheck/blob/main/pilot/gate/synthetic_gate_2026-08-15.json)):
 
 | quantity | value | reads as |
 |---|---|---|
@@ -177,7 +186,7 @@ selected to span the outcome space rather than to cherry-pick (spec §1):
 - **GO** - inflation is large and consistent → build the full auditor and publish the "map of false discoveries".
 - **NO-GO** - inflation is small or erratic → reformat or pivot.
 
-The pilot's measurement engine is calibrated first on **synthetic oracles with known ground truth** (a correct
+The pilot's measurement engine is checked first against **synthetic oracles with known ground truth** (a correct
 auditor must report high inflation on a synthetic null and none on a synthetic positive) - only then is it trusted
 on real data. Statistics are verified by hand against these oracles, not assumed.
 
@@ -220,7 +229,7 @@ Built in v0.1.0, outside the protocol: the single-stratum audit (`pbcheck.audit`
 Markdown/HTML report (`pbcheck.render`), the `pbcheck` CLI, the metadata-only mode and the
 behaviour on non-integer counts (pseudobulk arm dropped, never rounded). Specified but not
 built: the Phase 0 real-data harness (`controls`, `decision`, the spec section 9 `report`). No
-`risk_score` exists and none is promised. See [`pilot/README.md`](pilot/README.md), which also
+`risk_score` exists and none is promised. See [`pilot/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/pilot/README.md), which also
 lists the spec corrections that are named in module docstrings but not yet implemented, so that
 nothing here reads as done when it is not.
 
@@ -229,9 +238,11 @@ nothing here reads as done when it is not.
 Two committed demonstrations under `demo/` show pbcheck running against real public datasets
 outside the pre-registered Phase 0 protocol, including one where the tool's own design audit
 stops the run because the dataset uses a paired design. Both are labelled as demonstrations, not
-as a Phase 0 measurement, and quote no result as a finding about the underlying publications. See
-[`demo/README.md`](demo/README.md) for the exact commands, the datasets, their licences and the
-full disclaimer.
+as a Phase 0 measurement, and quote no result about the underlying publications. See
+[`demo/README.md`](https://github.com/s4s4s4s/pbcheck/blob/main/demo/README.md) for the exact
+commands, the datasets, their licences and the full disclaimer. `demo/` itself is produced by the
+demonstration scripts of this release (`scripts/demo_kang2018.py`, `scripts/demo_two_arm.py`), not
+committed by hand.
 
 ## Layout
 
@@ -277,6 +288,6 @@ python scripts/synthetic_gate.py
 
 ## License
 
-BSD-3-Clause. See [LICENSE](LICENSE).
+BSD-3-Clause. See [LICENSE](https://github.com/s4s4s4s/pbcheck/blob/main/LICENSE).
 
 <!-- DOI badge added after the Zenodo release -->

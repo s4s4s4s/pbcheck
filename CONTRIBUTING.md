@@ -69,6 +69,21 @@ Tag `vX.Y.Z` on `main`. The version is kept in sync in `src/pbcheck/__init__.py`
 `CITATION.cff` (`scripts/check_version_consistency.py --tag`). `release.yml` publishes to PyPI by
 trusted publishing; the GitHub Release it creates triggers the Zenodo archive.
 
+### Release procedure
+
+Run both of these locally, as the last two gates before pushing the tag; neither runs the tag
+push itself.
+
+1. `python scripts/check_version_consistency.py --tag vX.Y.Z --require-date` - confirms
+   `src/pbcheck/__init__.py`, `CITATION.cff`, `.zenodo.json`, the `CHANGELOG.md` heading and the
+   tag itself all name the same version, and that the `CHANGELOG.md` release date is a real ISO
+   date matching `CITATION.cff`'s `date-released`. A non-zero exit means do not push the tag yet.
+2. `python scripts/protocol_safety_check.py --with-gate` - on Windows with Python 3.12, the
+   platform and interpreter recorded in the committed gate artifact
+   (`pilot/gate/synthetic_gate_2026-08-15.json`). It fails if product code reads a Phase 0
+   permutation-count constant, contains a forbidden protocol string, or has touched a frozen path
+   since the last tag.
+
 Decision of 2026-09-05 (owner): shipping v0.1.0 is treated as an engineering change under the
 amendment test because it changes no number `scripts/synthetic_gate.py` prints and touches no
 frozen file; the product's wording is a protocol surface (`src/pbcheck/render/text.py`, tested

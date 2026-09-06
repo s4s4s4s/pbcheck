@@ -3,7 +3,7 @@
 Three subcommands: ``pbcheck --version``, ``pbcheck example OUT.h5ad`` (the offline quickstart
 generator, :mod:`pbcheck.example`) and ``pbcheck audit FILE.h5ad ...`` (the single-stratum audit,
 :mod:`pbcheck.audit` plus :mod:`pbcheck.render`). This module owns argument parsing, exit codes and
-the run's progress lines; every word of the audit's own findings comes from
+the run's progress lines; every word of the audit's own read-out comes from
 :func:`pbcheck.render.sections.summary_lines`, never retyped here.
 
 Exit codes: ``0`` when the three output files were written, whatever ``status`` the payload landed
@@ -48,7 +48,16 @@ _DEFAULT_OUT_ALL = "all"
 
 
 def _reconfigure_streams() -> None:
-    """Force UTF-8 on stdout/stderr so gene symbols and non-ASCII paths print on any console.
+    """Make stdout and stderr survive a character the console cannot encode.
+
+    The summary and the paths this module prints carry values that came from the user's file and
+    command line: a cell-type value, a column name, an output directory. On a console whose
+    encoding is not UTF-8 (cp1252 is the Windows default outside UTF-8 mode) printing one of them
+    raises ``UnicodeEncodeError``, and a run that finished and wrote its three files would exit
+    non-zero on the last line. Only the error handler is replaced: the encoding stays the
+    console's, because rewriting it to UTF-8 turns every non-ASCII character the console then
+    decodes back into mojibake. pbcheck's own fixed prose is ASCII (asserted in
+    ``tests/test_cli.py``), so the escapes can only ever land on a value the user supplied.
 
     ``TextIOWrapper.reconfigure`` is a no-op on streams that are not one (``capsys`` in tests
     replaces them with objects that may not offer it), hence the ``getattr`` guard.
@@ -57,7 +66,7 @@ def _reconfigure_streams() -> None:
         stream = getattr(sys, name)
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is not None:
-            reconfigure(encoding="utf-8")
+            reconfigure(errors="backslashreplace")
 
 
 def _build_parser() -> argparse.ArgumentParser:

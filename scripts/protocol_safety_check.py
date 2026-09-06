@@ -265,6 +265,7 @@ _EXISTING_TESTS_EXCLUDE = [
     ":!tests/test_checklist_scripts.py",
     ":!tests/test_protocol_safety_check.py",
     ":!tests/test_measure_audit_runtime.py",
+    ":!tests/test_render_output.py",
 ]
 
 

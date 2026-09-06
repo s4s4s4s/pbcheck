@@ -25,11 +25,21 @@ def _render_table(headers: tuple[str, ...], rows: tuple[tuple[object, ...], ...]
     return "\n".join(lines)
 
 
+def _line_break(text: str) -> str:
+    """Prose with the line breaks its author put in it kept in the Markdown output.
+
+    Some of the report's prose is a list rather than a run of sentences (the operating-envelope
+    rows of note N2 are one row per line); a bare newline is a soft break in Markdown, which would
+    run those rows together in the rendered document.
+    """
+    return "  \n".join(text.split("\n"))
+
+
 def _render_block(block: Block) -> str:
     if isinstance(block, Paragraph):
-        return block.text
+        return _line_break(block.text)
     if isinstance(block, Callout):
-        return "> " + block.text
+        return "\n".join("> " + line for line in _line_break(block.text).split("\n"))
     if isinstance(block, Table):
         parts = [f"**{block.caption}**"] if block.caption else []
         parts.append(_render_table(block.headers, block.rows))

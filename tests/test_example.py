@@ -4,8 +4,8 @@ These pin the contract the CLI's ``pbcheck example`` command and the quickstart 
 rely on: the shape produced is exactly what :func:`pbcheck.audit.run_audit` needs (raw
 integer counts, a donor column, a two-level condition column, a cell-type column), the
 draw is deterministic for a given seed and differs across seeds, and running the audit
-on the small shape reaches ``status == "complete"`` with the naive arm flagged as
-inflated, the one property this generator exists to demonstrate.
+on the small shape reaches ``status == "complete"`` with the naive arm's lambda class
+above the band, the one property this generator exists to demonstrate.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def test_reference_shape_constant_matches_plan():
     assert REFERENCE_SHAPE == {"n_genes": 8000, "n_donors_per_group": 8, "n_cells_per_donor": 625}
 
 
-def test_small_shape_audit_reaches_complete_and_is_inflated():
+def test_small_shape_audit_reaches_complete_and_lands_above_the_band():
     adata = example_adata(seed=0)
     settings = AuditSettings(
         donor_col="donor",
@@ -70,7 +70,7 @@ def test_small_shape_audit_reaches_complete_and_is_inflated():
     payload = run_audit(adata, settings)
     readout = payload["readout"]
     assert payload["status"] == "complete"
-    assert readout["lambda_naive_class"] == "inflated"
+    assert readout["lambda_naive_class"] == "above_band"
     # The three floors this generator exists to clear: the naive solo floor,
     # the naive paired floor (only rendered when the pseudobulk arm NaNs no
     # gene), and the pseudobulk floor itself.

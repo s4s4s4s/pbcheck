@@ -1,16 +1,24 @@
 """The pbcheck-audit/1 payload schema and its validator.
 
-This module defines the shape of ``pbcheck_audit.json`` (WP0 of the v0.1.0 plan) and nothing
-else: it does not compute an audit, it only tells the caller whether a payload has every key the
-schema requires, of the right type, with the right literal values where the schema fixes them.
-Pure stdlib, importable before the engine-calling modules of this release exist.
+This module defines the shape of ``pbcheck_audit.json`` and checks a payload against it: it does
+not compute an audit, it tells the caller whether a payload has every key the schema requires and
+no key it does not, of the right type, with the right literal values where the schema fixes them.
 
-``pbcheck.audit`` (built in parallel) fills a payload matching this schema; ``pbcheck.render``
-(also built in parallel) reads it back. Neither of those two modules is imported here.
+Two rules go past the shape, because the JSON artifact is read by machines that will never see the
+rendered report and must be no easier to mislead than a reader: the caveat block has to carry the
+notes the report is defined to always carry and exactly the conditional notes the payload's own
+fields call for, with no text matching the report's forbidden patterns; and the readout flags that
+switch conditional prose on have to agree with the fields they are derived from.
+
+``pbcheck.audit`` fills a payload matching this schema and ``pbcheck.render`` reads it back;
+neither is imported at module level. The caveat rules need the report's wording gate
+(``pbcheck.render.text``), which is imported inside the two functions that use it, because
+``pbcheck.render`` imports this module.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 AUDIT_SCHEMA_VERSION = "pbcheck-audit/1"
@@ -63,17 +71,27 @@ class _Bool(_Spec):
             _fail(path, f"expected bool, got {type(value).__name__}")
 
 
+def _is_mapping(value: Any) -> bool:
+    """Any mapping, not only ``dict``: the engine hands over ``MappingProxyType`` constants."""
+    return isinstance(value, Mapping)
+
+
+def _is_sequence(value: Any) -> bool:
+    """Any sequence but a string or bytes: the engine hands over tuples as well as lists."""
+    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+
+
 class _AnyDict(_Spec):
-    """A dict whose internal shape this schema does not pin (recorded verbatim from the engine)."""
+    """A mapping whose shape this schema does not pin (recorded verbatim from the engine)."""
 
     def check(self, value: Any, path: str) -> None:
-        if not isinstance(value, dict):
+        if not _is_mapping(value):
             _fail(path, f"expected dict, got {type(value).__name__}")
 
 
 class _AnyList(_Spec):
     def check(self, value: Any, path: str) -> None:
-        if not isinstance(value, list):
+        if not _is_sequence(value):
             _fail(path, f"expected list, got {type(value).__name__}")
 
 
@@ -93,7 +111,9 @@ class _CountsSource(_Spec):
         if not isinstance(value, str):
             _fail(path, f"expected str, got {type(value).__name__}")
             return
-        if value == "X" or value == "raw.X" or value.startswith("layers:"):
+        if value == "X" or value == "raw.X":
+            return
+        if value.startswith("layers:") and value[len("layers:"):].strip():
             return
         _fail(path, f'expected "X", "layers:<name>" or "raw.X", got {value!r}')
 
@@ -113,11 +133,24 @@ class _ListOf(_Spec):
         self.item = item
 
     def check(self, value: Any, path: str) -> None:
-        if not isinstance(value, list):
+        if not _is_sequence(value):
             _fail(path, f"expected list, got {type(value).__name__}")
             return
         for index, element in enumerate(value):
             self.item.check(element, f"{path}[{index}]")
+
+
+class _SizedListOf(_ListOf):
+    """A sequence of a fixed length, each element validated by the same spec."""
+
+    def __init__(self, item: _Spec, length: int) -> None:
+        super().__init__(item)
+        self.length = length
+
+    def check(self, value: Any, path: str) -> None:
+        super().check(value, path)
+        if len(value) != self.length:
+            _fail(path, f"expected {self.length} items, got {len(value)}")
 
 
 class _DictOf(_Spec):
@@ -127,7 +160,7 @@ class _DictOf(_Spec):
         self.value = value
 
     def check(self, value: Any, path: str) -> None:
-        if not isinstance(value, dict):
+        if not _is_mapping(value):
             _fail(path, f"expected dict, got {type(value).__name__}")
             return
         for key, element in value.items():
@@ -143,9 +176,12 @@ class _DictSchema(_Spec):
         self.fields = fields
 
     def check(self, value: Any, path: str) -> None:
-        if not isinstance(value, dict):
+        if not _is_mapping(value):
             _fail(path, f"expected dict, got {type(value).__name__}")
             return
+        unknown = sorted(str(key) for key in value if key not in self.fields)
+        if unknown:
+            _fail(_join(path, unknown[0]), "unknown key, not in the pbcheck-audit/1 schema")
         for key, spec in self.fields.items():
             sub_path = _join(path, key)
             if key not in value:
@@ -171,9 +207,13 @@ STATUS_REASON_VALUES = (
     "too_few_profiles_after_thin_filter",
 )
 UNIVERSE_BUILDER_VALUES = ("pseudobulk_frozen", "naive_detection_fallback")
-LAMBDA_CLASS_VALUES = ("calibrated", "inflated", "under")
+LAMBDA_CLASS_VALUES = ("in_band", "above_band", "below_band")
 ENGINE_PATH_VALUES = ("run_null", "naive_null")
-CAVEAT_IDS = ("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "A1")
+CAVEAT_IDS = ("N1", "N2", "N3", "N4", "N5", "N6", "N7", "N8", "N9", "R1")
+
+#: Notes every payload carries, whatever its status: the scope banner, the envelope note, the
+#: "none of this is a Phase 0 result" note and the provenance note. :func:`validate` requires them.
+ALWAYS_ON_CAVEAT_IDS = ("N1", "N2", "N3", "N7")
 RUNTIME_STAGE_KEYS = (
     "load",
     "prepare",
@@ -235,6 +275,8 @@ _COUNTS_CHECK_SCHEMA = _DictSchema({
     "reason": _Nullable(_STR),
     "dtype": _STR,
     "layer": _STR,
+    "n_cells": _INT,
+    "n_genes": _INT,
     "n_values_checked": _INT,
     "n_noninteger": _INT,
     "n_negative": _INT,
@@ -242,6 +284,7 @@ _COUNTS_CHECK_SCHEMA = _DictSchema({
     "max_abs_value": _Nullable(_FLOAT),
     "examples": _ANY_LIST,
     "notes": _ListOf(_STR),
+    "rule": _STR,
 })
 
 _DESIGN_SCHEMA = _DictSchema({
@@ -271,6 +314,7 @@ _SETTINGS_TOOL_SCHEMA = _DictSchema({
     "naive_engine": _Enum("fast"),
     "pseudobulk_method": _Enum("moderated_ebayes"),
     "trend": _BOOL,
+    "min_donors_per_group": _INT,
     "universe_min_total_count": _INT,
     "universe_min_prop": _FLOAT,
     "fallback_universe_min_prop": _FLOAT,
@@ -280,7 +324,7 @@ _SETTINGS_TOOL_SCHEMA = _DictSchema({
 
 _SETTINGS_PROTOCOL_CONSTANTS_SCHEMA = _DictSchema({
     "alpha": _FLOAT,
-    "lambda_band": _ListOf(_FLOAT),
+    "lambda_band": _SizedListOf(_FLOAT, 2),
     "min_universe_size": _INT,
     "min_cells": _INT,
     "min_counts": _INT,
@@ -342,7 +386,7 @@ _REAL_LABEL_PAIRED_BH_SCHEMA = _DictSchema({
 _REAL_LABEL_SCHEMA = _DictSchema({
     "naive": _REAL_LABEL_NAIVE_SCHEMA,
     "pseudobulk": _Nullable(_REAL_LABEL_PSEUDOBULK_SCHEMA),
-    "paired_bh": _REAL_LABEL_PAIRED_BH_SCHEMA,
+    "paired_bh": _Nullable(_REAL_LABEL_PAIRED_BH_SCHEMA),
     "consistent_with_permutation_path": _Nullable(_BOOL),
 })
 
@@ -392,6 +436,8 @@ _READOUT_SCHEMA = _DictSchema({
     "naive_real_over_floor_solo": _Nullable(_FLOAT),
     "pseudobulk_real_over_floor": _Nullable(_FLOAT),
     "paired_floor_shown": _BOOL,
+    "few_donors": _BOOL,
+    "few_donors_threshold": _INT,
     "min_donors_per_group": _INT,
     "min_profiles_per_group_after_thin_filter": _Nullable(_INT),
     "n_perm_naive_requested": _INT,
@@ -447,26 +493,124 @@ _TOP_LEVEL_SCHEMA = _DictSchema({
 })
 
 
+def _caveat_ids(payload: Mapping) -> list[str]:
+    return [entry["id"] for entry in payload["caveats"]]
+
+
+def _check_caveats(payload: Mapping) -> None:
+    """The caveat block's own rules, beyond the per-entry types checked by the schema.
+
+    Three things a payload cannot do and stay a pbcheck-audit/1 payload: carry a note twice, drop
+    a note the report is defined to always carry, or carry a conditional note whose condition this
+    same payload says is not met (and the reverse). The fourth rule is the wording gate: every
+    caveat text is put through the report's own forbidden-pattern check, with quoted identifiers
+    masked, so a text assembled outside :mod:`pbcheck.render.text` cannot reach a reader.
+    """
+    from pbcheck.render import text  # local: pbcheck.render imports this module's validator
+
+    ids = _caveat_ids(payload)
+    duplicates = sorted({entry for entry in ids if ids.count(entry) > 1})
+    if duplicates:
+        _fail("caveats", f"caveat {duplicates[0]} appears more than once")
+    for required in ALWAYS_ON_CAVEAT_IDS:
+        if required not in ids:
+            _fail("caveats", f"missing required caveat {required}")
+
+    expected_n6 = payload["status_reason"] == "non_integer_counts"
+    if expected_n6 != ("N6" in ids):
+        _fail("caveats", "N6 is present exactly when status_reason is non_integer_counts")
+    expected_n4 = bool(payload["readout"]["few_donors"])
+    if expected_n4 != ("N4" in ids):
+        _fail("caveats", "N4 is present exactly when readout.few_donors is true")
+
+    for index, entry in enumerate(payload["caveats"]):
+        hits = text.forbidden_pattern_hits(entry["text"])
+        if hits:
+            _fail(
+                f"caveats[{index}].text",
+                f"caveat {entry['id']} matches the forbidden pattern {hits[0]!r}",
+            )
+
+
+def _check_readout_consistency(payload: Mapping) -> None:
+    """The readout flags the report's conditional prose is switched on, against their own inputs.
+
+    ``few_donors`` is the flag the donor-threshold note and the read-out paragraph's categorical
+    clause hang on, and ``paired_floor_shown`` the flag its pseudobulk clause hangs on. Both are
+    derivable from other fields of the same payload, so a payload that disagrees with itself here
+    would render prose the numbers do not support.
+    """
+    readout = payload["readout"]
+    if readout["few_donors"] != (
+        readout["min_donors_per_group"] < readout["few_donors_threshold"]
+    ):
+        _fail(
+            "readout.few_donors",
+            "must be true exactly when min_donors_per_group is below few_donors_threshold",
+        )
+
+    real_label = payload["real_label"]
+    paired_bh = real_label["paired_bh"] if real_label is not None else None
+    shown = bool(paired_bh is not None and paired_bh["n_na_pseudobulk"] == 0)
+    if readout["paired_floor_shown"] and not shown:
+        _fail(
+            "readout.paired_floor_shown",
+            "true requires real_label.paired_bh with n_na_pseudobulk == 0",
+        )
+
+
 def validate(payload: dict) -> None:
     """Raise :class:`AuditSchemaError` naming the dotted path of the first schema violation.
 
     Returns ``None`` when ``payload`` matches the pbcheck-audit/1 schema: every required key is
-    present at every level (``null`` is accepted only where the schema marks a block nullable),
-    every value has the right type, and every literal enum (``status``, ``status_reason``,
-    caveat ids, ``universe.builder``, ``permutation_null.*.engine_path``, floor ``bh_mode``,
-    ``readout`` lambda classes, ``schema_version`` itself) holds one of its allowed values.
+    present at every level and no key that the schema does not name (``null`` is accepted only
+    where the schema marks a block nullable), every value has the right type, and every literal
+    enum (``status``, ``status_reason``, caveat ids, ``universe.builder``,
+    ``permutation_null.engine_path``, floor ``bh_mode``, ``readout`` lambda classes,
+    ``schema_version`` itself) holds one of its allowed values.
+
+    Beyond the shape, it enforces the two rules that make the JSON artifact as trustworthy as the
+    rendered report: the caveat block carries the always-on notes and exactly the conditional
+    notes its own fields call for, with no text matching the report's forbidden patterns
+    (:func:`_check_caveats`); and the readout flags that switch conditional prose on agree with the
+    fields they are derived from (:func:`_check_readout_consistency`).
     """
-    if not isinstance(payload, dict):
+    if not _is_mapping(payload):
         raise AuditSchemaError(f"<root>: expected dict, got {type(payload).__name__}")
     _TOP_LEVEL_SCHEMA.check(payload, "")
+    _check_caveats(payload)
+    _check_readout_consistency(payload)
+
+
+def _always_on_caveats(payload: Mapping) -> list[dict]:
+    """The four notes every payload carries, with the placeholder payload's own values filled in.
+
+    The texts come from :mod:`pbcheck.render.text`; nothing is written here. The import is local
+    because ``pbcheck.render`` imports this module, and only this function needs the renderer.
+    """
+    from pbcheck.render import text  # local: pbcheck.render imports this module's validator
+
+    names = ", ".join(payload["settings"]["protocol_constants"])
+    values = {
+        "N1": {"version": payload["pbcheck_version"]},
+        "N2": {},
+        "N3": {},
+        "N7": {"protocol_constant_names": names},
+    }
+    return [
+        {"id": caveat_id, "text": text.caveat_text(caveat_id, **values[caveat_id])}
+        for caveat_id in ALWAYS_ON_CAVEAT_IDS
+    ]
 
 
 def empty_payload() -> dict:
     """A payload with every schema key present, every arm ``null``, ``status`` ``design_only``.
 
     Every key that the schema marks nullable is set to ``None``; every other key holds a
-    type-correct placeholder (``""``, ``0``, ``0.0``, ``False``, ``{}`` or ``[]``). It is meant as
-    a starting point for building a real payload and as a fixture that :func:`validate` accepts.
+    type-correct placeholder (``""``, ``0``, ``0.0``, ``False``, ``{}`` or ``[]``), except the
+    caveat block, which carries the four always-on notes (:data:`ALWAYS_ON_CAVEAT_IDS`) because
+    :func:`validate` requires them of every payload. It is meant as a starting point for building
+    a real payload and as a fixture that :func:`validate` accepts.
     """
     input_block = {
         "path": None,
@@ -515,6 +659,7 @@ def empty_payload() -> dict:
             "naive_engine": "fast",
             "pseudobulk_method": "moderated_ebayes",
             "trend": False,
+            "min_donors_per_group": 0,
             "universe_min_total_count": 0,
             "universe_min_prop": 0.0,
             "fallback_universe_min_prop": 0.0,
@@ -545,6 +690,8 @@ def empty_payload() -> dict:
         "naive_real_over_floor_solo": None,
         "pseudobulk_real_over_floor": None,
         "paired_floor_shown": False,
+        "few_donors": False,
+        "few_donors_threshold": 0,
         "min_donors_per_group": 0,
         "min_profiles_per_group_after_thin_filter": None,
         "n_perm_naive_requested": 0,
@@ -562,7 +709,7 @@ def empty_payload() -> dict:
         "python": "",
         "packages": {key: "" for key in PACKAGE_KEYS},
     }
-    return {
+    payload = {
         "schema_version": AUDIT_SCHEMA_VERSION,
         "pbcheck_version": "",
         "generated_utc": "",
@@ -581,3 +728,5 @@ def empty_payload() -> dict:
         "caveats": [],
         "provenance": provenance_block,
     }
+    payload["caveats"] = _always_on_caveats(payload)
+    return payload

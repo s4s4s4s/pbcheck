@@ -6,7 +6,7 @@ holds raw counts, freezes the gene universe, runs the two DE arms and the donor-
 and assembles the payload that :mod:`pbcheck.audit_schema` validates and :mod:`pbcheck.render`
 renders.
 
-What it is not: a Phase 0 measurement. The engine it drives was calibrated on synthetic oracles
+What it is not: a Phase 0 measurement. The engine it drives was measured on synthetic oracles
 inside the operating envelope of Amendment 3; this module runs it on a user's file, outside the
 pre-registered protocol, and the payload says so in every report it feeds (the caveat block).
 
@@ -36,13 +36,29 @@ import numpy as np
 import pandas as pd
 from scipy import sparse as sp
 
-from pbcheck import __version__, audit_schema, gate_config, gene_universe, io_counts, metrics, mtc
+from pbcheck import (
+    __version__,
+    audit_schema,
+    gate_config,
+    gene_universe,
+    io_counts,
+    metrics,
+    mtc,
+    product_constants,
+)
 from pbcheck.design import audit_design
 from pbcheck.methods.naive import naive_de
 from pbcheck.methods.naive_engine import NaiveRelabelEngine
 from pbcheck.methods.pseudobulk import build_pseudobulk, pseudobulk_de
 from pbcheck.permutation import build_perms, run_null
-from pbcheck.render.text import CAVEATS, LAMBDA_CLASS_WORDS, caveat_text, envelope_rows
+from pbcheck.render.sections import STATUS_REASON_WORDS
+from pbcheck.render.text import (
+    LAMBDA_CLASS_WORDS,
+    caveat_text,
+    envelope_rows,
+    readout_caveat_text,
+    sentence_text,
+)
 
 # ---------------------------------------------------------------------------
 # Product constants. None of these is pre-registered: they are this tool's own defaults and may be
@@ -100,15 +116,21 @@ PRODUCT_UNIVERSE_MIN_PROP = io_counts.UNIVERSE_MIN_PROP
 #: is not the file the user thinks they handed over, so a silent partial run would mislead.
 MAX_MISSING_OBS_FRACTION = 0.5
 
-#: Achieved naive permutation count below which the null is called coarse (caveat C9).
+#: Achieved naive permutation count below which the null is called coarse (note N9).
 #: PRODUCT VALUE, a display threshold only: nothing is gated on it.
 COARSE_NULL_THRESHOLD = 100
 
+#: The clause the floor read-out line carries when the achieved permutation count is below
+#: :data:`COARSE_NULL_THRESHOLD`. It is prose, and its home is ``pbcheck.render.text`` next to the
+#: sentence it is interpolated into; it lives here until the renderer's remaining fixed sentences
+#: are moved there, because that module cannot import this one (this one imports it).
+COARSE_NULL_NOTE = ", coarse because few distinct donor splits exist"
+
 #: Donors per group below which floors are called coarse and cross-file comparison is warned
-#: against (caveat C4). PRODUCT VALUE for display; it is the donor count above which the project's
-#: own protocol treats a floor comparison as free of the per-cell leak, reused here as the point
-#: where this tool stops warning, and it gates nothing.
-FEW_DONORS_THRESHOLD = 8
+#: against (note N4). Defined in :mod:`pbcheck.product_constants` with its origin, and re-exported
+#: here under its established name: the report prose interpolates the same constant, and
+#: ``pbcheck.render.text`` cannot import this module (this module imports it).
+FEW_DONORS_THRESHOLD = product_constants.FEW_DONORS_THRESHOLD
 
 #: The constant cell-type column added when the caller selects no cell type, so that the engine's
 #: ``celltype_col`` argument is never ``None`` and the pseudobulk aggregation has one group.
@@ -117,7 +139,7 @@ STRATUM_COL = "_pbcheck_stratum"
 #: Value of :data:`STRATUM_COL`, and the cell-type name of a pooled stratum.
 STRATUM_VALUE = "all_cells"
 
-#: Columns whose name looks like a cell-type annotation (caveat C8).
+#: Columns whose name looks like a cell-type annotation (note N8).
 CELLTYPE_LIKE_PATTERN = re.compile(r"cell.?type|celltype|annotation", re.IGNORECASE)
 
 #: The universe rule rendered verbatim in the report next to ``universe.builder`` on the ordinary
@@ -143,7 +165,10 @@ FALLBACK_UNIVERSE_RULE = (
 _PROVENANCE_PACKAGES = ("numpy", "scipy", "pandas", "anndata", "scanpy", "statsmodels",
                         "decoupler", "pydeseq2")
 
-_LAMBDA_CALIBRATED, _LAMBDA_INFLATED, _LAMBDA_UNDER = LAMBDA_CLASS_WORDS
+#: The three ``readout.lambda_*_class`` values, taken from the keys of the renderer's phrase table
+#: so the payload and the prose cannot drift apart. The names describe a position against the
+#: donor-pseudobulk arm's band and award no property to the arm they describe.
+_LAMBDA_IN_BAND, _LAMBDA_ABOVE_BAND, _LAMBDA_BELOW_BAND = LAMBDA_CLASS_WORDS
 
 
 class AuditInputError(ValueError):
@@ -211,18 +236,19 @@ def _available(values) -> str:
 def _lambda_class(value: float | None) -> str | None:
     """The report's word for a genomic-inflation factor, or ``None`` if the arm did not run.
 
-    The three words are ``pbcheck.render.text.LAMBDA_CLASS_WORDS``, which reproduce the bands of
-    ``band()`` in ``scripts/synthetic_gate.py``; that script prints the middle one upper-cased for
-    emphasis on a terminal, and the payload keeps the lower-case form the schema fixes.
+    The three class names are the keys of ``pbcheck.render.text.LAMBDA_CLASS_WORDS``. The band is
+    ``gate_config.LAMBDA_BAND``, the donor-pseudobulk arm's band, with the inclusive bounds of
+    ``band()`` in ``scripts/synthetic_gate.py``; where the naive arm's class is rendered, the
+    sentence says that the band is shown to describe the number, not as that arm's own criterion.
     """
     if value is None or not np.isfinite(value):
         return None
     low, high = gate_config.LAMBDA_BAND
     if value < low:
-        return _LAMBDA_UNDER
+        return _LAMBDA_BELOW_BAND
     if value > high:
-        return _LAMBDA_INFLATED
-    return _LAMBDA_CALIBRATED
+        return _LAMBDA_ABOVE_BAND
+    return _LAMBDA_IN_BAND
 
 
 def _floor_mc_se(counts: np.ndarray) -> float:
@@ -646,6 +672,7 @@ def _settings_block(settings: AuditSettings) -> dict:
             "naive_engine": "fast",
             "pseudobulk_method": "moderated_ebayes",
             "trend": False,
+            "min_donors_per_group": PRODUCT_MIN_DONORS_PER_GROUP,
             "universe_min_total_count": PRODUCT_UNIVERSE_MIN_TOTAL_COUNT,
             "universe_min_prop": PRODUCT_UNIVERSE_MIN_PROP,
             "fallback_universe_min_prop": FALLBACK_UNIVERSE_MIN_PROP,
@@ -683,63 +710,174 @@ def _provenance_block() -> dict:
 
 
 def _caveats(payload: dict, settings: AuditSettings) -> list[dict]:
-    """The caveat block: C1, C2, C3 and C7 always, the rest exactly under their own condition.
+    """The caveat block: N1, N2, N3 and N7 always, the rest exactly under their own condition.
 
-    Every text comes from ``pbcheck.render.text.CAVEATS`` and every interpolated value from the
-    payload built above, so no number in the prose is typed by hand here.
+    Every text comes from ``pbcheck.render.text`` and every interpolated value from the payload
+    built above, so no number in the prose is typed by hand here. The conditions are the payload's
+    own flags where the schema defines one (``readout.few_donors`` for N4,
+    ``readout.paired_floor_shown`` for R1's pseudobulk clause), so validation cannot find a note
+    whose condition this same payload denies.
     """
     design = payload["design"]
     readout = payload["readout"]
     protocol_names = ", ".join(payload["settings"]["protocol_constants"])
 
     out = [
-        {"id": "C1", "text": caveat_text("C1", version=payload["pbcheck_version"])},
-        {"id": "C2", "text": caveat_text("C2", envelope_rows=envelope_rows())},
-        {"id": "C3", "text": CAVEATS["C3"]},
+        {"id": "N1", "text": caveat_text("N1", version=payload["pbcheck_version"])},
+        {"id": "N2", "text": caveat_text("N2", envelope_rows=envelope_rows())},
+        {"id": "N3", "text": caveat_text("N3")},
     ]
 
-    donors_per_group = design["donors_per_group"]
-    min_donors = min(
-        [donors_per_group.get(settings.test_level, 0), donors_per_group.get(settings.ref_level, 0)]
-    )
-    if min_donors < FEW_DONORS_THRESHOLD:
-        out.append({"id": "C4", "text": CAVEATS["C4"]})
+    if readout["few_donors"]:
+        out.append({"id": "N4", "text": caveat_text("N4")})
 
     separating = [col for col, sep in design["batch_separates_condition"].items() if sep]
     if separating:
-        out.append({"id": "C5", "text": caveat_text("C5", cols=", ".join(separating))})
+        out.append({"id": "N5", "text": caveat_text("N5", cols=", ".join(separating))})
 
     if payload["status_reason"] == "non_integer_counts":
         reason = (payload["counts_check"] or {}).get("reason") or "no reason recorded"
-        out.append({"id": "C6", "text": caveat_text("C6", reason=reason)})
+        out.append({"id": "N6", "text": caveat_text("N6", reason=reason)})
 
-    out.append({"id": "C7", "text": caveat_text("C7", protocol_constant_names=protocol_names)})
+    out.append({"id": "N7", "text": caveat_text("N7", protocol_constant_names=protocol_names)})
 
     if settings.celltype_col is None and payload["input"]["celltype_like_columns_found"]:
-        out.append({"id": "C8", "text": caveat_text(
-            "C8", col=payload["input"]["celltype_like_columns_found"][0])})
+        out.append({"id": "N8", "text": caveat_text(
+            "N8", col=payload["input"]["celltype_like_columns_found"][0])})
 
     achieved = readout["n_perm_naive_achieved"]
     if achieved is not None and achieved < COARSE_NULL_THRESHOLD:
         floor = readout["naive_floor_solo"] or {}
-        out.append({"id": "C9", "text": caveat_text(
-            "C9", n=achieved, requested=readout["n_perm_naive_requested"],
+        out.append({"id": "N9", "text": caveat_text(
+            "N9", n=achieved, requested=readout["n_perm_naive_requested"],
             se=f"{floor.get('mc_se', float('nan')):.3g}")})
 
     if payload["status"] == "complete":
         floor = readout["naive_floor_solo"]
+        paired_floor_shown = bool(readout["paired_floor_shown"])
         pb_floor = payload["permutation_null"]["pseudobulk"]["floor"]
-        out.append({"id": "A1", "text": caveat_text(
-            "A1",
+        out.append({"id": "R1", "text": readout_caveat_text(
             floor_solo=f"{floor['median_count']:.0f}",
-            G=payload["universe"]["size"],
+            universe_size=payload["universe"]["size"],
             alpha=f"{settings.alpha:g}",
             floor_pct=f"{100.0 * floor['median_frac']:.1f}",
             real_solo=readout["naive_real_solo"],
-            pb_real=payload["real_label"]["pseudobulk"]["n_significant_paired"],
-            pb_floor=f"{pb_floor['median_count']:.0f}",
+            few_donors=bool(readout["few_donors"]),
+            paired_floor_shown=paired_floor_shown,
+            pb_real=(payload["real_label"]["pseudobulk"]["n_significant_paired"]
+                     if paired_floor_shown else None),
+            pb_floor=f"{pb_floor['median_count']:.0f}" if paired_floor_shown else None,
         )})
     return out
+
+
+def format_scalar(value: object) -> str:
+    """Render a payload scalar for a read-out sentence: ``None`` as ``"n/a"``, a bool as
+    ``"yes"``/``"no"``, a float to four significant figures, everything else via ``str``.
+
+    The report's number convention, applied here because the read-out lines are payload fields
+    (``readout.sentences``) built by this module and printed verbatim by the renderer.
+    ``tests/test_audit.py`` pins it against the renderer's own cell formatter, so a table cell and
+    a sentence can never show the same number differently.
+    """
+    if value is None:
+        return "n/a"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, float):
+        return f"{value:.4g}"
+    return str(value)
+
+
+def _readout_sentences(payload: dict) -> list[str]:
+    """The plain-language read-out lines, filled from the payload's own blocks.
+
+    Written into ``readout.sentences`` and printed verbatim by ``pbcheck.render``: the numbers a
+    reader sees in the read-out paragraph are the numbers this module put in the payload, not a
+    second derivation made at render time. Empty when no permutation null ran (a ``design_only``
+    status has nothing to read out).
+    """
+    null = payload["permutation_null"]
+    if null is None:
+        return []
+
+    design = payload["design"]
+    input_block = payload["input"]
+    universe = payload["universe"]
+    readout = payload["readout"]
+    real = payload["real_label"]
+    naive_null = null["naive"]
+    floor = naive_null["floor_solo"]
+    achieved = readout["n_perm_naive_achieved"]
+
+    lines = [
+        sentence_text(
+            "floor_solo",
+            median_count=format_scalar(floor["median_count"]),
+            median_frac_pct=format_scalar(floor["median_frac"] * 100),
+            universe_size=universe["size"],
+            mc_se=format_scalar(floor["mc_se"]),
+            n_perm_achieved=format_scalar(achieved),
+            coarse_note=(COARSE_NULL_NOTE
+                         if achieved is not None and achieved < COARSE_NULL_THRESHOLD else ""),
+            real_solo=format_scalar(readout["naive_real_solo"]),
+        ),
+        sentence_text(
+            "lambda_naive",
+            **{"lambda": format_scalar(naive_null["lambda"])},
+            iqr=format_scalar(naive_null["lambda_iqr"]),
+            class_word=LAMBDA_CLASS_WORDS[readout["lambda_naive_class"]]
+            if readout["lambda_naive_class"] is not None else format_scalar(None),
+            band_lo=gate_config.LAMBDA_BAND[0],
+            band_hi=gate_config.LAMBDA_BAND[1],
+        ),
+    ]
+
+    pseudobulk_null = null["pseudobulk"]
+    if pseudobulk_null is None:
+        lines.append(sentence_text(
+            "pseudobulk_not_run",
+            reason_text=STATUS_REASON_WORDS.get(
+                payload["status_reason"] or "", "no reason recorded"),
+        ))
+    else:
+        pb_real = real["pseudobulk"] if real is not None else None
+        pb_class = readout["lambda_pseudobulk_class"]
+        lines.append(sentence_text(
+            "pseudobulk",
+            **{"lambda": format_scalar(pseudobulk_null["lambda"])},
+            class_word=(LAMBDA_CLASS_WORDS[pb_class] if pb_class is not None
+                        else format_scalar(None)),
+            band_lo=gate_config.LAMBDA_BAND[0],
+            band_hi=gate_config.LAMBDA_BAND[1],
+            fp_rate=format_scalar(pseudobulk_null["fp_rate"]),
+            se=format_scalar(pseudobulk_null["fp_rate_mc_se"]),
+            median_count=format_scalar(pseudobulk_null["floor"]["median_count"]),
+            real_paired=format_scalar(
+                pb_real["n_significant_paired"] if pb_real is not None else None),
+        ))
+
+    donors_per_group = design["donors_per_group"]
+    lines.append(sentence_text(
+        "donors",
+        n_test=format_scalar(donors_per_group.get(input_block["test_level"])),
+        test_level=input_block["test_level"],
+        n_ref=format_scalar(donors_per_group.get(input_block["ref_level"])),
+        ref_level=input_block["ref_level"],
+        n_distinct_splits=format_scalar(null["n_distinct_splits"]),
+    ))
+
+    profiles = universe["profiles_per_group_after_thin_filter"]
+    if profiles is not None:
+        protocol = payload["settings"]["protocol_constants"]
+        lines.append(sentence_text(
+            "profiles",
+            min_cells=protocol["min_cells"],
+            min_counts=protocol["min_counts"],
+            p_test=format_scalar(profiles.get(input_block["test_level"])),
+            p_ref=format_scalar(profiles.get(input_block["ref_level"])),
+        ))
+    return lines
 
 
 def run_audit(adata, settings: AuditSettings) -> dict:
@@ -778,6 +916,8 @@ def run_audit(adata, settings: AuditSettings) -> dict:
     min_donors_per_group = min(donors_per_group.get(settings.test_level, 0),
                                donors_per_group.get(settings.ref_level, 0))
     payload["readout"]["min_donors_per_group"] = min_donors_per_group
+    payload["readout"]["few_donors_threshold"] = int(FEW_DONORS_THRESHOLD)
+    payload["readout"]["few_donors"] = bool(min_donors_per_group < FEW_DONORS_THRESHOLD)
     payload["readout"]["n_perm_naive_requested"] = int(settings.n_perm)
     payload["readout"]["n_perm_pb_requested"] = int(settings.n_perm_pb)
 
@@ -791,6 +931,7 @@ def run_audit(adata, settings: AuditSettings) -> dict:
         }
         payload["runtime_seconds"] = float(time.perf_counter() - started)
         payload["caveats"] = _caveats(payload, settings)
+        payload["readout"]["sentences"] = _readout_sentences(payload)
         audit_schema.validate(payload)
         return payload
 

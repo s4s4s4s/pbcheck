@@ -7,11 +7,12 @@ tools: Read, Glob, Grep
 color: cyan
 ---
 
-Verified against `c3c2556` on `main` (clean tree): `pytest -q` → **367 passed**, 0 failed, in ~20s
-(18 files under `tests/`). <!-- test count: filled by the integrator --> `git log --oneline -20`
-shows the last five commits are Amendment 5 Part A, two engine-affordability fixes, the
-stratum-list machine-checking pass, and Amendment 4 Part A, i.e. today's work is the tip of the
-amendment chain, not a side branch of it.
+Verified on branch `fix/core` (post-review fix pass, clean tree): `pytest -q` → **668 passed**,
+0 failed (31 files under `tests/`). <!-- test count: filled by the integrator --> `main`'s engine
+history (Amendment 5 Part A, the naive-engine speedup, the stratum-list freeze, Amendment 4 Part A)
+is unchanged by this branch; the branch's own commits are the v0.1.0 release (WP1-WP5) and this
+fix pass over its post-integration review (schema/caveat renames, the audit fixes, the renderer and
+golden-fixture fixes, this documentation pass).
 
 ## What this project is
 
@@ -45,8 +46,9 @@ Census stratum has been analysed.
 | `io_counts.py` | the counts gate (spec §9 item 2): integer-count assertion on values not dtype, frozen-universe sizing, fills the columns `census_select` left `pending`. **Admits nothing** |
 | `audit_schema.py` | `AUDIT_SCHEMA_VERSION = "pbcheck-audit/1"`, the JSON schema's key lists, `validate(payload)`. Pure stdlib, product release (v0.1.0), not a Phase 0 module |
 | `audit.py` | the v0.1.0 product's only module that calls the engine: `AuditSettings`, `run_audit`, `audit_h5ad`, the `PRODUCT_*`/`FALLBACK_*` constants. See Traps for why its constants are not `gate_config` values |
+| `product_constants.py` | `FEW_DONORS_THRESHOLD`, shared by `audit.py` and `render/text.py` without a circular import (the module imports nothing from the package) |
 | `example.py` | `example_adata(...)` - a small gamma-Poisson generator for the offline quickstart, not the Phase 0 oracle in `synthetic/oracles.py` |
-| `render/` | `render_markdown`, `render_html`, `write_outputs`, `sections.py`'s shared section model, and `text.py`'s wording constants and forbidden-pattern list. See Traps |
+| `render/` | `render_markdown` (`markdown.py`), `render_html` (`html.py`), `write_outputs` (`__init__.py`), `sections.py`'s shared section model (the payload's `readout.sentences` rendered verbatim, never re-derived), and `text.py`'s wording constants, caveat templates (`N1`-`N9`, `R1`) and forbidden-pattern list. See Traps |
 | `cli.py` | the `pbcheck` command's argparse and `main(argv=None)` |
 | `__main__.py` | `python -m pbcheck` entry point, delegates to `cli.main` |
 
@@ -89,16 +91,29 @@ The correctness spec, not shipped runtime code (imported by tests via `sys.path`
 effect; the NULL oracle (no true DE) and POSITIVE oracle (log2FC=1.0 injected into K=200 genes) are
 what every gate number is computed on. `donor_sigma=0` is the falsification control.
 
-### `tests/` - 18 files, 367 tests, all offline <!-- test count: filled by the integrator -->
+### `tests/` - 30 files, 649 tests, all offline <!-- test count: filled by the integrator -->
 
 No test needs the network or `cellxgene-census`; `pytest -m "not slow"` skips DESeq2-touching /
 multi-permutation end-to-end tests. `tests/conftest.py` holds the shared oracle fixtures.
 `tests/test_stratum_list_freeze.py`, `test_census_select.py`, `test_io_counts.py` and
 `test_census_candidates.py` are the largest files, they exercise the real-data harness's admission
-logic against synthetic `obs` frames, never a real Census read. `test_render_text.py` pins the
-forbidden-pattern list and the wording constants in `render/text.py`; `test_checklist_scripts.py`,
-`test_protocol_safety_check.py` and `test_measure_audit_runtime.py` cover the v0.1.0 release
-checklist scripts above.
+logic against synthetic `obs` frames, never a real Census read.
+
+The v0.1.0 release adds: `test_audit.py` (`audit.py`'s `run_audit`/`audit_h5ad`), `test_audit_schema.py`
+(the `pbcheck-audit/1` schema and `validate()`), `test_render_text.py` (the forbidden-pattern list
+and every wording constant in `render/text.py`, including the `N1`-`N9`/`R1` caveat ids and the
+`in_band`/`above_band`/`below_band` lambda classes), `test_render.py` and `test_render_output.py`
+(`render/sections.py`, `markdown.py`, `html.py` and the golden fixtures), `test_cli.py` (the
+`pbcheck` command, including the Windows cp1252-stdout subprocess test), `test_example.py`
+(`example.py`'s offline quickstart generator), `test_packaging.py` (the built sdist/wheel,
+`pyproject.toml`, `.zenodo.json`, `CITATION.cff`), `test_docs.py` (this file's own claims: the
+README/USAGE/CONTRIBUTING/pilot-README/demo-README forbidden-pattern scan, the demo-readout
+numeric-token guard, absolute README links, and the CLI-default numbers against `audit.PRODUCT_N_PERM`
+/ `PRODUCT_N_PERM_PB` / `gate_config.ALPHA`), `test_checklist_scripts.py`
+(`scripts/check_docstring_only_diff.py`), and `test_protocol_safety_check.py` /
+`test_measure_audit_runtime.py` for the two scripts of the same name. `demo/` and its
+`test_demo_scripts.py` are not yet on this branch (a later work package); `test_docs.py`'s
+demo-readout check `pytest.skip`s until they land.
 
 ### `pilot/` — committed Phase 0 artifacts, no code
 
@@ -191,7 +206,7 @@ by a real run.
 ## Current state (verified this session)
 
 - v0.1.0 released; PyPI trusted publishing via `release.yml`.
-- `pytest -q` on `c3c2556`: **367 passed**, 0 failed (~20s). <!-- test count: filled by the integrator -->
+- `pytest -q` on `fix/core` (this pass): **668 passed**, 0 failed. <!-- test count: filled by the integrator -->
   Coverage is report-only (no `--cov-fail-under` gate, deliberate, see `tests.yml`).
 - The committed gate run (`pilot/gate/synthetic_gate_2026-08-15.json`) verdict: **`INSTRUMENT VALID
   WITHIN THE STATED OPERATING ENVELOPE`**. λ_pseudobulk 1.01 (band [0.9, 1.1]), pseudobulk perm-null FP

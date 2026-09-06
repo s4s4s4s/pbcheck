@@ -39,6 +39,9 @@ Phase 0 result.
   `test_cli.py`, `test_example.py`, `test_packaging.py`, `test_docs.py`, `test_demo_scripts.py`.
 - Changed: README rewritten users-first; Phase 0 status kept, moved below the quickstart.
   `risk_score` removed from the list of promised features (it was never specified).
+- Changed (fix pass, post-review): the lambda-class enum was renamed `calibrated`/`inflated`/`under`
+  to the neutral `in_band`/`above_band`/`below_band`, and the caveat ids `C1`..`C9`/`A1` to
+  `N1`..`N9`/`R1`, across the schema, the renderer, the fixtures and this documentation.
 - Changed: version 0.0.1.dev0 to 0.1.0; `Development Status :: 3 - Alpha`; one sentence
   appended to the docstring of `metrics.signal_above_floor`.
 - Unchanged: `docs/PHASE0_SPEC.md`, `docs/AMENDMENTS.md`, `pilot/preregistration`, `pilot/gate`,

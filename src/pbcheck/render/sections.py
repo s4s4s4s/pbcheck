@@ -3,23 +3,27 @@
 ``build_sections`` turns a validated ``pbcheck-audit/1`` payload into the ten report sections of
 the v0.1.0 plan, in order, for every ``status`` (``complete``, ``naive_only``, ``design_only``): a
 section whose arm did not run at this status prints a short "not run" note instead of its usual
-blocks. ``pbcheck.render.markdown`` (and later ``pbcheck.render.html``) walk this same list, so
-the two output formats never diverge in content, only in how a block is drawn.
+blocks. ``pbcheck.render.markdown`` and ``pbcheck.render.html`` walk this same list, so the two
+output formats never diverge in content, only in how a block is drawn.
 
-Every fixed sentence template lives in :mod:`pbcheck.render.text` (``CAVEATS``, ``SENTENCES``,
-``GLOSSARY``); this module only picks payload values and fills them in. Caveats are the one
-exception: ``pbcheck.audit`` (built in parallel, elsewhere) already formats ``payload["caveats"]``
-into finished text, so this module prints ``caveats[].text`` verbatim and never re-formats a
-caveat template itself.
+This module composes no sentence of its own. Every fixed line it prints comes from
+:mod:`pbcheck.render.text` (``CAVEATS``, ``SENTENCES``, ``GLOSSARY``, ``REPORT_LINES``,
+``STATUS_REASON_WORDS``); the only strings written here are the captions that label a table. Two
+kinds of finished prose are printed verbatim rather than filled in here: ``payload["caveats"][].text``
+and ``payload["readout"]["sentences"]``, both assembled by :mod:`pbcheck.audit` from those same
+templates, so the sentences a reader gets are the sentences the JSON payload carries.
+
+Numbers are drawn by :func:`_fmt`: four significant figures for a float, ``"n/a"`` for a missing
+value, ``"yes"``/``"no"`` for a flag. That convention is the report's own (the protocol states
+none) and is shared with ``pbcheck.audit.format_scalar``, which formats the payload's sentences.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pbcheck import gate_config
 from pbcheck.render import text
-
+from pbcheck.render.text import NO_REASON_RECORDED, NOT_REACHED, STATUS_REASON_WORDS
 
 @dataclass(frozen=True)
 class Paragraph:
@@ -66,25 +70,15 @@ class Section:
     blocks: tuple[Block, ...]
 
 
-#: ``status_reason`` values in plain words, used wherever a section explains why an arm did not
-#: run (plan section 1.3's status table).
-STATUS_REASON_WORDS: dict[str, str] = {
-    "design_only_requested": "a metadata-only run was requested",
-    "donor_spans_conditions": (
-        "a donor appears in both conditions, which the design gate does not allow"
-    ),
-    "too_few_donors": "fewer than the minimum donors were present in at least one group",
-    "non_integer_counts": "no counts matrix passed the raw-count check",
-    "universe_too_small": "the frozen gene universe was too small to proceed",
-    "too_few_profiles_after_thin_filter": (
-        "too few pseudobulk profiles remained after the thin-donor filter"
-    ),
-}
-
-
 def _fmt(value: object) -> str:
-    """Render a payload scalar for a table cell or a sentence: ``None`` as ``"n/a"``, a bool as
-    ``"yes"``/``"no"``, a float to four significant figures, everything else via ``str``."""
+    """Render a payload scalar for a table cell: ``None`` as ``"n/a"``, a bool as ``"yes"``/``"no"``,
+    a float to four significant figures, everything else via ``str``.
+
+    The four-figure convention is the report's, not the protocol's: it is applied here and in
+    ``pbcheck.audit.format_scalar`` (which formats the read-out sentences the payload carries), and
+    ``tests/test_audit.py`` pins the two against each other so one number never appears in two
+    shapes in one report.
+    """
     if value is None:
         return "n/a"
     if isinstance(value, bool):
@@ -92,6 +86,12 @@ def _fmt(value: object) -> str:
     if isinstance(value, float):
         return f"{value:.4g}"
     return str(value)
+
+
+def _fmt_achieved(value: object) -> str:
+    """An achieved permutation count: ``None`` means the arm never reached the null, which is a
+    fact about the run rather than a missing cell, so it is said in words."""
+    return NOT_REACHED if value is None else _fmt(value)
 
 
 def _caveat_text(payload: dict, caveat_id: str) -> str | None:
@@ -104,103 +104,7 @@ def _caveat_text(payload: dict, caveat_id: str) -> str | None:
 
 def _status_reason_words(payload: dict) -> str:
     reason = payload["status_reason"]
-    return STATUS_REASON_WORDS.get(reason, "no reason recorded")
-
-
-def _build_sentences(payload: dict) -> list[str]:
-    """The plain-language read-out lines: ``text.SENTENCES`` filled from ``payload["readout"]``
-    and its neighbouring blocks. Built here, not read from ``payload["readout"]["sentences"]``,
-    because the ``SENTENCES`` templates are this work package's contract, not the audit engine's."""
-    lines: list[str] = []
-    perm = payload["permutation_null"]
-    if perm is None:
-        return lines
-
-    design = payload["design"]
-    inputb = payload["input"]
-    universe = payload["universe"]
-    readout = payload["readout"]
-    real = payload["real_label"]
-
-    naive_perm = perm["naive"]
-    floor = naive_perm["floor_solo"]
-    coarse_note = ""
-    if _caveat_text(payload, "C9") is not None:
-        coarse_note = ", coarse because few distinct donor splits exist"
-    lines.append(
-        text.SENTENCES["floor_solo"].format_map(
-            {
-                "median_count": _fmt(floor["median_count"]),
-                "median_frac_pct": _fmt(floor["median_frac"] * 100),
-                "G": universe["size"],
-                "mc_se": _fmt(floor["mc_se"]),
-                "n_perm_achieved": readout["n_perm_naive_achieved"],
-                "coarse_note": coarse_note,
-                "real_solo": _fmt(readout["naive_real_solo"]),
-            }
-        )
-    )
-    lines.append(
-        text.SENTENCES["lambda_naive"].format_map(
-            {
-                "lambda": _fmt(naive_perm["lambda"]),
-                "iqr": _fmt(naive_perm["lambda_iqr"]),
-                "class_word": _fmt(readout["lambda_naive_class"]),
-                "band_lo": gate_config.LAMBDA_BAND[0],
-                "band_hi": gate_config.LAMBDA_BAND[1],
-            }
-        )
-    )
-
-    pb_perm = perm["pseudobulk"]
-    if pb_perm is not None:
-        pb_real = real["pseudobulk"] if real is not None else None
-        real_paired = _fmt(pb_real["n_significant_paired"]) if pb_real is not None else "n/a"
-        lines.append(
-            text.SENTENCES["pseudobulk"].format_map(
-                {
-                    "lambda": _fmt(pb_perm["lambda"]),
-                    "class_word": _fmt(readout["lambda_pseudobulk_class"]),
-                    "fp_rate": _fmt(pb_perm["fp_rate"]),
-                    "se": _fmt(pb_perm["fp_rate_mc_se"]),
-                    "median_count": _fmt(pb_perm["floor"]["median_count"]),
-                    "real_paired": real_paired,
-                }
-            )
-        )
-    else:
-        lines.append(
-            text.SENTENCES["pseudobulk_not_run"].format_map(
-                {"reason_text": _status_reason_words(payload)}
-            )
-        )
-
-    lines.append(
-        text.SENTENCES["donors"].format_map(
-            {
-                "n_test": _fmt(design["donors_per_group"].get(inputb["test_level"])),
-                "test_level": inputb["test_level"],
-                "n_ref": _fmt(design["donors_per_group"].get(inputb["ref_level"])),
-                "ref_level": inputb["ref_level"],
-                "n_distinct_splits": perm["n_distinct_splits"],
-            }
-        )
-    )
-
-    profiles = universe["profiles_per_group_after_thin_filter"]
-    if profiles is not None:
-        protocol = payload["settings"]["protocol_constants"]
-        lines.append(
-            text.SENTENCES["profiles"].format_map(
-                {
-                    "min_cells": protocol["min_cells"],
-                    "min_counts": protocol["min_counts"],
-                    "p_test": _fmt(profiles.get(inputb["test_level"])),
-                    "p_ref": _fmt(profiles.get(inputb["ref_level"])),
-                }
-            )
-        )
-    return lines
+    return STATUS_REASON_WORDS.get(reason, NO_REASON_RECORDED)
 
 
 def _basename(path: str | None) -> str:
@@ -210,45 +114,70 @@ def _basename(path: str | None) -> str:
 
 
 def _section_header(payload: dict) -> Section:
-    version = payload["pbcheck_version"]
-    status = payload["status"]
-    reason_words = STATUS_REASON_WORDS.get(payload["status_reason"] or "", "")
-    status_line = f"Status: {status}"
-    if reason_words:
-        status_line += f" ({reason_words})"
+    reason = payload["status_reason"]
+    reason_words = STATUS_REASON_WORDS.get(reason) if reason else None
+    status_line = (
+        text.report_line("header_status", status=payload["status"])
+        if reason_words is None
+        else text.report_line(
+            "header_status_with_reason", status=payload["status"], reason_text=reason_words
+        )
+    )
     blocks: list[Block] = [
-        Paragraph(f"pbcheck audit - {_basename(payload['input']['path'])}"),
-        Paragraph(f"pbcheck {version}, generated {payload['generated_utc']}."),
+        Paragraph(text.report_line("header_title", file=_basename(payload["input"]["path"]))),
+        Paragraph(text.report_line(
+            "header_version",
+            version=payload["pbcheck_version"],
+            generated_utc=payload["generated_utc"],
+        )),
         Paragraph(status_line),
     ]
-    c1 = _caveat_text(payload, "C1")
-    if c1 is not None:
-        blocks.append(Callout(c1))
+    n1 = _caveat_text(payload, "N1")
+    if n1 is not None:
+        blocks.append(Callout(n1))
     return Section(id="1", title="Header", blocks=tuple(blocks))
 
 
-def _section_readout(payload: dict) -> Section:
-    perm = payload["permutation_null"]
+def _ratio_line(payload: dict) -> str:
+    """The read-out ratio line: real-label calls over the permutation floor, per arm.
+
+    Each ratio names the BH convention of the two counts it divides, and the pseudobulk ratio is
+    printed only when the payload shows the paired floor, so the line never sets a solo-corrected
+    count against a paired-corrected one. Below the donor threshold the ratios are the quantity
+    change 2 of the fifth amendment (docs/AMENDMENTS.md) calls leak-contaminated, and the line
+    says so instead of leaving the number to be read as a signal-to-floor factor.
+    """
     readout = payload["readout"]
+    line = text.report_line(
+        "ratio_solo", naive_ratio=_fmt(readout["naive_real_over_floor_solo"])
+    )
+    if readout["paired_floor_shown"] and readout["pseudobulk_real_over_floor"] is not None:
+        line += text.report_line(
+            "ratio_paired", pseudobulk_ratio=_fmt(readout["pseudobulk_real_over_floor"])
+        )
+    if readout["few_donors"]:
+        line += text.report_line("ratio_leak_contaminated")
+    return line
+
+
+def _section_readout(payload: dict) -> Section:
+    """Section 2: the payload's own read-out sentences, printed verbatim, then the notes.
+
+    ``payload["readout"]["sentences"]`` is the single source of these lines (``pbcheck.audit``
+    fills it from :data:`pbcheck.render.text.SENTENCES`): the renderer does not re-derive them, so
+    the report and the JSON a reader gets cannot disagree.
+    """
     blocks: list[Block] = []
 
-    if perm is None:
-        blocks.append(Paragraph(f"No detection arms were run at this status: {_status_reason_words(payload)}."))
+    if payload["permutation_null"] is None:
+        blocks.append(Paragraph(
+            text.report_line("no_arms_run", reason_text=_status_reason_words(payload))
+        ))
     else:
-        blocks.extend(Paragraph(line) for line in _build_sentences(payload))
-        ratio_line = (
-            "Real-label calls over the permutation floor: naive "
-            f"{_fmt(readout['naive_real_over_floor_solo'])} times the floor"
-        )
-        if readout["pseudobulk_real_over_floor"] is not None:
-            ratio_line += f"; pseudobulk {_fmt(readout['pseudobulk_real_over_floor'])} times the floor"
-        ratio_line += "."
-        blocks.append(Paragraph(ratio_line))
+        blocks.extend(Paragraph(line) for line in payload["readout"]["sentences"])
+        blocks.append(Paragraph(_ratio_line(payload)))
 
-    a1 = _caveat_text(payload, "A1")
-    if a1 is not None:
-        blocks.append(Callout(a1))
-    for caveat_id in ("C2", "C3", "C4", "C5", "C6", "C8", "C9"):
+    for caveat_id in ("R1", "N2", "N3", "N4", "N5", "N6", "N8", "N9"):
         caveat = _caveat_text(payload, caveat_id)
         if caveat is not None:
             blocks.append(Callout(caveat))
@@ -257,7 +186,10 @@ def _section_readout(payload: dict) -> Section:
 
 
 def _section_glossary() -> Section:
-    blocks = tuple(Paragraph(f"{term}: {definition}") for term, definition in text.GLOSSARY)
+    blocks = tuple(
+        Paragraph(text.report_line("glossary_entry", term=term, definition=definition))
+        for term, definition in text.GLOSSARY
+    )
     return Section(id="3", title="What these words mean", blocks=blocks)
 
 
@@ -309,7 +241,7 @@ def _section_design(payload: dict) -> Section:
             )
         )
     else:
-        blocks.append(Paragraph("No batch columns were provided."))
+        blocks.append(Paragraph(text.report_line("no_batch_columns")))
 
     blocks.append(
         KeyValues(
@@ -345,7 +277,9 @@ def _section_counts(payload: dict) -> Section:
         return Section(
             id="5",
             title="Counts check",
-            blocks=(Paragraph(f"Counts check: not run ({_status_reason_words(payload)})."),),
+            blocks=(Paragraph(text.report_line(
+                "counts_check_not_run", reason_text=_status_reason_words(payload)
+            )),),
         )
     examples = counts_check["examples"]
     examples_text = ", ".join(str(example) for example in examples) if examples else "none"
@@ -360,7 +294,7 @@ def _section_counts(payload: dict) -> Section:
             ),
             caption="Counts check",
         ),
-        Paragraph(f"Examples of the values checked: {examples_text}."),
+        Paragraph(text.report_line("counts_examples", examples=examples_text)),
     ]
     return Section(id="5", title="Counts check", blocks=tuple(blocks))
 
@@ -373,7 +307,10 @@ def _section_naive(payload: dict) -> Section:
         return Section(
             id="6",
             title="Naive per-cell arm",
-            blocks=(Paragraph(f"Naive per-cell arm: not run: {_status_reason_words(payload)}."),),
+            blocks=(Paragraph(text.report_line(
+                "arm_not_run", arm="Naive per-cell arm",
+                reason_text=_status_reason_words(payload),
+            )),),
         )
 
     naive_perm = perm["naive"]
@@ -429,8 +366,15 @@ def _section_naive(payload: dict) -> Section:
         )
     )
 
-    if readout["paired_floor_shown"] and naive_perm["floor_paired"] is not None:
-        floor_paired = naive_perm["floor_paired"]
+    floor_paired = naive_perm["floor_paired"]
+    if not readout["paired_floor_shown"]:
+        blocks.append(Paragraph(text.report_line(
+            "paired_floor_not_comparable",
+            n_na_pseudobulk=real["paired_bh"]["n_na_pseudobulk"],
+        )))
+    elif floor_paired is None:
+        blocks.append(Paragraph(text.report_line("paired_floor_not_measured")))
+    else:
         blocks.append(
             KeyValues(
                 items=(
@@ -443,30 +387,21 @@ def _section_naive(payload: dict) -> Section:
                 caption="Paired permutation floor",
             )
         )
-    else:
-        na_count = real["paired_bh"]["n_na_pseudobulk"]
-        blocks.append(
-            Paragraph(
-                f"The paired floor is not shown: the pseudobulk arm left {na_count} genes without "
-                "a value, so the paired series is not comparable; the solo floor above stands alone."
-            )
-        )
-
     blocks.append(
         KeyValues(
             items=(
                 ("requested", readout["n_perm_naive_requested"]),
-                ("achieved", _fmt(readout["n_perm_naive_achieved"])),
+                ("achieved", _fmt_achieved(readout["n_perm_naive_achieved"])),
             ),
             caption="Permutations, naive arm",
         )
     )
 
     blocks.append(
-        Callout(
-            "B5 machinery check, not a calibration criterion: empirical-permutation-p lambda "
-            f"{_fmt(naive_perm['b5_lambda_empirical'])}."
-        )
+        Callout(text.report_line(
+            "machinery_check",
+            b5_lambda_empirical=_fmt(naive_perm["b5_lambda_empirical"]),
+        ))
     )
 
     return Section(id="6", title="Naive per-cell arm", blocks=tuple(blocks))
@@ -483,7 +418,10 @@ def _section_pseudobulk(payload: dict) -> Section:
         return Section(
             id="7",
             title="Donor-pseudobulk arm",
-            blocks=(Paragraph(f"Donor-pseudobulk arm: not run: {_status_reason_words(payload)}."),),
+            blocks=(Paragraph(text.report_line(
+                "arm_not_run", arm="Donor-pseudobulk arm",
+                reason_text=_status_reason_words(payload),
+            )),),
         )
 
     blocks: list[Block] = [
@@ -535,17 +473,17 @@ def _section_pseudobulk(payload: dict) -> Section:
         KeyValues(
             items=(
                 ("requested", readout["n_perm_pb_requested"]),
-                ("achieved", _fmt(readout["n_perm_pb_achieved"])),
+                ("achieved", _fmt_achieved(readout["n_perm_pb_achieved"])),
             ),
             caption="Permutations, pseudobulk arm",
         )
     )
 
     blocks.append(
-        Callout(
-            "B5 machinery check, not a calibration criterion: empirical-permutation-p lambda "
-            f"{_fmt(pb_perm['b5_lambda_empirical'])}."
-        )
+        Callout(text.report_line(
+            "machinery_check",
+            b5_lambda_empirical=_fmt(pb_perm["b5_lambda_empirical"]),
+        ))
     )
 
     moderation = pb_real["moderation"]
@@ -591,7 +529,7 @@ def _section_universe(payload: dict) -> Section:
             ),
             caption="Frozen gene universe",
         ),
-        Paragraph(f"Builder rule: {universe['builder_rule']}"),
+        Paragraph(text.report_line("builder_rule", rule=universe["builder_rule"])),
     ]
     thin = universe["thin_donor_filter"]
     if thin:
@@ -599,7 +537,7 @@ def _section_universe(payload: dict) -> Section:
             KeyValues(items=tuple((str(k), _fmt(v)) for k, v in thin.items()), caption="Thin-donor filter")
         )
     else:
-        blocks.append(Paragraph("Thin-donor filter: not run."))
+        blocks.append(Paragraph(text.report_line("thin_filter_not_run")))
 
     if real is not None:
         paired_bh = real["paired_bh"]
@@ -675,18 +613,14 @@ def _section_settings(payload: dict) -> Section:
             caption="Runtime by stage",
         ),
     ]
-    c7 = _caveat_text(payload, "C7")
-    if c7 is not None:
-        blocks.append(Callout(c7))
+    n7 = _caveat_text(payload, "N7")
+    if n7 is not None:
+        blocks.append(Callout(n7))
     return Section(id="9", title="Settings and provenance", blocks=tuple(blocks))
 
 
 def _section_footer(payload: dict) -> Section:
-    version = payload["pbcheck_version"]
-    line = (
-        f"Generated by pbcheck {version}. Protocol: docs/PHASE0_SPEC.md and docs/AMENDMENTS.md "
-        "in the pbcheck repository."
-    )
+    line = text.report_line("footer", version=payload["pbcheck_version"])
     return Section(id="10", title="Footer", blocks=(Paragraph(line),))
 
 
@@ -712,24 +646,37 @@ def build_sections(payload: dict) -> list[Section]:
 
 
 def prose_blocks(sections: list[Section]) -> list[str]:
-    """The text of every :class:`Paragraph` and :class:`Callout` block, in section order.
+    """Every string of a section that is pbcheck's own prose rather than a payload value.
 
-    What the forbidden-pattern test scans: table cells (gene symbols, raw values) are excluded on
-    purpose, so a gene name like ``GOLGA8A`` never trips a prose rule meant for sentences.
+    What the forbidden-pattern gate scans: the text of every :class:`Paragraph` and
+    :class:`Callout`, and the caption of every :class:`Table` and :class:`KeyValues` (a caption is
+    written by this module and reaches both outputs, so it is prose too). Table cells are excluded
+    on purpose: they hold payload values, and a gene symbol like ``GOLGA8A`` must not trip a rule
+    meant for sentences.
     """
     texts: list[str] = []
     for section in sections:
         for block in section.blocks:
             if isinstance(block, (Paragraph, Callout)):
                 texts.append(block.text)
+            elif isinstance(block, (Table, KeyValues)) and block.caption:
+                texts.append(block.caption)
     return texts
 
 
 def summary_lines(payload: dict) -> list[str]:
-    """The CLI's end-of-run summary: the header and read-out paragraphs, reused verbatim from
-    :func:`build_sections` rather than composed again from the payload."""
+    """The CLI's end-of-run summary: the header and read-out sections, reused verbatim from
+    :func:`build_sections` rather than composed again from the payload.
+
+    Callouts are included, so the summary a user sees in the terminal carries the always-on scope
+    note (N1) and the read-out paragraph (R1) rather than the numbers alone.
+    """
     lines: list[str] = []
     for section in build_sections(payload):
         if section.id in ("1", "2"):
-            lines.extend(block.text for block in section.blocks if isinstance(block, Paragraph))
+            lines.extend(
+                block.text
+                for block in section.blocks
+                if isinstance(block, (Paragraph, Callout))
+            )
     return lines
