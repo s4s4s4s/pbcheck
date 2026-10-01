@@ -94,7 +94,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -114,7 +114,7 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -138,7 +138,7 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
